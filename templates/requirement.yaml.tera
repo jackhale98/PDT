@@ -1,0 +1,39 @@
+# Requirement: {{ title }}
+# Created by PDT - Plain-text Product Development Toolkit
+
+id: {{ id }}
+type: {{ req_type }}
+title: "{{ title }}"
+
+source:
+  document: ""
+  revision: ""
+  section: ""
+  date: {{ created_date }}
+
+category: "{{ category }}"
+tags: []
+
+text: |
+  # Enter requirement text here
+  # Use clear, testable language:
+  #   - "shall" for mandatory requirements
+  #   - "should" for recommended requirements
+  #   - "may" for optional requirements
+
+rationale: ""
+
+acceptance_criteria:
+  - ""
+
+priority: {{ priority }}
+status: draft
+
+links:
+  satisfied_by: []
+  verified_by: []
+
+# Auto-managed metadata (do not edit manually)
+created: {{ created }}
+author: {{ author }}
+revision: 1

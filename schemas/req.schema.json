@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/requirement.schema.json",
+  "title": "Requirement",
+  "description": "A design input or output requirement",
+  "type": "object",
+  "required": ["id", "type", "title", "text", "status", "priority", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^REQ-[0-9A-Z]{26}$",
+      "description": "Unique identifier (REQ prefix + ULID)"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["input", "output"],
+      "description": "Design input or output"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "document": {
+          "type": "string",
+          "description": "Source document name"
+        },
+        "revision": {
+          "type": "string",
+          "description": "Document revision"
+        },
+        "section": {
+          "type": "string",
+          "description": "Section reference"
+        },
+        "date": {
+          "type": "string",
+          "format": "date",
+          "description": "Date of source document"
+        }
+      }
+    },
+    "category": {
+      "type": "string",
+      "description": "User-defined category"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for filtering and organization"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Full requirement text"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Why this requirement exists"
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Criteria for verifying the requirement is met"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "default": "medium",
+      "description": "Priority level"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "obsolete"],
+      "default": "draft",
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "satisfied_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of entities that satisfy this requirement"
+        },
+        "verified_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of tests that verify this requirement"
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Revision number"
+    }
+  },
+  "additionalProperties": false
+}

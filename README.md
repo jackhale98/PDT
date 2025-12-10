@@ -186,6 +186,39 @@ pdt risk show RISK-01HC2               # Show details
 pdt risk edit RISK-01HC2               # Open in editor
 ```
 
+### Tests (Verification/Validation)
+
+```bash
+pdt test new                                  # Create with template
+pdt test new --title "Temperature Test"       # Create with title
+pdt test new -t verification -l system        # Create verification test at system level
+pdt test new -m analysis                      # Create with analysis method (IADT)
+pdt test new -i                               # Interactive wizard
+pdt test list                                 # List all tests
+pdt test list --type verification             # Filter by test type
+pdt test list --level unit                    # Filter by test level
+pdt test list --method inspection             # Filter by IADT method
+pdt test list --orphans                       # Show tests without linked requirements
+pdt test show TEST-01HC2                      # Show details
+pdt test edit TEST-01HC2                      # Open in editor
+```
+
+### Test Results
+
+```bash
+pdt rslt new --test TEST-01HC2                # Create result for a test
+pdt rslt new --test @1 --verdict pass         # Use short ID, set verdict
+pdt rslt new -i                               # Interactive wizard
+pdt rslt list                                 # List all results
+pdt rslt list --verdict fail                  # Filter by verdict
+pdt rslt list --verdict issues                # Show fail/conditional/incomplete
+pdt rslt list --test TEST-01HC2               # Show results for a specific test
+pdt rslt list --with-failures                 # Show only results with failures
+pdt rslt list --recent 7                      # Show results from last 7 days
+pdt rslt show RSLT-01HC2                      # Show details
+pdt rslt edit RSLT-01HC2                      # Open in editor
+```
+
 ### Link Management
 
 ```bash
@@ -307,6 +340,150 @@ author: Jane Doe
 revision: 2
 ```
 
+## Test Example (Verification/Validation Protocol)
+
+```yaml
+id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
+type: verification
+test_level: system
+test_method: test
+title: "Temperature Cycling Test"
+
+category: "Environmental"
+tags: [thermal, environmental, reliability]
+
+objective: |
+  Verify the device operates within specified temperature range
+  as required by REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD.
+
+preconditions:
+  - "Unit at room temperature (23C +/- 2C)"
+  - "All test equipment calibrated"
+  - "Power supply connected"
+
+equipment:
+  - name: "Temperature Chamber"
+    specification: "-40C to +100C range, 0.5C accuracy"
+    calibration_required: true
+  - name: "Multimeter"
+    specification: "DC voltage measurement"
+    calibration_required: true
+
+procedure:
+  - step: 1
+    action: "Place unit in chamber at 23C, power on"
+    expected: "Unit boots successfully"
+    acceptance: "All LEDs illuminate correctly"
+  - step: 2
+    action: "Ramp chamber to -20C at 2C/min"
+    expected: "Unit remains operational"
+    acceptance: "No errors logged"
+  - step: 3
+    action: "Hold at -20C for 4 hours"
+    expected: "Continuous operation"
+    acceptance: "All functions pass self-test"
+  - step: 4
+    action: "Ramp chamber to +50C at 2C/min"
+    expected: "Unit remains operational"
+    acceptance: "No errors logged"
+
+acceptance_criteria:
+  - "All steps pass"
+  - "No errors in system log"
+  - "All functions operational at temperature extremes"
+
+environment:
+  temperature: "Per procedure"
+  humidity: "< 80% RH (non-condensing)"
+
+estimated_duration: "8 hours"
+
+priority: high
+status: approved
+
+links:
+  verifies:
+    - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD
+  mitigates:
+    - RISK-01HC2JB7SMQX7RS1Y0GFKBHPTE
+
+created: 2024-01-15T10:30:00Z
+author: Jane Doe
+revision: 1
+```
+
+## Result Example
+
+```yaml
+id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTG
+test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
+test_revision: 1
+title: "Temperature Cycling Test - Run 1"
+
+verdict: pass
+verdict_rationale: |
+  All steps completed successfully. Device operated within
+  specification at both temperature extremes.
+
+category: "Environmental"
+
+executed_date: 2024-02-01T09:00:00Z
+executed_by: "John Smith"
+
+sample_info:
+  sample_id: "SN-001234"
+  serial_number: "001234"
+  lot_number: "LOT-2024-001"
+  configuration: "Rev B hardware, v1.2.0 firmware"
+
+environment:
+  temperature: "-20C to +50C per procedure"
+  humidity: "45% RH"
+  location: "Lab A, Environmental Chamber #3"
+
+equipment_used:
+  - name: "Temperature Chamber"
+    asset_id: "ENV-CHAM-003"
+    calibration_date: "2024-01-15"
+    calibration_due: "2025-01-15"
+
+step_results:
+  - step: 1
+    result: pass
+    observed: "Unit booted in 12 seconds"
+  - step: 2
+    result: pass
+    observed: "No anomalies during ramp"
+  - step: 3
+    result: pass
+    observed: "Self-test passed at 1h, 2h, 3h, 4h intervals"
+    measurement:
+      value: -20.1
+      unit: "C"
+      min: -21
+      max: -19
+  - step: 4
+    result: pass
+    observed: "No anomalies during ramp"
+
+deviations: []
+failures: []
+
+duration: "8h 15m"
+notes: |
+  Test completed without incident. Minor temperature overshoot
+  observed during cold ramp (reached -20.5C briefly).
+
+status: approved
+
+links:
+  test: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
+
+created: 2024-02-01T17:30:00Z
+author: John Smith
+revision: 1
+```
+
 ## Validation
 
 PDT validates files against JSON Schema with detailed error messages:
@@ -375,6 +552,45 @@ RPN = Severity x Occurrence x Detection (range: 1-1000)
 |------|---------|
 | **prevention** | Reduces occurrence probability |
 | **detection** | Improves ability to detect before failure |
+
+## Test Engineering
+
+### Verification vs Validation
+
+| Type | Purpose | Question |
+|------|---------|----------|
+| **Verification** | Did we build it right? | Confirms design outputs meet inputs |
+| **Validation** | Did we build the right thing? | Confirms product meets user needs |
+
+### V-Model Test Levels
+
+| Level | Tests Against | Scope |
+|-------|---------------|-------|
+| **Unit** | Detailed design | Individual components |
+| **Integration** | Architecture design | Component interactions |
+| **System** | System requirements | Complete system |
+| **Acceptance** | User needs | End-user scenarios |
+
+### IADT Methods
+
+Tests can use different verification methods (Inspection, Analysis, Demonstration, Test):
+
+| Method | Description | When to Use |
+|--------|-------------|-------------|
+| **Inspection** | Visual examination | Workmanship, labeling, documentation |
+| **Analysis** | Calculation/simulation | Complex systems, safety-critical |
+| **Demonstration** | Show functionality | User interface, simple operations |
+| **Test** | Measured execution | Performance, environmental, stress |
+
+### Test Verdicts
+
+| Verdict | Meaning | Follow-up |
+|---------|---------|-----------|
+| **pass** | All criteria met | None required |
+| **fail** | One or more criteria not met | Action items required |
+| **conditional** | Passed with deviations | Document justification |
+| **incomplete** | Could not complete test | Reschedule |
+| **not_applicable** | Test not applicable | Document rationale |
 
 ## Best Practices
 

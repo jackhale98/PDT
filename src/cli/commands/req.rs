@@ -235,7 +235,7 @@ pub fn run(cmd: ReqCommands, global: &GlobalOpts) -> Result<()> {
     }
 }
 
-fn run_list(_args: ListArgs, global: &GlobalOpts) -> Result<()> {
+fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
     // Collect all requirement files
@@ -278,12 +278,95 @@ fn run_list(_args: ListArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
+    // Apply filters
+    reqs.retain(|req| {
+        // Type filter
+        let type_match = match args.r#type {
+            ReqTypeFilter::Input => req.req_type == RequirementType::Input,
+            ReqTypeFilter::Output => req.req_type == RequirementType::Output,
+            ReqTypeFilter::All => true,
+        };
+
+        // Status filter
+        let status_match = match args.status {
+            StatusFilter::Draft => req.status == crate::core::entity::Status::Draft,
+            StatusFilter::Review => req.status == crate::core::entity::Status::Review,
+            StatusFilter::Approved => req.status == crate::core::entity::Status::Approved,
+            StatusFilter::Obsolete => req.status == crate::core::entity::Status::Obsolete,
+            StatusFilter::Active => req.status != crate::core::entity::Status::Obsolete,
+            StatusFilter::All => true,
+        };
+
+        // Priority filter
+        let priority_match = match args.priority {
+            PriorityFilter::Low => req.priority == Priority::Low,
+            PriorityFilter::Medium => req.priority == Priority::Medium,
+            PriorityFilter::High => req.priority == Priority::High,
+            PriorityFilter::Critical => req.priority == Priority::Critical,
+            PriorityFilter::Urgent => req.priority == Priority::High || req.priority == Priority::Critical,
+            PriorityFilter::All => true,
+        };
+
+        // Category filter
+        let category_match = args.category.as_ref().map_or(true, |cat| {
+            req.category.as_ref().map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+        });
+
+        // Tag filter
+        let tag_match = args.tag.as_ref().map_or(true, |tag| {
+            req.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase())
+        });
+
+        // Author filter
+        let author_match = args.author.as_ref().map_or(true, |author| {
+            req.author.to_lowercase().contains(&author.to_lowercase())
+        });
+
+        // Search filter (in title and text)
+        let search_match = args.search.as_ref().map_or(true, |search| {
+            let search_lower = search.to_lowercase();
+            req.title.to_lowercase().contains(&search_lower)
+                || req.text.to_lowercase().contains(&search_lower)
+        });
+
+        // Orphans filter (no satisfied_by or verified_by links)
+        let orphans_match = if args.orphans {
+            req.links.satisfied_by.is_empty() && req.links.verified_by.is_empty()
+        } else {
+            true
+        };
+
+        // Needs review filter (status is draft or review)
+        let needs_review_match = if args.needs_review {
+            req.status == crate::core::entity::Status::Draft
+                || req.status == crate::core::entity::Status::Review
+        } else {
+            true
+        };
+
+        // Recent filter (created in last N days)
+        let recent_match = args.recent.map_or(true, |days| {
+            let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+            req.created >= cutoff
+        });
+
+        type_match && status_match && priority_match && category_match
+            && tag_match && author_match && search_match && orphans_match
+            && needs_review_match && recent_match
+    });
+
+    // Handle count-only mode
+    if args.count {
+        println!("{}", reqs.len());
+        return Ok(());
+    }
+
     if reqs.is_empty() {
         match global.format {
             OutputFormat::Json => println!("[]"),
             OutputFormat::Yaml => println!("[]"),
             _ => {
-                println!("No requirements found.");
+                println!("No requirements found matching filters.");
                 println!();
                 println!("Create one with: {}", style("pdt req new").yellow());
             }
@@ -291,8 +374,39 @@ fn run_list(_args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    // Sort by created date (default)
-    reqs.sort_by(|a, b| a.created.cmp(&b.created));
+    // Sort by specified column
+    match args.sort {
+        ListColumn::Id => reqs.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Type => reqs.sort_by(|a, b| a.req_type.to_string().cmp(&b.req_type.to_string())),
+        ListColumn::Title => reqs.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::Status => reqs.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string())),
+        ListColumn::Priority => {
+            // Sort by priority level (critical > high > medium > low)
+            let priority_order = |p: &Priority| match p {
+                Priority::Critical => 0,
+                Priority::High => 1,
+                Priority::Medium => 2,
+                Priority::Low => 3,
+            };
+            reqs.sort_by(|a, b| priority_order(&a.priority).cmp(&priority_order(&b.priority)));
+        }
+        ListColumn::Category => reqs.sort_by(|a, b| {
+            a.category.as_deref().unwrap_or("").cmp(b.category.as_deref().unwrap_or(""))
+        }),
+        ListColumn::Author => reqs.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => reqs.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Tags => reqs.sort_by(|a, b| a.tags.join(",").cmp(&b.tags.join(","))),
+    }
+
+    // Reverse if requested
+    if args.reverse {
+        reqs.reverse();
+    }
+
+    // Apply limit
+    if let Some(limit) = args.limit {
+        reqs.truncate(limit);
+    }
 
     // Rebuild short ID index with current requirements
     let mut short_ids = ShortIdIndex::new();

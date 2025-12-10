@@ -113,9 +113,13 @@ pub struct ListArgs {
     #[arg(long, short = 'l', default_value = "all")]
     pub level: RiskLevelFilter,
 
-    /// Filter by category (exact match)
+    /// Filter by category (case-insensitive)
     #[arg(long, short = 'c')]
     pub category: Option<String>,
+
+    /// Filter by tag (case-insensitive)
+    #[arg(long)]
+    pub tag: Option<String>,
 
     /// Filter by minimum RPN
     #[arg(long)]
@@ -125,7 +129,7 @@ pub struct ListArgs {
     #[arg(long)]
     pub max_rpn: Option<u16>,
 
-    /// Filter by author
+    /// Filter by author (substring match)
     #[arg(long, short = 'a')]
     pub author: Option<String>,
 
@@ -137,13 +141,25 @@ pub struct ListArgs {
     #[arg(long)]
     pub unmitigated: bool,
 
+    /// Show risks created in last N days
+    #[arg(long)]
+    pub recent: Option<u32>,
+
+    /// Sort by field (default: created)
+    #[arg(long, default_value = "created")]
+    pub sort: ListColumn,
+
+    /// Reverse sort order
+    #[arg(long, short = 'r')]
+    pub reverse: bool,
+
+    /// Sort by RPN (highest first) - shorthand for --sort rpn --reverse
+    #[arg(long)]
+    pub by_rpn: bool,
+
     /// Limit output to N items
     #[arg(long, short = 'n')]
     pub limit: Option<usize>,
-
-    /// Sort by RPN (highest first)
-    #[arg(long)]
-    pub by_rpn: bool,
 
     /// Show count only, not the items
     #[arg(long)]
@@ -275,6 +291,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             RiskTypeFilter::All => true,
         };
 
+        // Status filter
+        let status_match = match args.status {
+            StatusFilter::Draft => r.status == crate::core::entity::Status::Draft,
+            StatusFilter::Review => r.status == crate::core::entity::Status::Review,
+            StatusFilter::Approved => r.status == crate::core::entity::Status::Approved,
+            StatusFilter::Obsolete => r.status == crate::core::entity::Status::Obsolete,
+            StatusFilter::Active => r.status != crate::core::entity::Status::Obsolete,
+            StatusFilter::All => true,
+        };
+
         // Level filter
         let level_match = match args.level {
             RiskLevelFilter::All => true,
@@ -289,9 +315,14 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let min_rpn_match = args.min_rpn.map_or(true, |min| r.rpn.unwrap_or(0) >= min);
         let max_rpn_match = args.max_rpn.map_or(true, |max| r.rpn.unwrap_or(0) <= max);
 
-        // Category filter
+        // Category filter (case-insensitive)
         let category_match = args.category.as_ref().map_or(true, |cat| {
-            r.category.as_ref().map_or(false, |c| c == cat)
+            r.category.as_ref().map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+        });
+
+        // Tag filter (case-insensitive)
+        let tag_match = args.tag.as_ref().map_or(true, |tag| {
+            r.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase())
         });
 
         // Author filter
@@ -309,8 +340,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Unmitigated filter
         let unmitigated_match = !args.unmitigated || r.mitigations.is_empty();
 
-        type_match && level_match && min_rpn_match && max_rpn_match
-            && category_match && author_match && search_match && unmitigated_match
+        // Recent filter (created in last N days)
+        let recent_match = args.recent.map_or(true, |days| {
+            let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+            r.created >= cutoff
+        });
+
+        type_match && status_match && level_match && min_rpn_match && max_rpn_match
+            && category_match && tag_match && author_match && search_match
+            && unmitigated_match && recent_match
     });
 
     if risks.is_empty() {
@@ -326,11 +364,40 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    // Sort
+    // Sort by specified column (or RPN if --by-rpn is used)
     if args.by_rpn {
         risks.sort_by(|a, b| b.rpn.unwrap_or(0).cmp(&a.rpn.unwrap_or(0)));
     } else {
-        risks.sort_by(|a, b| a.created.cmp(&b.created));
+        match args.sort {
+            ListColumn::Id => risks.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+            ListColumn::Type => risks.sort_by(|a, b| a.risk_type.to_string().cmp(&b.risk_type.to_string())),
+            ListColumn::Title => risks.sort_by(|a, b| a.title.cmp(&b.title)),
+            ListColumn::Status => risks.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string())),
+            ListColumn::RiskLevel => {
+                let level_order = |l: &Option<RiskLevel>| match l {
+                    Some(RiskLevel::Critical) => 0,
+                    Some(RiskLevel::High) => 1,
+                    Some(RiskLevel::Medium) => 2,
+                    Some(RiskLevel::Low) => 3,
+                    None => 4,
+                };
+                risks.sort_by(|a, b| level_order(&a.risk_level).cmp(&level_order(&b.risk_level)));
+            }
+            ListColumn::Severity => risks.sort_by(|a, b| b.severity.unwrap_or(0).cmp(&a.severity.unwrap_or(0))),
+            ListColumn::Occurrence => risks.sort_by(|a, b| b.occurrence.unwrap_or(0).cmp(&a.occurrence.unwrap_or(0))),
+            ListColumn::Detection => risks.sort_by(|a, b| b.detection.unwrap_or(0).cmp(&a.detection.unwrap_or(0))),
+            ListColumn::Rpn => risks.sort_by(|a, b| b.rpn.unwrap_or(0).cmp(&a.rpn.unwrap_or(0))),
+            ListColumn::Category => risks.sort_by(|a, b| {
+                a.category.as_deref().unwrap_or("").cmp(b.category.as_deref().unwrap_or(""))
+            }),
+            ListColumn::Author => risks.sort_by(|a, b| a.author.cmp(&b.author)),
+            ListColumn::Created => risks.sort_by(|a, b| a.created.cmp(&b.created)),
+        }
+    }
+
+    // Reverse if requested (unless by_rpn which is already reversed)
+    if args.reverse && !args.by_rpn {
+        risks.reverse();
     }
 
     // Apply limit

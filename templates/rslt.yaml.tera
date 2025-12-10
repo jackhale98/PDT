@@ -1,0 +1,91 @@
+# Result: {{ title }}
+# Created by PDT - Plain-text Product Development Toolkit
+
+id: {{ id }}
+test_id: {{ test_id }}
+test_revision: 1
+title: "{{ title }}"
+
+verdict: {{ verdict }}
+verdict_rationale: |
+  # Explain the verdict
+  # Especially important for fail or conditional results
+
+category: "{{ category }}"
+tags: []
+
+# Execution information
+executed_date: {{ executed_date }}
+executed_by: {{ executed_by }}
+# reviewed_by: ""
+# reviewed_date: ""
+
+# Sample identification
+sample_info:
+  sample_id: ""
+  serial_number: ""
+  lot_number: ""
+  configuration: ""
+
+# Actual test environment
+environment:
+  temperature: ""
+  humidity: ""
+  location: ""
+  other: ""
+
+# Equipment used (with calibration info)
+equipment_used:
+  - name: ""
+    asset_id: ""
+    calibration_date: ""
+    calibration_due: ""
+
+# Results for each procedure step
+step_results:
+  - step: 1
+    result: pass  # pass, fail, skip, not_applicable
+    observed: |
+      # What was actually observed
+    # measurement:
+    #   value: 0.0
+    #   unit: ""
+    #   min: 0.0
+    #   max: 0.0
+    notes: ""
+
+# Any deviations from the test procedure
+deviations: []
+#   - description: ""
+#     impact: ""
+#     justification: ""
+
+# Failure details (if any)
+failures: []
+#   - description: ""
+#     step: 1
+#     root_cause: ""
+#     corrective_action: ""
+#     action_id: ""
+
+# Supporting evidence
+attachments: []
+#   - filename: ""
+#     path: ""
+#     type: data  # data, photo, screenshot, log, report, other
+#     description: ""
+
+duration: "{{ duration }}"
+notes: |
+  # General observations and notes
+
+status: draft
+
+links:
+  test: {{ test_id }}
+  actions: []  # ACT-xxx IDs created from failures
+
+# Auto-managed metadata (do not edit manually)
+created: {{ created }}
+author: {{ author }}
+revision: 1

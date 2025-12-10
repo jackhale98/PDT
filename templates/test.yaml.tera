@@ -1,0 +1,72 @@
+# Test: {{ title }}
+# Created by PDT - Plain-text Product Development Toolkit
+
+id: {{ id }}
+type: {{ test_type }}
+test_level: {{ test_level }}
+test_method: {{ test_method }}
+title: "{{ title }}"
+
+category: "{{ category }}"
+tags: []
+
+objective: |
+  # What does this test verify or validate?
+  # Be specific about success criteria
+
+description: |
+  # Detailed description of the test
+  # Include any background or context
+
+# Prerequisites that must be met before testing
+preconditions:
+  - "Unit under test is at room temperature"
+  - "All required equipment is calibrated"
+
+# Equipment and tools required
+equipment:
+  - name: ""
+    specification: ""
+    calibration_required: false
+
+# Step-by-step test procedure
+procedure:
+  - step: 1
+    action: |
+      # What to do
+    expected: |
+      # What should happen
+    acceptance: |
+      # Pass/fail criteria
+
+# Overall pass/fail criteria
+acceptance_criteria:
+  - "All steps pass"
+
+# Sample size (for multi-sample tests)
+# sample_size:
+#   quantity: 3
+#   rationale: "Statistical confidence"
+#   sampling_method: "Random selection"
+
+# Environmental conditions
+environment:
+  temperature: "23 ± 2°C"
+  humidity: "50 ± 10% RH"
+  other: ""
+
+estimated_duration: "{{ estimated_duration }}"
+
+priority: {{ priority }}
+status: draft
+
+links:
+  verifies: []    # REQ-xxx IDs this test verifies
+  validates: []   # User needs this test validates
+  mitigates: []   # RISK-xxx IDs whose mitigation this test verifies
+  depends_on: []  # TEST-xxx IDs that must pass first
+
+# Auto-managed metadata (do not edit manually)
+created: {{ created }}
+author: {{ author }}
+revision: 1

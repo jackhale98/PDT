@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/rslt.schema.json",
+  "title": "Result",
+  "description": "A test result or execution record",
+  "type": "object",
+  "required": ["id", "test_id", "verdict", "executed_date", "executed_by", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^RSLT-[0-9A-Z]{26}$",
+      "description": "Unique identifier (RSLT prefix + ULID)"
+    },
+    "test_id": {
+      "type": "string",
+      "pattern": "^TEST-[0-9A-Z]{26}$",
+      "description": "ID of the test protocol that was executed"
+    },
+    "test_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Revision of the test protocol used"
+    },
+    "title": {
+      "type": "string",
+      "maxLength": 200,
+      "description": "Optional title for this result (defaults to test title + date)"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "conditional", "incomplete", "not_applicable"],
+      "description": "Overall test verdict"
+    },
+    "verdict_rationale": {
+      "type": "string",
+      "description": "Explanation for the verdict, especially for conditional or fail"
+    },
+    "category": {
+      "type": "string",
+      "description": "User-defined category"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for filtering and organization"
+    },
+    "executed_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the test was executed"
+    },
+    "executed_by": {
+      "type": "string",
+      "description": "Person who executed the test"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "description": "Person who reviewed the results"
+    },
+    "reviewed_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the results were reviewed"
+    },
+    "sample_info": {
+      "type": "object",
+      "properties": {
+        "sample_id": {
+          "type": "string",
+          "description": "Identifier for the sample tested"
+        },
+        "serial_number": {
+          "type": "string",
+          "description": "Serial number of the unit tested"
+        },
+        "lot_number": {
+          "type": "string",
+          "description": "Lot or batch number"
+        },
+        "configuration": {
+          "type": "string",
+          "description": "Configuration or build version"
+        }
+      },
+      "description": "Information about the sample tested"
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "temperature": {
+          "type": "string",
+          "description": "Actual temperature during test"
+        },
+        "humidity": {
+          "type": "string",
+          "description": "Actual humidity during test"
+        },
+        "location": {
+          "type": "string",
+          "description": "Where the test was conducted"
+        },
+        "other": {
+          "type": "string",
+          "description": "Other environmental conditions"
+        }
+      },
+      "description": "Actual environmental conditions during the test"
+    },
+    "equipment_used": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Equipment name"
+          },
+          "asset_id": {
+            "type": "string",
+            "description": "Asset or equipment ID"
+          },
+          "calibration_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Date of last calibration"
+          },
+          "calibration_due": {
+            "type": "string",
+            "format": "date",
+            "description": "Date calibration expires"
+          }
+        },
+        "required": ["name"]
+      },
+      "description": "Equipment used during the test"
+    },
+    "step_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Step number from the procedure"
+          },
+          "result": {
+            "type": "string",
+            "enum": ["pass", "fail", "skip", "not_applicable"],
+            "description": "Result for this step"
+          },
+          "observed": {
+            "type": "string",
+            "description": "What was actually observed"
+          },
+          "measurement": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number",
+                "description": "Measured value"
+              },
+              "unit": {
+                "type": "string",
+                "description": "Unit of measurement"
+              },
+              "min": {
+                "type": "number",
+                "description": "Minimum acceptable value"
+              },
+              "max": {
+                "type": "number",
+                "description": "Maximum acceptable value"
+              }
+            },
+            "description": "Quantitative measurement data"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes for this step"
+          }
+        },
+        "required": ["step", "result"]
+      },
+      "description": "Results for each procedure step"
+    },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Description of the deviation"
+          },
+          "impact": {
+            "type": "string",
+            "description": "Impact of the deviation on results"
+          },
+          "justification": {
+            "type": "string",
+            "description": "Justification for accepting the deviation"
+          }
+        },
+        "required": ["description"]
+      },
+      "description": "Any deviations from the test procedure"
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Description of the failure"
+          },
+          "step": {
+            "type": "integer",
+            "description": "Step where failure occurred"
+          },
+          "root_cause": {
+            "type": "string",
+            "description": "Root cause analysis"
+          },
+          "corrective_action": {
+            "type": "string",
+            "description": "Corrective action taken or required"
+          },
+          "action_id": {
+            "type": "string",
+            "description": "ID of related action item"
+          }
+        },
+        "required": ["description"]
+      },
+      "description": "Details of any failures encountered"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Name of the attachment file"
+          },
+          "path": {
+            "type": "string",
+            "description": "Relative path to the attachment"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["data", "photo", "screenshot", "log", "report", "other"],
+            "description": "Type of attachment"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the attachment"
+          }
+        },
+        "required": ["filename"]
+      },
+      "description": "Supporting attachments (photos, data files, etc.)"
+    },
+    "duration": {
+      "type": "string",
+      "description": "Actual time to complete the test (e.g., 2h 30m)"
+    },
+    "notes": {
+      "type": "string",
+      "description": "General notes and observations"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "default": "draft",
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "test": {
+          "type": "string",
+          "description": "ID of the test protocol (same as test_id)"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of action items created from this result"
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Revision number"
+    }
+  },
+  "additionalProperties": false
+}

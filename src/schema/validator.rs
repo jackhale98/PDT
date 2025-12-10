@@ -756,4 +756,307 @@ author: Test
         let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Risk);
         assert!(result.is_err(), "Invalid RISK ID pattern should fail");
     }
+
+    // ========================================================================
+    // TEST Schema Tests
+    // ========================================================================
+
+    #[test]
+    fn test_valid_test() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTD
+type: verification
+title: "Temperature Validation Test"
+objective: |
+  Verify the device operates within specified temperature range.
+status: draft
+created: 2024-01-01T00:00:00Z
+author: Test Engineer
+revision: 1
+"#;
+
+        let result = validator.validate(yaml, "test.pdt.yaml", EntityPrefix::Test);
+        assert!(result.is_ok(), "Valid test should pass: {:?}", result);
+    }
+
+    #[test]
+    fn test_test_missing_required_fields() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTD
+type: verification
+# missing: title, objective, status, created, author
+"#;
+
+        let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Test);
+        assert!(result.is_err(), "Missing required fields should fail");
+        let err = result.unwrap_err();
+        assert!(err.violation_count() > 0);
+    }
+
+    #[test]
+    fn test_test_invalid_type() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTD
+type: unit
+title: "Test"
+objective: "Test objective"
+status: draft
+created: 2024-01-01T00:00:00Z
+author: Test
+"#;
+
+        let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Test);
+        assert!(result.is_err(), "Invalid type value should fail");
+    }
+
+    #[test]
+    fn test_test_with_procedure() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTD
+type: verification
+test_level: system
+test_method: test
+title: "Thermal Test"
+objective: "Verify thermal performance"
+preconditions:
+  - "Unit at room temperature"
+  - "All sensors connected"
+equipment:
+  - name: "Thermal Chamber"
+    specification: "-40C to +85C range"
+    calibration_required: true
+procedure:
+  - step: 1
+    action: "Place unit in thermal chamber"
+    expected: "Unit fits in chamber"
+    acceptance: "Unit placed without damage"
+  - step: 2
+    action: "Set chamber to -20C"
+    expected: "Chamber reaches setpoint within 30 minutes"
+    acceptance: "Temperature stable at -20C ±2C"
+acceptance_criteria:
+  - "All procedure steps pass"
+  - "Unit powers on at temperature extremes"
+status: draft
+created: 2024-01-01T00:00:00Z
+author: Test Engineer
+"#;
+
+        let result = validator.validate(yaml, "test.pdt.yaml", EntityPrefix::Test);
+        assert!(result.is_ok(), "Test with procedure should pass: {:?}", result);
+    }
+
+    #[test]
+    fn test_test_with_links() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTD
+type: verification
+title: "Requirement Verification Test"
+objective: "Verify requirement REQ-01 is satisfied"
+links:
+  verifies:
+    - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTE
+  mitigates:
+    - RISK-01HC2JB7SMQX7RS1Y0GFKBHPTF
+status: approved
+created: 2024-01-01T00:00:00Z
+author: Test
+"#;
+
+        let result = validator.validate(yaml, "test.pdt.yaml", EntityPrefix::Test);
+        assert!(result.is_ok(), "Test with links should pass: {:?}", result);
+    }
+
+    #[test]
+    fn test_test_invalid_id_pattern() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: TEST-invalid
+type: verification
+title: "Test"
+objective: "Test objective"
+status: draft
+created: 2024-01-01T00:00:00Z
+author: Test
+"#;
+
+        let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Test);
+        assert!(result.is_err(), "Invalid TEST ID pattern should fail");
+    }
+
+    // ========================================================================
+    // RSLT Schema Tests
+    // ========================================================================
+
+    #[test]
+    fn test_valid_result() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTD
+test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTE
+verdict: pass
+executed_date: 2024-01-15T10:30:00Z
+executed_by: "Test Engineer"
+status: draft
+created: 2024-01-15T10:30:00Z
+author: Test Engineer
+revision: 1
+"#;
+
+        let result = validator.validate(yaml, "test.pdt.yaml", EntityPrefix::Rslt);
+        assert!(result.is_ok(), "Valid result should pass: {:?}", result);
+    }
+
+    #[test]
+    fn test_result_missing_required_fields() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTD
+# missing: test_id, verdict, executed_date, executed_by, status, created, author
+"#;
+
+        let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Rslt);
+        assert!(result.is_err(), "Missing required fields should fail");
+        let err = result.unwrap_err();
+        assert!(err.violation_count() > 0);
+    }
+
+    #[test]
+    fn test_result_invalid_verdict() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTD
+test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTE
+verdict: success
+executed_date: 2024-01-15T10:30:00Z
+executed_by: "Test Engineer"
+status: draft
+created: 2024-01-15T10:30:00Z
+author: Test
+"#;
+
+        let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Rslt);
+        assert!(result.is_err(), "Invalid verdict value should fail");
+    }
+
+    #[test]
+    fn test_result_with_step_results() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTD
+test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTE
+verdict: pass
+executed_date: 2024-01-15T10:30:00Z
+executed_by: "Test Engineer"
+step_results:
+  - step: 1
+    result: pass
+    observed: "Unit placed in chamber successfully"
+  - step: 2
+    result: pass
+    observed: "Chamber reached -20C in 25 minutes"
+    measurement:
+      value: -20.1
+      unit: "°C"
+      min: -22
+      max: -18
+status: approved
+created: 2024-01-15T10:30:00Z
+author: Test Engineer
+"#;
+
+        let result = validator.validate(yaml, "test.pdt.yaml", EntityPrefix::Rslt);
+        assert!(result.is_ok(), "Result with step results should pass: {:?}", result);
+    }
+
+    #[test]
+    fn test_result_with_failures() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTD
+test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTE
+verdict: fail
+verdict_rationale: "Unit failed to power on at low temperature"
+executed_date: 2024-01-15T10:30:00Z
+executed_by: "Test Engineer"
+failures:
+  - description: "Unit did not power on at -20C"
+    step: 3
+    root_cause: "Battery unable to deliver sufficient current at low temperature"
+    corrective_action: "Evaluate battery specification or add heater"
+status: draft
+created: 2024-01-15T10:30:00Z
+author: Test Engineer
+"#;
+
+        let result = validator.validate(yaml, "test.pdt.yaml", EntityPrefix::Rslt);
+        assert!(result.is_ok(), "Result with failures should pass: {:?}", result);
+    }
+
+    #[test]
+    fn test_result_invalid_test_id_pattern() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTD
+test_id: TEST-invalid
+verdict: pass
+executed_date: 2024-01-15T10:30:00Z
+executed_by: "Test Engineer"
+status: draft
+created: 2024-01-15T10:30:00Z
+author: Test
+"#;
+
+        let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Rslt);
+        assert!(result.is_err(), "Invalid test_id pattern should fail");
+    }
+
+    #[test]
+    fn test_result_invalid_id_pattern() {
+        let registry = SchemaRegistry::default();
+        let validator = Validator::new(&registry);
+
+        let yaml = r#"
+id: RSLT-invalid
+test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTE
+verdict: pass
+executed_date: 2024-01-15T10:30:00Z
+executed_by: "Test Engineer"
+status: draft
+created: 2024-01-15T10:30:00Z
+author: Test
+"#;
+
+        let result = validator.iter_errors(yaml, "test.pdt.yaml", EntityPrefix::Rslt);
+        assert!(result.is_err(), "Invalid RSLT ID pattern should fail");
+    }
 }

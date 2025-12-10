@@ -191,6 +191,24 @@ impl Project {
         }
     }
 
+    /// Get the directory for tests of a specific type (verification or validation)
+    pub fn test_directory(&self, test_type: &str) -> PathBuf {
+        match test_type {
+            "verification" => self.root.join("verification/protocols"),
+            "validation" => self.root.join("validation/protocols"),
+            _ => self.root.join("verification/protocols"),
+        }
+    }
+
+    /// Get the directory for test results of a specific type
+    pub fn result_directory(&self, test_type: &str) -> PathBuf {
+        match test_type {
+            "verification" => self.root.join("verification/results"),
+            "validation" => self.root.join("validation/results"),
+            _ => self.root.join("verification/results"),
+        }
+    }
+
     /// Iterate all entity files of a given prefix type
     pub fn iter_entity_files(&self, prefix: EntityPrefix) -> impl Iterator<Item = PathBuf> {
         let dir = self.root.join(Self::entity_directory(prefix));

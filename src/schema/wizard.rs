@@ -116,14 +116,43 @@ impl SchemaWizard {
             .unwrap_or_default();
 
         if let Some(props) = properties {
-            // Define the order we want to prompt fields
+            // Define the order we want to prompt fields for each entity type
+            // This covers requirements, risks, tests, and results
             let field_order = [
-                "type", "title", "priority", "category", "tags",
+                // Common fields
+                "type", "test_type", "test_level", "test_method",
+                "title", "priority",
+                "category", "tags",
+                // Requirement fields
                 "text", "rationale", "acceptance_criteria",
+                // Risk FMEA fields (in logical order)
+                "description", "failure_mode", "cause", "effect",
+                "severity", "occurrence", "detection",
+                // Test fields
+                "objective", "preconditions", "equipment", "procedure",
+                "sample_size", "environment", "estimated_duration",
+                // Result fields
+                "test_id", "verdict", "verdict_rationale",
+                "executed_date", "executed_by",
+                "sample_info", "equipment_used", "step_results",
+                "deviations", "failures", "attachments",
+                "duration", "notes",
+            ];
+
+            // Fields to skip entirely (auto-managed or calculated)
+            let skip_fields = [
+                "id", "created", "author", "revision", "source", "links", "status",
+                // Calculated fields that should not be prompted
+                "rpn", "risk_level", "initial_risk", "mitigations",
+                // Test result fields handled separately
+                "test_revision", "reviewed_by", "reviewed_date",
             ];
 
             // First add fields in preferred order
             for name in &field_order {
+                if skip_fields.contains(name) {
+                    continue;
+                }
                 if let Some(prop_schema) = props.get(*name) {
                     if let Some(field) = self.parse_field(*name, prop_schema, required.contains(&name.to_string())) {
                         fields.push(field);
@@ -131,13 +160,17 @@ impl SchemaWizard {
                 }
             }
 
-            // Then add any remaining fields not in our order (excluding auto-managed ones)
-            for (name, prop_schema) in props {
-                let skip_fields = ["id", "created", "author", "revision", "source", "links", "status"];
-                if !field_order.contains(&name.as_str()) && !skip_fields.contains(&name.as_str()) {
-                    if let Some(field) = self.parse_field(name, prop_schema, required.contains(name)) {
-                        fields.push(field);
-                    }
+            // Then add any remaining fields not in our order (excluding skip fields)
+            // Collect and sort remaining fields for consistent ordering
+            let mut remaining: Vec<_> = props
+                .iter()
+                .filter(|(name, _)| !field_order.contains(&name.as_str()) && !skip_fields.contains(&name.as_str()))
+                .collect();
+            remaining.sort_by(|(a, _), (b, _)| a.cmp(b));
+
+            for (name, prop_schema) in remaining {
+                if let Some(field) = self.parse_field(name, prop_schema, required.contains(name)) {
+                    fields.push(field);
                 }
             }
         }

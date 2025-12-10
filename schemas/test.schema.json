@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/test.schema.json",
+  "title": "Test",
+  "description": "A verification or validation test protocol",
+  "type": "object",
+  "required": ["id", "type", "title", "objective", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^TEST-[0-9A-Z]{26}$",
+      "description": "Unique identifier (TEST prefix + ULID)"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["verification", "validation"],
+      "description": "Test category - verification (meets specs) or validation (meets user needs)"
+    },
+    "test_level": {
+      "type": "string",
+      "enum": ["unit", "integration", "system", "acceptance"],
+      "description": "Level of testing in the V-model hierarchy"
+    },
+    "test_method": {
+      "type": "string",
+      "enum": ["inspection", "analysis", "demonstration", "test"],
+      "description": "IADT method - how the test is performed"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "category": {
+      "type": "string",
+      "description": "User-defined category (e.g., functional, performance, environmental)"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for filtering and organization"
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What this test is intended to verify or validate"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the test"
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Conditions that must be met before starting the test"
+    },
+    "equipment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Equipment name or description"
+          },
+          "specification": {
+            "type": "string",
+            "description": "Required specification (e.g., accuracy, range)"
+          },
+          "calibration_required": {
+            "type": "boolean",
+            "description": "Whether calibration is required before use"
+          }
+        },
+        "required": ["name"]
+      },
+      "description": "Equipment and tools required for the test"
+    },
+    "procedure": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Step number"
+          },
+          "action": {
+            "type": "string",
+            "description": "What to do in this step"
+          },
+          "expected": {
+            "type": "string",
+            "description": "Expected outcome or observation"
+          },
+          "acceptance": {
+            "type": "string",
+            "description": "Pass/fail criteria for this step"
+          }
+        },
+        "required": ["step", "action"]
+      },
+      "description": "Step-by-step test procedure"
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Overall criteria for test pass/fail determination"
+    },
+    "sample_size": {
+      "type": "object",
+      "properties": {
+        "quantity": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of samples to test"
+        },
+        "rationale": {
+          "type": "string",
+          "description": "Why this sample size was chosen"
+        },
+        "sampling_method": {
+          "type": "string",
+          "description": "How samples are selected (e.g., random, worst-case)"
+        }
+      },
+      "description": "Sample size and selection method"
+    },
+    "environment": {
+      "type": "object",
+      "properties": {
+        "temperature": {
+          "type": "string",
+          "description": "Temperature conditions (e.g., 23±2°C)"
+        },
+        "humidity": {
+          "type": "string",
+          "description": "Humidity conditions (e.g., 50±10% RH)"
+        },
+        "other": {
+          "type": "string",
+          "description": "Other environmental conditions"
+        }
+      },
+      "description": "Environmental conditions for the test"
+    },
+    "estimated_duration": {
+      "type": "string",
+      "description": "Estimated time to complete the test (e.g., 2 hours, 1 day)"
+    },
+    "priority": {
+      "type": "string",
+      "enum": ["low", "medium", "high", "critical"],
+      "default": "medium",
+      "description": "Priority level"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "default": "draft",
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "verifies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of requirements this test verifies"
+        },
+        "validates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of user needs this test validates"
+        },
+        "mitigates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of risks whose mitigation this test verifies"
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of tests that must pass before this one"
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Revision number"
+    }
+  },
+  "additionalProperties": false
+}

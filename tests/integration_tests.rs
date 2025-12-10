@@ -253,10 +253,10 @@ fn test_req_show_by_short_id() {
         .assert()
         .success();
 
-    // Then show by short ID
+    // Then show by prefixed short ID (REQ@1 format)
     pdt()
         .current_dir(tmp.path())
-        .args(["req", "show", "@1"])
+        .args(["req", "show", "REQ@1"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Test Req"));
@@ -519,9 +519,10 @@ fn test_risk_show_by_short_id() {
         .assert()
         .success();
 
+    // Show by prefixed short ID (RISK@1 format)
     pdt()
         .current_dir(tmp.path())
-        .args(["risk", "show", "@1"])
+        .args(["risk", "show", "RISK@1"])
         .assert()
         .success()
         .stdout(predicate::str::contains("Thermal Risk"));

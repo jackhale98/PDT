@@ -322,7 +322,7 @@ revision: 1
 pdt rslt new --test TEST-01HC2
 
 # Create using short ID
-pdt rslt new --test @1 --verdict pass
+pdt rslt new --test TEST@1 --verdict pass
 
 # Create with verdict
 pdt rslt new --test TEST-01HC2 --verdict fail
@@ -386,7 +386,7 @@ pdt rslt list --count
 pdt rslt show RSLT-01HC2
 
 # Show using short ID
-pdt rslt show @1
+pdt rslt show RSLT@1
 
 # Show with test protocol details
 pdt rslt show RSLT-01HC2 --with-test
@@ -405,7 +405,7 @@ pdt rslt show RSLT-01HC2 -f yaml
 pdt rslt edit RSLT-01HC2
 
 # Using short ID
-pdt rslt edit @1
+pdt rslt edit RSLT@1
 ```
 
 ## Validation

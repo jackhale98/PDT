@@ -394,9 +394,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    // Rebuild short ID index with current results
-    let mut short_ids = ShortIdIndex::new();
-    short_ids.rebuild(results.iter().map(|r| r.id.to_string()));
+    // Update short ID index with current results (preserves other entity types)
+    let mut short_ids = ShortIdIndex::load(&project);
+    short_ids.rebuild_for_prefix("RSLT", results.iter().map(|r| r.id.to_string()));
     let _ = short_ids.save(&project);
 
     // Output based on format
@@ -417,7 +417,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,test_id,verdict,status,executed_by,executed_date");
             for result in &results {
-                let short_id = short_ids.get_short_id(&result.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&result.id.to_string()).unwrap_or(0);
                 println!(
                     "@{},{},{},{},{},{},{}",
                     short_id,
@@ -444,7 +444,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "-".repeat(95));
 
             for result in &results {
-                let short_id = short_ids.get_short_id(&result.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&result.id.to_string()).unwrap_or(0);
                 let id_display = format_short_id(&result.id);
                 let test_display = format_short_id(&result.test_id);
                 let executor_truncated = truncate_str(&result.executed_by, 13);
@@ -486,7 +486,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| @ | ID | Test | Verdict | Status | Executed By | Date |");
             println!("|---|---|---|---|---|---|---|");
             for result in &results {
-                let short_id = short_ids.get_short_id(&result.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&result.id.to_string()).unwrap_or(0);
                 println!(
                     "| @{} | {} | {} | {} | {} | {} | {} |",
                     short_id,

@@ -219,16 +219,16 @@ pdt risk list -f md
 pdt risk show RISK-01HC2
 
 # Show by short ID (after running list)
-pdt risk show @1
+pdt risk show RISK@1
 
 # Show by title search
 pdt risk show "thermal"
 
 # Output as JSON
-pdt risk show @1 -f json
+pdt risk show RISK@1 -f json
 
 # Output as YAML
-pdt risk show @1 -f yaml
+pdt risk show RISK@1 -f yaml
 ```
 
 ### Edit a risk
@@ -238,7 +238,7 @@ pdt risk show @1 -f yaml
 pdt risk edit RISK-01HC2
 
 # Open by short ID
-pdt risk edit @1
+pdt risk edit RISK@1
 ```
 
 ## FMEA Methodology
@@ -362,6 +362,38 @@ pdt validate risks/design/RISK-01HC2JB7SMQX7RS1Y0GFKBHPTD.pdt.yaml
 
 # Validate only risks
 pdt validate --entity-type risk
+
+# Check for RPN/risk_level calculation mismatches (shown as warnings)
+pdt validate --strict    # Treat calculation warnings as errors
+
+# Auto-fix calculated values (RPN, risk_level)
+pdt validate --fix
+```
+
+### Calculated Value Validation
+
+PDT validates that calculated values (RPN and risk_level) are consistent:
+
+- **RPN**: Must equal `severity × occurrence × detection`
+- **risk_level**: Must match the expected level based on RPN:
+  - 1-50: low
+  - 51-150: medium
+  - 151-400: high
+  - 401+: critical
+
+If these values are incorrect, PDT shows warnings:
+
+```
+! risks/design/RISK-01HC2.pdt.yaml - 2 calculation warning(s)
+    RPN mismatch: stored 999 but calculated 125 (5×5×5)
+    risk_level mismatch: stored 'low' but calculated 'medium'
+```
+
+Use `--fix` to automatically correct these values:
+
+```bash
+pdt validate --fix
+# Files fixed:    1
 ```
 
 ### Validation Rules

@@ -426,9 +426,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    // Rebuild short ID index with current tests
-    let mut short_ids = ShortIdIndex::new();
-    short_ids.rebuild(tests.iter().map(|t| t.id.to_string()));
+    // Update short ID index with current tests (preserves other entity types)
+    let mut short_ids = ShortIdIndex::load(&project);
+    short_ids.rebuild_for_prefix("TEST", tests.iter().map(|t| t.id.to_string()));
     let _ = short_ids.save(&project);
 
     // Output based on format
@@ -449,7 +449,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,type,level,method,title,status,priority");
             for test in &tests {
-                let short_id = short_ids.get_short_id(&test.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&test.id.to_string()).unwrap_or(0);
                 println!(
                     "@{},{},{},{},{},{},{},{}",
                     short_id,
@@ -478,7 +478,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "-".repeat(105));
 
             for test in &tests {
-                let short_id = short_ids.get_short_id(&test.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&test.id.to_string()).unwrap_or(0);
                 let id_display = format_short_id(&test.id);
                 let title_truncated = truncate_str(&test.title, 26);
                 let level_str = test.test_level.map_or("-".to_string(), |l| l.to_string());
@@ -513,7 +513,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| @ | ID | Type | Level | Method | Title | Status | Priority |");
             println!("|---|---|---|---|---|---|---|---|");
             for test in &tests {
-                let short_id = short_ids.get_short_id(&test.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&test.id.to_string()).unwrap_or(0);
                 println!(
                     "| @{} | {} | {} | {} | {} | {} | {} | {} |",
                     short_id,

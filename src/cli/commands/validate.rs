@@ -2,11 +2,13 @@
 
 use console::style;
 use miette::Result;
+use std::fs;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
 use crate::core::project::Project;
 use crate::core::EntityPrefix;
+use crate::entities::risk::Risk;
 use crate::schema::registry::SchemaRegistry;
 use crate::schema::validator::Validator;
 
@@ -35,6 +37,10 @@ pub struct ValidateArgs {
     /// Show summary only, don't show individual errors
     #[arg(long)]
     pub summary: bool,
+
+    /// Fix calculated values (RPN, risk level) in-place
+    #[arg(long)]
+    pub fix: bool,
 }
 
 /// Validation statistics
@@ -45,6 +51,7 @@ struct ValidationStats {
     files_failed: usize,
     total_errors: usize,
     total_warnings: usize,
+    files_fixed: usize,
 }
 
 pub fn run(args: ValidateArgs) -> Result<()> {
@@ -134,16 +141,56 @@ pub fn run(args: ValidateArgs) -> Result<()> {
             }
         };
 
-        // Validate
+        // Validate schema
         match validator.iter_errors(&content, &filename, entity_prefix) {
             Ok(_) => {
-                stats.files_passed += 1;
-                if !args.summary {
-                    println!(
-                        "{} {}",
-                        style("✓").green(),
-                        path.display()
-                    );
+                // Schema validation passed - now check calculated values for RISK entities
+                let calc_issues = if entity_prefix == EntityPrefix::Risk {
+                    check_risk_calculations(&content, path, args.fix, &mut stats)?
+                } else {
+                    vec![]
+                };
+
+                if calc_issues.is_empty() {
+                    stats.files_passed += 1;
+                    if !args.summary {
+                        println!(
+                            "{} {}",
+                            style("✓").green(),
+                            path.display()
+                        );
+                    }
+                } else {
+                    // Has calculation issues but schema is valid
+                    if args.fix {
+                        stats.files_passed += 1;
+                        if !args.summary {
+                            println!(
+                                "{} {} (fixed)",
+                                style("✓").green(),
+                                path.display()
+                            );
+                        }
+                    } else {
+                        stats.total_warnings += calc_issues.len();
+                        if !args.summary {
+                            println!(
+                                "{} {} - {} calculation warning(s)",
+                                style("!").yellow(),
+                                path.display(),
+                                calc_issues.len()
+                            );
+                            for issue in &calc_issues {
+                                println!("    {}", style(issue).yellow());
+                            }
+                        }
+                        if args.strict {
+                            stats.files_failed += 1;
+                            had_error = true;
+                        } else {
+                            stats.files_passed += 1;
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -200,6 +247,13 @@ pub fn run(args: ValidateArgs) -> Result<()> {
         println!(
             "  Total warnings: {}",
             style(stats.total_warnings).yellow()
+        );
+    }
+
+    if stats.files_fixed > 0 {
+        println!(
+            "  Files fixed:    {}",
+            style(stats.files_fixed).cyan()
         );
     }
 
@@ -296,4 +350,80 @@ fn expand_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
 
     files.sort();
     files
+}
+
+/// Check and optionally fix calculated values in RISK entities
+fn check_risk_calculations(
+    content: &str,
+    path: &PathBuf,
+    fix: bool,
+    stats: &mut ValidationStats,
+) -> Result<Vec<String>> {
+    let mut issues = Vec::new();
+
+    // Parse the risk
+    let risk: Risk = match serde_yml::from_str(content) {
+        Ok(r) => r,
+        Err(_) => return Ok(issues), // Already reported by schema validation
+    };
+
+    // Check RPN calculation
+    if let Some(expected_rpn) = risk.calculate_rpn() {
+        if let Some(actual_rpn) = risk.rpn {
+            if actual_rpn != expected_rpn {
+                issues.push(format!(
+                    "RPN mismatch: stored {} but calculated {} ({}×{}×{})",
+                    actual_rpn,
+                    expected_rpn,
+                    risk.severity.unwrap_or(0),
+                    risk.occurrence.unwrap_or(0),
+                    risk.detection.unwrap_or(0)
+                ));
+            }
+        }
+    }
+
+    // Check risk level calculation
+    if let Some(expected_level) = risk.determine_risk_level() {
+        if let Some(actual_level) = risk.risk_level {
+            if actual_level != expected_level {
+                issues.push(format!(
+                    "risk_level mismatch: stored '{}' but calculated '{}'",
+                    actual_level, expected_level
+                ));
+            }
+        }
+    }
+
+    // Fix if requested and there are issues
+    if fix && !issues.is_empty() {
+        // Re-parse as a mutable value to fix
+        let mut value: serde_yml::Value = serde_yml::from_str(content)
+            .map_err(|e| miette::miette!("Failed to re-parse YAML: {}", e))?;
+
+        // Update RPN
+        if let Some(expected_rpn) = risk.calculate_rpn() {
+            value["rpn"] = serde_yml::Value::Number(expected_rpn.into());
+
+            // Update risk level based on the calculated RPN
+            let expected_level = match expected_rpn {
+                0..=50 => "low",
+                51..=150 => "medium",
+                151..=400 => "high",
+                _ => "critical",
+            };
+            value["risk_level"] = serde_yml::Value::String(expected_level.to_string());
+        }
+
+        // Write back
+        let updated_content = serde_yml::to_string(&value)
+            .map_err(|e| miette::miette!("Failed to serialize YAML: {}", e))?;
+        fs::write(path, updated_content)
+            .map_err(|e| miette::miette!("Failed to write file: {}", e))?;
+
+        stats.files_fixed += 1;
+        issues.clear(); // Clear issues since we fixed them
+    }
+
+    Ok(issues)
 }

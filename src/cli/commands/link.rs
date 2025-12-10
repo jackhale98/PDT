@@ -6,6 +6,7 @@ use std::fs;
 
 use crate::core::identity::EntityId;
 use crate::core::project::Project;
+use crate::core::shortid::ShortIdIndex;
 use crate::entities::requirement::Requirement;
 
 #[derive(clap::Subcommand, Debug)]
@@ -353,8 +354,12 @@ fn run_check(args: CheckLinksArgs) -> Result<()> {
     }
 }
 
-/// Find a requirement by ID prefix match
+/// Find a requirement by ID prefix match or short ID
 fn find_requirement(project: &Project, id_query: &str) -> Result<(Requirement, std::path::PathBuf)> {
+    // Resolve short ID (e.g., REQ@1) to full ID
+    let short_ids = ShortIdIndex::load(project);
+    let resolved_query = short_ids.resolve(id_query).unwrap_or_else(|| id_query.to_string());
+
     let mut matches: Vec<(Requirement, std::path::PathBuf)> = Vec::new();
 
     // Search both inputs and outputs
@@ -372,9 +377,9 @@ fn find_requirement(project: &Project, id_query: &str) -> Result<(Requirement, s
         {
             if let Ok(req) = crate::yaml::parse_yaml_file::<Requirement>(entry.path()) {
                 let id_str = req.id.to_string();
-                if id_str.starts_with(id_query) || id_str == id_query {
+                if id_str.starts_with(&resolved_query) || id_str == resolved_query {
                     matches.push((req, entry.path().to_path_buf()));
-                } else if req.title.to_lowercase().contains(&id_query.to_lowercase()) {
+                } else if !id_query.contains('@') && req.title.to_lowercase().contains(&resolved_query.to_lowercase()) {
                     matches.push((req, entry.path().to_path_buf()));
                 }
             }
@@ -407,15 +412,19 @@ fn find_requirement(project: &Project, id_query: &str) -> Result<(Requirement, s
     }
 }
 
-/// Resolve an entity ID from a query string
+/// Resolve an entity ID from a query string (supports short IDs like REQ@1)
 fn resolve_entity_id(project: &Project, query: &str) -> Result<EntityId> {
-    // First try to parse as a full ID
-    if let Ok(id) = query.parse::<EntityId>() {
+    // Resolve short ID (e.g., REQ@1, RISK@2) to full ID
+    let short_ids = ShortIdIndex::load(project);
+    let resolved_query = short_ids.resolve(query).unwrap_or_else(|| query.to_string());
+
+    // Try to parse as a full ID
+    if let Ok(id) = resolved_query.parse::<EntityId>() {
         return Ok(id);
     }
 
     // Try to find by prefix
-    let (req, _) = find_requirement(project, query)?;
+    let (req, _) = find_requirement(project, &resolved_query)?;
     Ok(req.id)
 }
 

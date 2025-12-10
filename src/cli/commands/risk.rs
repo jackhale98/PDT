@@ -411,9 +411,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    // Rebuild short ID index with current risks
-    let mut short_ids = ShortIdIndex::new();
-    short_ids.rebuild(risks.iter().map(|r| r.id.to_string()));
+    // Update short ID index with current risks (preserves other entity types)
+    let mut short_ids = ShortIdIndex::load(&project);
+    short_ids.rebuild_for_prefix("RISK", risks.iter().map(|r| r.id.to_string()));
     let _ = short_ids.save(&project);
 
     // Output based on format
@@ -434,7 +434,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,type,title,status,risk_level,severity,occurrence,detection,rpn");
             for risk in &risks {
-                let short_id = short_ids.get_short_id(&risk.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&risk.id.to_string()).unwrap_or(0);
                 println!(
                     "@{},{},{},{},{},{},{},{},{},{}",
                     short_id,
@@ -464,7 +464,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "-".repeat(90));
 
             for risk in &risks {
-                let short_id = short_ids.get_short_id(&risk.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&risk.id.to_string()).unwrap_or(0);
                 let id_display = format_short_id(&risk.id);
                 let title_truncated = truncate_str(&risk.title, 30);
                 let level_str = risk.risk_level.map_or("-".to_string(), |l| l.to_string());
@@ -505,7 +505,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| @ | ID | Type | Title | Status | Level | RPN |");
             println!("|---|---|---|---|---|---|---|");
             for risk in &risks {
-                let short_id = short_ids.get_short_id(&risk.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&risk.id.to_string()).unwrap_or(0);
                 println!(
                     "| @{} | {} | {} | {} | {} | {} | {} |",
                     short_id,

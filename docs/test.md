@@ -305,7 +305,7 @@ pdt test list --count
 pdt test show TEST-01HC2
 
 # Show using short ID
-pdt test show @1
+pdt test show TEST@1
 
 # Show by title search
 pdt test show "temperature"
@@ -324,7 +324,7 @@ pdt test show TEST-01HC2 -f json
 pdt test edit TEST-01HC2
 
 # Using short ID
-pdt test edit @1
+pdt test edit TEST@1
 ```
 
 ## Validation

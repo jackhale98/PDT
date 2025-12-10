@@ -408,9 +408,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         reqs.truncate(limit);
     }
 
-    // Rebuild short ID index with current requirements
-    let mut short_ids = ShortIdIndex::new();
-    short_ids.rebuild(reqs.iter().map(|r| r.id.to_string()));
+    // Update short ID index with current requirements (preserves other entity types)
+    let mut short_ids = ShortIdIndex::load(&project);
+    short_ids.rebuild_for_prefix("REQ", reqs.iter().map(|r| r.id.to_string()));
     let _ = short_ids.save(&project); // Ignore save errors
 
     // Output based on format
@@ -431,7 +431,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,type,title,status,priority,category,author,created");
             for req in &reqs {
-                let short_id = short_ids.get_short_id(&req.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&req.id.to_string()).unwrap_or(0);
                 println!(
                     "@{},{},{},{},{},{},{},{},{}",
                     short_id,
@@ -460,7 +460,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "-".repeat(90));
 
             for req in &reqs {
-                let short_id = short_ids.get_short_id(&req.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&req.id.to_string()).unwrap_or(0);
                 let id_display = format_short_id(&req.id);
                 let title_truncated = truncate_str(&req.title, 34);
                 println!(
@@ -490,7 +490,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| @ | ID | Type | Title | Status | Priority |");
             println!("|---|---|---|---|---|---|");
             for req in &reqs {
-                let short_id = short_ids.get_short_id(&req.id.to_string()).unwrap_or(0);
+                let short_id = short_ids.get_number(&req.id.to_string()).unwrap_or(0);
                 println!(
                     "| @{} | {} | {} | {} | {} | {} |",
                     short_id,

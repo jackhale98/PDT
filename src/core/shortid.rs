@@ -1,9 +1,7 @@
 //! Short ID system for easier entity selection
 //!
-//! Provides session-local aliases that map to full entity IDs.
-//! Supports two formats:
-//! - Entity-prefixed: `REQ@1`, `RISK@2`, `TEST@3` (cross-entity safe)
-//! - Simple: `@1`, `@2` (works within same entity type)
+//! Provides prefixed aliases that map to full entity IDs.
+//! Format: `REQ@1`, `RISK@2`, `TEST@3` (cross-entity safe)
 //!
 //! These are persisted in .pdt/shortids.json and regenerated when entities are listed.
 
@@ -16,10 +14,9 @@ use crate::core::project::Project;
 /// Index file location within a project
 const INDEX_FILE: &str = ".pdt/shortids.json";
 
-/// A mapping of short IDs to full entity IDs
+/// A mapping of prefixed short IDs to full entity IDs
 ///
-/// Supports entity-prefixed aliases (REQ@1, RISK@2) for cross-entity operations
-/// and simple aliases (@1, @2) for within-entity-type operations.
+/// Supports entity-prefixed aliases (REQ@1, RISK@2) for cross-entity operations.
 #[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ShortIdIndex {
     /// Maps "PREFIX@N" to full entity ID string (e.g., "REQ@1" -> "REQ-01ABC...")
@@ -29,15 +26,6 @@ pub struct ShortIdIndex {
     reverse: HashMap<String, String>,
     /// Next available short ID per prefix
     next_ids: HashMap<String, u32>,
-    /// Legacy: simple @N to full ID (for backwards compatibility within single list)
-    #[serde(skip)]
-    simple_entries: HashMap<u32, String>,
-    /// Legacy: full ID to simple @N
-    #[serde(skip)]
-    simple_reverse: HashMap<String, u32>,
-    /// Legacy next ID for simple entries
-    #[serde(skip)]
-    simple_next_id: u32,
 }
 
 impl ShortIdIndex {
@@ -47,9 +35,6 @@ impl ShortIdIndex {
             entries: HashMap::new(),
             reverse: HashMap::new(),
             next_ids: HashMap::new(),
-            simple_entries: HashMap::new(),
-            simple_reverse: HashMap::new(),
-            simple_next_id: 1,
         }
     }
 
@@ -60,7 +45,9 @@ impl ShortIdIndex {
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(mut index) = serde_json::from_str::<ShortIdIndex>(&content) {
                     // Rebuild reverse lookup
-                    index.reverse = index.entries.iter()
+                    index.reverse = index
+                        .entries
+                        .iter()
                         .map(|(k, v)| (v.clone(), k.clone()))
                         .collect();
                     return index;
@@ -77,15 +64,45 @@ impl ShortIdIndex {
         fs::write(path, content)
     }
 
-    /// Clear and rebuild the index with new entity IDs (for a single entity type list)
+    /// Clear and rebuild the index with new entity IDs
     ///
-    /// This clears the simple @N mappings but preserves and updates prefixed mappings.
+    /// Automatically extracts prefix from entity IDs and rebuilds entries for each prefix.
     pub fn rebuild(&mut self, entity_ids: impl IntoIterator<Item = String>) {
-        // Clear simple entries (these are session-local for current list)
-        self.simple_entries.clear();
-        self.simple_reverse.clear();
-        self.simple_next_id = 1;
+        let ids: Vec<String> = entity_ids.into_iter().collect();
 
+        // Find all prefixes and rebuild each
+        let prefixes: std::collections::HashSet<String> = ids
+            .iter()
+            .filter_map(|id| Self::extract_prefix(id).map(String::from))
+            .collect();
+
+        for prefix in &prefixes {
+            self.rebuild_for_prefix(prefix, ids.iter().filter(|id| id.starts_with(&format!("{}-", prefix))).cloned());
+        }
+    }
+
+    /// Clear and rebuild the index for a specific entity type
+    ///
+    /// This resets the numbering for the given prefix.
+    pub fn rebuild_for_prefix(&mut self, prefix: &str, entity_ids: impl IntoIterator<Item = String>) {
+        // Remove old entries for this prefix
+        let old_keys: Vec<String> = self
+            .entries
+            .keys()
+            .filter(|k| k.starts_with(&format!("{}@", prefix)))
+            .cloned()
+            .collect();
+
+        for key in old_keys {
+            if let Some(entity_id) = self.entries.remove(&key) {
+                self.reverse.remove(&entity_id);
+            }
+        }
+
+        // Reset counter for this prefix
+        self.next_ids.insert(prefix.to_string(), 1);
+
+        // Add new entities
         for id in entity_ids {
             self.add(id);
         }
@@ -96,135 +113,83 @@ impl ShortIdIndex {
         entity_id.split('-').next()
     }
 
-    /// Add an entity ID and return its simple short ID number
-    ///
-    /// This adds to both the prefixed index (REQ@1) and simple index (@1).
-    pub fn add(&mut self, entity_id: String) -> u32 {
-        // Handle simple @N (for current list session)
-        let simple_id = if let Some(&existing) = self.simple_reverse.get(&entity_id) {
-            existing
-        } else {
-            let id = self.simple_next_id;
-            self.simple_next_id += 1;
-            self.simple_entries.insert(id, entity_id.clone());
-            self.simple_reverse.insert(entity_id.clone(), id);
-            id
-        };
-
-        // Handle prefixed PREFIX@N (persistent)
-        if let Some(prefix) = Self::extract_prefix(&entity_id) {
-            if !self.reverse.contains_key(&entity_id) {
-                let next = self.next_ids.entry(prefix.to_string()).or_insert(1);
-                let prefixed_key = format!("{}@{}", prefix, next);
-                self.entries.insert(prefixed_key.clone(), entity_id.clone());
-                self.reverse.insert(entity_id, prefixed_key);
-                *next += 1;
-            }
+    /// Add an entity ID and return its short ID (e.g., "REQ@1")
+    pub fn add(&mut self, entity_id: String) -> Option<String> {
+        // Check if already exists
+        if let Some(existing) = self.reverse.get(&entity_id) {
+            return Some(existing.clone());
         }
 
-        simple_id
+        // Extract prefix and create prefixed short ID
+        let prefix = Self::extract_prefix(&entity_id)?;
+        let next = self.next_ids.entry(prefix.to_string()).or_insert(1);
+        let prefixed_key = format!("{}@{}", prefix, next);
+        self.entries.insert(prefixed_key.clone(), entity_id.clone());
+        self.reverse.insert(entity_id, prefixed_key.clone());
+        *next += 1;
+
+        Some(prefixed_key)
     }
 
     /// Resolve a short ID reference to a full entity ID
     ///
     /// Accepts:
-    /// - `PREFIX@N` format (e.g., `REQ@1`, `RISK@42`) - uses persistent prefixed index
-    /// - `@N` format (e.g., `@1`, `@42`) - uses session-local simple index
-    /// - Plain number (e.g., `1`, `42`) - uses session-local simple index
-    /// - Full or partial entity ID (passed through)
+    /// - `PREFIX@N` format (e.g., `REQ@1`, `RISK@42`)
+    /// - Full or partial entity ID (passed through for matching)
     pub fn resolve(&self, reference: &str) -> Option<String> {
         // Check for prefixed format: PREFIX@N (e.g., REQ@1, RISK@2)
         if let Some(at_pos) = reference.find('@') {
             let prefix = &reference[..at_pos];
-            let num_str = &reference[at_pos + 1..];
 
-            // If there's a non-empty prefix, it's a prefixed reference
+            // If there's a non-empty uppercase prefix, it's a prefixed reference
             if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_uppercase()) {
-                // Look up in prefixed entries
                 return self.entries.get(reference).cloned();
             }
         }
 
-        // Check if it's a simple short ID reference (@N or just N)
-        let num_str = if reference.starts_with('@') {
-            &reference[1..]
-        } else if reference.chars().all(|c| c.is_ascii_digit()) {
-            reference
-        } else {
-            // Not a short ID, return as-is for partial matching
-            return Some(reference.to_string());
-        };
-
-        // Parse the number and look up in simple entries
-        num_str.parse::<u32>().ok()
-            .and_then(|n| self.simple_entries.get(&n).cloned())
-            // Fall back to prefixed entries if simple not found
-            .or_else(|| {
-                // Try to find any prefixed entry ending with @N
-                for (key, value) in &self.entries {
-                    if key.ends_with(&format!("@{}", num_str)) {
-                        return Some(value.clone());
-                    }
-                }
-                None
-            })
-    }
-
-    /// Get the simple short ID number for a full entity ID
-    pub fn get_short_id(&self, entity_id: &str) -> Option<u32> {
-        self.simple_reverse.get(entity_id).copied()
+        // Not a short ID reference, return as-is for partial matching
+        Some(reference.to_string())
     }
 
     /// Get the prefixed short ID for a full entity ID (e.g., "REQ@1")
-    pub fn get_prefixed_short_id(&self, entity_id: &str) -> Option<String> {
+    pub fn get_short_id(&self, entity_id: &str) -> Option<String> {
         self.reverse.get(entity_id).cloned()
     }
 
-    /// Format an entity ID with its short ID prefix
+    /// Format an entity ID with its short ID prefix for display
     pub fn format_with_short_id(&self, entity_id: &EntityId) -> String {
         let id_str = entity_id.to_string();
-        if let Some(short_id) = self.simple_reverse.get(&id_str) {
-            format!("@{:<3} {}", short_id, id_str)
+        if let Some(short_id) = self.reverse.get(&id_str) {
+            format!("{:<8} {}", short_id, id_str)
         } else {
-            format!("     {}", id_str)
+            format!("{:8} {}", "", id_str)
         }
     }
 
-    /// Format an entity ID with its prefixed short ID (e.g., "REQ@1")
-    pub fn format_with_prefixed_short_id(&self, entity_id: &EntityId) -> Option<String> {
-        let id_str = entity_id.to_string();
-        self.reverse.get(&id_str).cloned()
+    /// Get short ID number for an entity (for backward compat with display)
+    pub fn get_number(&self, entity_id: &str) -> Option<u32> {
+        self.reverse.get(entity_id).and_then(|s| {
+            s.split('@').nth(1).and_then(|n| n.parse().ok())
+        })
     }
 
-    /// Get all simple entries as (short_id, full_id) pairs
-    pub fn iter(&self) -> impl Iterator<Item = (u32, &str)> {
-        self.simple_entries.iter().map(|(k, v)| (*k, v.as_str()))
-    }
-
-    /// Get all prefixed entries as (prefixed_id, full_id) pairs
-    pub fn iter_prefixed(&self) -> impl Iterator<Item = (&str, &str)> {
+    /// Get all entries as (prefixed_id, full_id) pairs
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
         self.entries.iter().map(|(k, v)| (k.as_str(), v.as_str()))
     }
 
-    /// Number of simple entries in the index (current session)
+    /// Number of entries in the index
     pub fn len(&self) -> usize {
-        self.simple_entries.len()
-    }
-
-    /// Total number of prefixed entries (all entity types)
-    pub fn prefixed_len(&self) -> usize {
         self.entries.len()
     }
 
     /// Check if the index is empty
     pub fn is_empty(&self) -> bool {
-        self.simple_entries.is_empty()
+        self.entries.is_empty()
     }
 
-    /// Merge another index's prefixed entries into this one
-    ///
-    /// This is useful for combining indexes from different list operations.
-    pub fn merge_prefixed(&mut self, other: &ShortIdIndex) {
+    /// Merge another index's entries into this one (preserving existing entries)
+    pub fn merge(&mut self, other: &ShortIdIndex) {
         for (key, value) in &other.entries {
             if !self.entries.contains_key(key) {
                 self.entries.insert(key.clone(), value.clone());
@@ -258,18 +223,16 @@ mod tests {
         let short1 = index.add("REQ-01ABC".to_string());
         let short2 = index.add("REQ-02DEF".to_string());
 
-        assert_eq!(short1, 1);
-        assert_eq!(short2, 2);
+        assert_eq!(short1, Some("REQ@1".to_string()));
+        assert_eq!(short2, Some("REQ@2".to_string()));
 
-        // Simple @N format works for current session
-        assert_eq!(index.resolve("@1"), Some("REQ-01ABC".to_string()));
-        assert_eq!(index.resolve("@2"), Some("REQ-02DEF".to_string()));
-        assert_eq!(index.resolve("1"), Some("REQ-01ABC".to_string()));
-        assert_eq!(index.resolve("@99"), None);
+        assert_eq!(index.resolve("REQ@1"), Some("REQ-01ABC".to_string()));
+        assert_eq!(index.resolve("REQ@2"), Some("REQ-02DEF".to_string()));
+        assert_eq!(index.resolve("REQ@99"), None);
     }
 
     #[test]
-    fn test_prefixed_short_id() {
+    fn test_prefixed_short_id_multiple_types() {
         let mut index = ShortIdIndex::new();
 
         index.add("REQ-01ABC".to_string());
@@ -289,28 +252,35 @@ mod tests {
     fn test_short_id_passthrough() {
         let index = ShortIdIndex::new();
 
-        // Non-numeric references should pass through
+        // Non-short-ID references should pass through
         assert_eq!(index.resolve("REQ-01ABC"), Some("REQ-01ABC".to_string()));
-        assert_eq!(index.resolve("temperature"), Some("temperature".to_string()));
+        assert_eq!(
+            index.resolve("temperature"),
+            Some("temperature".to_string())
+        );
     }
 
     #[test]
-    fn test_short_id_rebuild() {
+    fn test_short_id_rebuild_for_prefix() {
         let mut index = ShortIdIndex::new();
-        index.add("OLD-001".to_string());
-        index.add("OLD-002".to_string());
+        index.add("REQ-001".to_string());
+        index.add("REQ-002".to_string());
+        index.add("RISK-001".to_string());
 
-        assert_eq!(index.len(), 2);
-
-        index.rebuild(vec!["NEW-001".to_string(), "NEW-002".to_string(), "NEW-003".to_string()]);
-
-        // Simple entries get rebuilt
         assert_eq!(index.len(), 3);
-        assert_eq!(index.resolve("@1"), Some("NEW-001".to_string()));
-        assert_eq!(index.resolve("@3"), Some("NEW-003".to_string()));
 
-        // Prefixed entries accumulate (old ones preserved, new ones added)
-        assert!(index.prefixed_len() >= 3);
+        // Rebuild only REQ entries
+        index.rebuild_for_prefix(
+            "REQ",
+            vec!["REQ-NEW1".to_string(), "REQ-NEW2".to_string()],
+        );
+
+        // REQ entries are rebuilt
+        assert_eq!(index.resolve("REQ@1"), Some("REQ-NEW1".to_string()));
+        assert_eq!(index.resolve("REQ@2"), Some("REQ-NEW2".to_string()));
+
+        // RISK entries unchanged
+        assert_eq!(index.resolve("RISK@1"), Some("RISK-001".to_string()));
     }
 
     #[test]
@@ -328,22 +298,17 @@ mod tests {
     fn test_get_short_id() {
         let mut index = ShortIdIndex::new();
         index.add("REQ-001".to_string());
-        index.add("REQ-002".to_string());
-
-        assert_eq!(index.get_short_id("REQ-001"), Some(1));
-        assert_eq!(index.get_short_id("REQ-002"), Some(2));
-        assert_eq!(index.get_short_id("REQ-003"), None);
-    }
-
-    #[test]
-    fn test_get_prefixed_short_id() {
-        let mut index = ShortIdIndex::new();
-        index.add("REQ-001".to_string());
         index.add("RISK-001".to_string());
 
-        assert_eq!(index.get_prefixed_short_id("REQ-001"), Some("REQ@1".to_string()));
-        assert_eq!(index.get_prefixed_short_id("RISK-001"), Some("RISK@1".to_string()));
-        assert_eq!(index.get_prefixed_short_id("TEST-001"), None);
+        assert_eq!(
+            index.get_short_id("REQ-001"),
+            Some("REQ@1".to_string())
+        );
+        assert_eq!(
+            index.get_short_id("RISK-001"),
+            Some("RISK@1".to_string())
+        );
+        assert_eq!(index.get_short_id("TEST-001"), None);
     }
 
     #[test]
@@ -354,15 +319,23 @@ mod tests {
         index.add("REQ-01ABCDEF".to_string());
         index.add("RISK-01GHIJKL".to_string());
         index.add("TEST-01MNOPQR".to_string());
+        index.add("RSLT-01STUVWX".to_string());
 
         // Can resolve any entity type with prefixed format
         assert_eq!(index.resolve("REQ@1"), Some("REQ-01ABCDEF".to_string()));
         assert_eq!(index.resolve("RISK@1"), Some("RISK-01GHIJKL".to_string()));
         assert_eq!(index.resolve("TEST@1"), Some("TEST-01MNOPQR".to_string()));
+        assert_eq!(index.resolve("RSLT@1"), Some("RSLT-01STUVWX".to_string()));
+    }
 
-        // Simple @N refers to current session order
-        assert_eq!(index.resolve("@1"), Some("REQ-01ABCDEF".to_string()));
-        assert_eq!(index.resolve("@2"), Some("RISK-01GHIJKL".to_string()));
-        assert_eq!(index.resolve("@3"), Some("TEST-01MNOPQR".to_string()));
+    #[test]
+    fn test_get_number() {
+        let mut index = ShortIdIndex::new();
+        index.add("REQ-001".to_string());
+        index.add("REQ-002".to_string());
+
+        assert_eq!(index.get_number("REQ-001"), Some(1));
+        assert_eq!(index.get_number("REQ-002"), Some(2));
+        assert_eq!(index.get_number("REQ-003"), None);
     }
 }

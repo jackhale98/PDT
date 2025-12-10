@@ -8,7 +8,7 @@ A CLI tool for managing product development artifacts as plain-text YAML files. 
 - **Schema validation** - JSON Schema validation with helpful error messages
 - **Traceability** - Link entities together and generate traceability matrices
 - **ULID-based IDs** - Unique, sortable identifiers for all entities
-- **Short ID aliases** - Use `@1`, `@2`, etc. instead of typing long IDs
+- **Short ID aliases** - Use `REQ@1`, `RISK@2`, etc. instead of typing long IDs
 - **Beautiful error messages** - Line numbers, context, and actionable suggestions
 - **FMEA Risk Management** - Built-in support for Failure Mode and Effects Analysis
 
@@ -35,11 +35,11 @@ pdt init
 # Create a requirement
 pdt req new --title "Operating Temperature Range" --type input
 
-# List all requirements (shows @N short IDs)
+# List all requirements (shows REQ@N short IDs)
 pdt req list
 
 # Show a specific requirement using short ID
-pdt req show @1                    # Use short ID from list
+pdt req show REQ@1                 # Use prefixed short ID from list
 pdt req show REQ-01HC2             # Or partial ID match
 
 # Create a risk
@@ -51,22 +51,29 @@ pdt validate
 
 ## Short IDs
 
-After running `list` commands, PDT assigns short IDs (`@1`, `@2`, etc.) to entities:
+After running `list` commands, PDT assigns entity-prefixed short IDs (`REQ@1`, `RISK@1`, etc.) to entities:
 
 ```bash
 $ pdt req list
-@     ID               TYPE     TITLE                                STATUS     PRIORITY
-------------------------------------------------------------------------------------------
-@1    REQ-01HC2JB7...  input    Operating Temperature Range          approved   high
-@2    REQ-01HC2JB8...  output   Thermal Management Specification     draft      high
+@       ID               TYPE     TITLE                                STATUS     PRIORITY
+--------------------------------------------------------------------------------------------
+REQ@1   REQ-01HC2JB7...  input    Operating Temperature Range          approved   high
+REQ@2   REQ-01HC2JB8...  output   Thermal Management Specification     draft      high
 
-# Now use @N instead of full ID
-pdt req show @1
-pdt req edit @2
-pdt link add @1 --type satisfied_by @2
+$ pdt risk list
+@        ID                TYPE      TITLE                            STATUS     LEVEL    RPN
+----------------------------------------------------------------------------------------------
+RISK@1   RISK-01HC2JB7...  design    Battery Overheating              review     medium   108
+
+# Use prefixed short IDs instead of full IDs
+pdt req show REQ@1
+pdt risk show RISK@1
+pdt link add REQ@1 --type verified_by TEST@1
+pdt trace from REQ@1
 ```
 
-Short IDs are session-local and regenerated each time you run `list`.
+Short IDs are persistent per entity type - the same entity keeps its short ID across list commands.
+This enables cross-entity linking (e.g., linking `REQ@1` to `TEST@1`).
 
 ## Project Structure
 
@@ -151,6 +158,8 @@ pdt init --git              # Initialize with git repository
 pdt validate                # Validate all project files
 pdt validate --keep-going   # Continue after errors
 pdt validate --summary      # Show summary only
+pdt validate --fix          # Auto-fix calculated values (RPN, risk level)
+pdt validate --strict       # Treat warnings as errors
 ```
 
 ### Requirements

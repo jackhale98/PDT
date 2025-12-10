@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
+use crate::core::shortid::ShortIdIndex;
 use crate::entities::requirement::Requirement;
 
 #[derive(clap::Subcommand, Debug)]
@@ -226,10 +227,14 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 fn run_from(args: FromArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
+    // Resolve short ID if applicable
+    let short_ids = ShortIdIndex::load(&project);
+    let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
+
     // Find the starting entity
     let reqs = load_all_requirements(&project)?;
     let source = reqs.iter()
-        .find(|r| r.id.to_string().starts_with(&args.id) || r.title.to_lowercase().contains(&args.id.to_lowercase()))
+        .find(|r| r.id.to_string().starts_with(&resolved_id) || r.title.to_lowercase().contains(&resolved_id.to_lowercase()))
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
     println!(
@@ -297,10 +302,14 @@ fn run_from(args: FromArgs) -> Result<()> {
 fn run_to(args: ToArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
+    // Resolve short ID if applicable
+    let short_ids = ShortIdIndex::load(&project);
+    let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
+
     // Find the target entity
     let reqs = load_all_requirements(&project)?;
     let target = reqs.iter()
-        .find(|r| r.id.to_string().starts_with(&args.id) || r.title.to_lowercase().contains(&args.id.to_lowercase()))
+        .find(|r| r.id.to_string().starts_with(&resolved_id) || r.title.to_lowercase().contains(&resolved_id.to_lowercase()))
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
     println!(

@@ -46,6 +46,7 @@ Features represent dimensional characteristics on components that have tolerance
 | `plus_tol` | number | Plus tolerance (positive number) |
 | `minus_tol` | number | Minus tolerance (positive number) |
 | `units` | string | Units (default: "mm") |
+| `distribution` | enum | Statistical distribution: `normal` (default), `uniform`, `triangular` |
 
 ### GdtControl Object
 
@@ -84,9 +85,12 @@ dimensions:
     plus_tol: 0.1     # Maximum: 10.1
     minus_tol: 0.05   # Minimum: 9.95
     units: "mm"
+    distribution: normal  # For tolerance stackup analysis
 ```
 
 **Important**: Both `plus_tol` and `minus_tol` are stored as **positive numbers**.
+
+The `distribution` field specifies the statistical distribution used when this feature is added to a tolerance stackup for Monte Carlo analysis.
 
 ## Example
 
@@ -109,11 +113,13 @@ dimensions:
     plus_tol: 0.1
     minus_tol: 0.05
     units: "mm"
+    distribution: normal
   - name: "depth"
     nominal: 15.0
     plus_tol: 0.5
     minus_tol: 0.0
     units: "mm"
+    distribution: normal
 
 gdt:
   - symbol: position

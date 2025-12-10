@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::{EntityId, EntityPrefix};
+use crate::entities::stackup::Distribution;
 
 /// Feature type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -68,6 +69,11 @@ pub struct Dimension {
     /// Units (mm, in, etc.)
     #[serde(default = "default_units")]
     pub units: String,
+
+    /// Statistical distribution for tolerance analysis
+    /// Used when this feature is added to a stackup
+    #[serde(default)]
+    pub distribution: Distribution,
 }
 
 fn default_units() -> String {
@@ -315,6 +321,7 @@ impl Feature {
             plus_tol,
             minus_tol,
             units: "mm".to_string(),
+            distribution: Distribution::default(),
         });
     }
 
@@ -351,6 +358,7 @@ mod tests {
             plus_tol: 0.1,
             minus_tol: 0.05,
             units: "mm".to_string(),
+            distribution: Distribution::default(),
         };
 
         assert!((dim.mmc() - 10.1).abs() < 1e-10);

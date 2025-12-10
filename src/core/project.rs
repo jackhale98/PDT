@@ -169,6 +169,7 @@ impl Project {
             EntityPrefix::Proc => "manufacturing/processes",
             EntityPrefix::Ctrl => "manufacturing/controls",
             EntityPrefix::Quot => "bom/quotes",
+            EntityPrefix::Sup => "bom/suppliers",
             EntityPrefix::Act => "actions",
         }
     }

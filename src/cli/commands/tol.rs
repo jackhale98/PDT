@@ -11,7 +11,8 @@ use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
-use crate::entities::stackup::{Disposition, Stackup};
+use crate::entities::feature::Feature;
+use crate::entities::stackup::{Contributor, Direction, Disposition, Stackup};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 
 #[derive(Subcommand, Debug)]
@@ -30,6 +31,14 @@ pub enum TolCommands {
 
     /// Run/recalculate analysis (worst-case, RSS, Monte Carlo)
     Analyze(AnalyzeArgs),
+
+    /// Add feature(s) as contributors to a stackup
+    /// Use +FEAT@N for positive direction, ~FEAT@N for negative
+    Add(AddArgs),
+
+    /// Remove contributor(s) from a stackup by feature ID
+    #[command(name = "rm")]
+    Remove(RemoveArgs),
 }
 
 /// Disposition filter
@@ -165,6 +174,37 @@ pub struct AnalyzeArgs {
     pub verbose: bool,
 }
 
+#[derive(clap::Args, Debug)]
+pub struct AddArgs {
+    /// Stackup ID or short ID (TOL@N)
+    pub stackup: String,
+
+    /// Features to add with direction prefix: +FEAT@1 (positive) or ~FEAT@2 (negative)
+    /// Use ~ instead of - for negative to avoid conflicts with CLI flags
+    /// Examples: +FEAT@1 ~FEAT@2 +FEAT@3
+    #[arg(required = true)]
+    pub features: Vec<String>,
+
+    /// Dimension name to use from feature (default: first dimension)
+    #[arg(long, short = 'd')]
+    pub dimension: Option<String>,
+
+    /// Run analysis after adding
+    #[arg(long, short = 'a')]
+    pub analyze: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct RemoveArgs {
+    /// Stackup ID or short ID (TOL@N)
+    pub stackup: String,
+
+    /// Features to remove (by feature ID or short ID)
+    /// Examples: FEAT@1 FEAT@2
+    #[arg(required = true)]
+    pub features: Vec<String>,
+}
+
 /// Run a tol subcommand
 pub fn run(cmd: TolCommands, _global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -173,6 +213,8 @@ pub fn run(cmd: TolCommands, _global: &GlobalOpts) -> Result<()> {
         TolCommands::Show(args) => run_show(args),
         TolCommands::Edit(args) => run_edit(args),
         TolCommands::Analyze(args) => run_analyze(args),
+        TolCommands::Add(args) => run_add(args),
+        TolCommands::Remove(args) => run_remove(args),
     }
 }
 
@@ -782,6 +824,287 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         );
         println!("     Yield: {:.2}%", mc.yield_percent);
     }
+
+    Ok(())
+}
+
+fn run_add(args: AddArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+
+    // Resolve stackup short ID
+    let short_ids = ShortIdIndex::load(&project);
+    let resolved_stackup_id = short_ids
+        .resolve(&args.stackup)
+        .unwrap_or_else(|| args.stackup.clone());
+
+    // Find and load the stackup
+    let tol_dir = project.root().join("tolerances/stackups");
+    let mut found_path = None;
+
+    if tol_dir.exists() {
+        for entry in fs::read_dir(&tol_dir).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path();
+
+            if path.extension().map_or(false, |e| e == "yaml") {
+                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if filename.contains(&resolved_stackup_id) || filename.starts_with(&resolved_stackup_id)
+                {
+                    found_path = Some(path);
+                    break;
+                }
+            }
+        }
+    }
+
+    let stackup_path = found_path
+        .ok_or_else(|| miette::miette!("No stackup found matching '{}'", args.stackup))?;
+
+    // Load stackup
+    let content = fs::read_to_string(&stackup_path).into_diagnostic()?;
+    let mut stackup: Stackup = serde_yml::from_str(&content).into_diagnostic()?;
+
+    // Parse and process each feature reference
+    let feat_dir = project.root().join("tolerances/features");
+    let mut added_count = 0;
+
+    for feat_ref in &args.features {
+        // Parse direction prefix (+/~)
+        // Using ~ instead of - to avoid conflicts with CLI flags
+        let (direction, feat_id_str) = if feat_ref.starts_with('+') {
+            (Direction::Positive, &feat_ref[1..])
+        } else if feat_ref.starts_with('~') {
+            (Direction::Negative, &feat_ref[1..])
+        } else {
+            // Default to positive if no prefix
+            (Direction::Positive, feat_ref.as_str())
+        };
+
+        // Resolve feature short ID
+        let resolved_feat_id = short_ids
+            .resolve(feat_id_str)
+            .unwrap_or_else(|| feat_id_str.to_string());
+
+        // Find and load the feature
+        let mut feature_path = None;
+        if feat_dir.exists() {
+            for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
+                let entry = entry.into_diagnostic()?;
+                let path = entry.path();
+
+                if path.extension().map_or(false, |e| e == "yaml") {
+                    let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                    if filename.contains(&resolved_feat_id)
+                        || filename.starts_with(&resolved_feat_id)
+                    {
+                        feature_path = Some(path);
+                        break;
+                    }
+                }
+            }
+        }
+
+        let feat_path = feature_path
+            .ok_or_else(|| miette::miette!("No feature found matching '{}'", feat_id_str))?;
+
+        let feat_content = fs::read_to_string(&feat_path).into_diagnostic()?;
+        let feature: Feature = serde_yml::from_str(&feat_content).into_diagnostic()?;
+
+        // Get dimension from feature
+        let dimension = if let Some(ref dim_name) = args.dimension {
+            feature
+                .dimensions
+                .iter()
+                .find(|d| d.name.to_lowercase() == dim_name.to_lowercase())
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "Dimension '{}' not found in feature {}. Available: {}",
+                        dim_name,
+                        feature.id,
+                        feature
+                            .dimensions
+                            .iter()
+                            .map(|d| d.name.as_str())
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                })?
+        } else {
+            feature.dimensions.first().ok_or_else(|| {
+                miette::miette!(
+                    "Feature {} has no dimensions defined",
+                    feature.id
+                )
+            })?
+        };
+
+        // Check if feature is already in stackup
+        let already_exists = stackup
+            .contributors
+            .iter()
+            .any(|c| c.feature_id.as_ref() == Some(&feature.id.to_string()));
+
+        if already_exists {
+            println!(
+                "{} Feature {} already in stackup, skipping",
+                style("!").yellow(),
+                style(feat_id_str).cyan()
+            );
+            continue;
+        }
+
+        // Create contributor from feature
+        // Distribution comes from the feature's dimension, not CLI args
+        let contributor = Contributor {
+            name: format!("{} - {}", feature.title, dimension.name),
+            feature_id: Some(feature.id.to_string()),
+            direction,
+            nominal: dimension.nominal,
+            plus_tol: dimension.plus_tol,
+            minus_tol: dimension.minus_tol,
+            distribution: dimension.distribution,
+            source: if feature.drawing.number.is_empty() {
+                None
+            } else {
+                Some(format!("{} Rev {}", feature.drawing.number, feature.drawing.revision))
+            },
+        };
+
+        let dir_symbol = match direction {
+            Direction::Positive => "+",
+            Direction::Negative => "-",
+        };
+
+        println!(
+            "{} Added {} ({}{:.3} +{:.3}/-{:.3})",
+            style("✓").green(),
+            style(&contributor.name).cyan(),
+            dir_symbol,
+            contributor.nominal,
+            contributor.plus_tol,
+            contributor.minus_tol
+        );
+
+        stackup.contributors.push(contributor);
+        added_count += 1;
+    }
+
+    if added_count == 0 {
+        println!("No features added.");
+        return Ok(());
+    }
+
+    // Write updated stackup
+    let yaml_content = serde_yml::to_string(&stackup).into_diagnostic()?;
+    fs::write(&stackup_path, &yaml_content).into_diagnostic()?;
+
+    println!();
+    println!(
+        "{} Added {} contributor(s) to stackup {}",
+        style("✓").green(),
+        added_count,
+        style(&args.stackup).cyan()
+    );
+
+    // Optionally run analysis
+    if args.analyze {
+        println!();
+        run_analyze(AnalyzeArgs {
+            id: args.stackup,
+            iterations: 10000,
+            verbose: false,
+        })?;
+    }
+
+    Ok(())
+}
+
+fn run_remove(args: RemoveArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+
+    // Resolve stackup short ID
+    let short_ids = ShortIdIndex::load(&project);
+    let resolved_stackup_id = short_ids
+        .resolve(&args.stackup)
+        .unwrap_or_else(|| args.stackup.clone());
+
+    // Find and load the stackup
+    let tol_dir = project.root().join("tolerances/stackups");
+    let mut found_path = None;
+
+    if tol_dir.exists() {
+        for entry in fs::read_dir(&tol_dir).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path();
+
+            if path.extension().map_or(false, |e| e == "yaml") {
+                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if filename.contains(&resolved_stackup_id) || filename.starts_with(&resolved_stackup_id)
+                {
+                    found_path = Some(path);
+                    break;
+                }
+            }
+        }
+    }
+
+    let stackup_path = found_path
+        .ok_or_else(|| miette::miette!("No stackup found matching '{}'", args.stackup))?;
+
+    // Load stackup
+    let content = fs::read_to_string(&stackup_path).into_diagnostic()?;
+    let mut stackup: Stackup = serde_yml::from_str(&content).into_diagnostic()?;
+
+    let original_count = stackup.contributors.len();
+
+    // Resolve each feature ID and remove matching contributors
+    for feat_ref in &args.features {
+        let resolved_feat_id = short_ids
+            .resolve(feat_ref)
+            .unwrap_or_else(|| feat_ref.to_string());
+
+        let before_len = stackup.contributors.len();
+        stackup.contributors.retain(|c| {
+            if let Some(ref fid) = c.feature_id {
+                !fid.contains(&resolved_feat_id)
+            } else {
+                true
+            }
+        });
+
+        if stackup.contributors.len() < before_len {
+            println!(
+                "{} Removed contributor for feature {}",
+                style("✓").green(),
+                style(feat_ref).cyan()
+            );
+        } else {
+            println!(
+                "{} No contributor found for feature {}",
+                style("!").yellow(),
+                style(feat_ref).cyan()
+            );
+        }
+    }
+
+    let removed_count = original_count - stackup.contributors.len();
+
+    if removed_count == 0 {
+        println!("No contributors removed.");
+        return Ok(());
+    }
+
+    // Write updated stackup
+    let yaml_content = serde_yml::to_string(&stackup).into_diagnostic()?;
+    fs::write(&stackup_path, &yaml_content).into_diagnostic()?;
+
+    println!();
+    println!(
+        "{} Removed {} contributor(s) from stackup {}",
+        style("✓").green(),
+        removed_count,
+        style(&args.stackup).cyan()
+    );
 
     Ok(())
 }

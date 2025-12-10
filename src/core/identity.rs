@@ -34,6 +34,8 @@ pub enum EntityPrefix {
     Ctrl,
     /// Quote / cost record
     Quot,
+    /// Supplier
+    Sup,
     /// Action item
     Act,
 }
@@ -54,6 +56,7 @@ impl EntityPrefix {
             EntityPrefix::Proc => "PROC",
             EntityPrefix::Ctrl => "CTRL",
             EntityPrefix::Quot => "QUOT",
+            EntityPrefix::Sup => "SUP",
             EntityPrefix::Act => "ACT",
         }
     }
@@ -73,6 +76,7 @@ impl EntityPrefix {
             EntityPrefix::Proc,
             EntityPrefix::Ctrl,
             EntityPrefix::Quot,
+            EntityPrefix::Sup,
             EntityPrefix::Act,
         ]
     }
@@ -120,7 +124,8 @@ impl EntityPrefix {
                     "features" => return Some(EntityPrefix::Feat),
                     "manufacturing" | "processes" => return Some(EntityPrefix::Proc),
                     "controls" => return Some(EntityPrefix::Ctrl),
-                    "quotes" | "bom" => return Some(EntityPrefix::Quot),
+                    "quotes" => return Some(EntityPrefix::Quot),
+                    "suppliers" => return Some(EntityPrefix::Sup),
                     _ => {}
                 }
             }
@@ -152,6 +157,7 @@ impl FromStr for EntityPrefix {
             "PROC" => Ok(EntityPrefix::Proc),
             "CTRL" => Ok(EntityPrefix::Ctrl),
             "QUOT" => Ok(EntityPrefix::Quot),
+            "SUP" => Ok(EntityPrefix::Sup),
             "ACT" => Ok(EntityPrefix::Act),
             _ => Err(IdParseError::InvalidPrefix(s.to_string())),
         }
@@ -239,7 +245,7 @@ impl<'de> Deserialize<'de> for EntityId {
 /// Errors that can occur when parsing entity IDs
 #[derive(Debug, Error)]
 pub enum IdParseError {
-    #[error("invalid entity prefix: '{0}' (valid: REQ, RISK, TEST, RSLT, TOL, MATE, ASM, CMP, FEAT, PROC, CTRL, QUOT, ACT)")]
+    #[error("invalid entity prefix: '{0}' (valid: REQ, RISK, TEST, RSLT, TOL, MATE, ASM, CMP, FEAT, PROC, CTRL, QUOT, SUP, ACT)")]
     InvalidPrefix(String),
 
     #[error("missing '-' delimiter in entity ID: '{0}'")]

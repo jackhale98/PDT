@@ -10,9 +10,11 @@ use crate::cli::commands::{
     init::InitArgs,
     link::LinkCommands,
     mate::MateCommands,
+    quote::QuoteCommands,
     req::ReqCommands,
     risk::RiskCommands,
     rslt::RsltCommands,
+    sup::SupCommands,
     test::TestCommands,
     tol::TolCommands,
     trace::TraceCommands,
@@ -79,6 +81,14 @@ pub enum Commands {
     /// Assembly management (BOM assemblies)
     #[command(subcommand)]
     Asm(AsmCommands),
+
+    /// Quote management (supplier quotations)
+    #[command(subcommand)]
+    Quote(QuoteCommands),
+
+    /// Supplier management (approved suppliers)
+    #[command(subcommand)]
+    Sup(SupCommands),
 
     /// Feature management (dimensional features on components)
     #[command(subcommand)]

@@ -57,6 +57,13 @@ pub struct TemplateContext {
     pub target_nominal: Option<f64>,
     pub target_upper: Option<f64>,
     pub target_lower: Option<f64>,
+    // QUOT fields
+    pub supplier: Option<String>,
+    // SUP fields
+    pub short_name: Option<String>,
+    pub website: Option<String>,
+    pub payment_terms: Option<String>,
+    pub notes: Option<String>,
 }
 
 impl TemplateContext {
@@ -98,6 +105,11 @@ impl TemplateContext {
             target_nominal: None,
             target_upper: None,
             target_lower: None,
+            supplier: None,
+            short_name: None,
+            website: None,
+            payment_terms: None,
+            notes: None,
         }
     }
 
@@ -251,6 +263,31 @@ impl TemplateContext {
         self.target_nominal = Some(nominal);
         self.target_upper = Some(upper);
         self.target_lower = Some(lower);
+        self
+    }
+
+    pub fn with_supplier(mut self, supplier: impl Into<String>) -> Self {
+        self.supplier = Some(supplier.into());
+        self
+    }
+
+    pub fn with_short_name(mut self, short_name: impl Into<String>) -> Self {
+        self.short_name = Some(short_name.into());
+        self
+    }
+
+    pub fn with_website(mut self, website: impl Into<String>) -> Self {
+        self.website = Some(website.into());
+        self
+    }
+
+    pub fn with_payment_terms(mut self, payment_terms: impl Into<String>) -> Self {
+        self.payment_terms = Some(payment_terms.into());
+        self
+    }
+
+    pub fn with_notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
         self
     }
 }
@@ -524,12 +561,14 @@ description: |
 
 # Dimensions with tolerances
 # Uses plus_tol/minus_tol format (not +/- symbol)
+# Distribution: normal (default), uniform, or triangular
 dimensions:
   - name: "diameter"
     nominal: 10.0
     plus_tol: 0.1
     minus_tol: 0.05
     units: "mm"
+    distribution: normal
 
 # GD&T controls (optional)
 gdt: []
@@ -1108,6 +1147,201 @@ revision: 1
             executed_date = executed_date,
             category = category,
             duration = duration,
+            created = created,
+            author = ctx.author,
+        )
+    }
+
+    /// Generate a quote template
+    pub fn generate_quote(&self, ctx: &TemplateContext) -> Result<String, TemplateError> {
+        let mut context = tera::Context::new();
+        context.insert("id", &ctx.id.to_string());
+        context.insert("author", &ctx.author);
+        context.insert("created", &ctx.created.to_rfc3339());
+        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("component_id", &ctx.component_id.clone().unwrap_or_default());
+        context.insert("supplier", &ctx.supplier.clone().unwrap_or_default());
+
+        if self.tera.get_template_names().any(|n| n == "quote.yaml.tera") {
+            self.tera
+                .render("quote.yaml.tera", &context)
+                .map_err(|e| TemplateError::RenderError(e.to_string()))
+        } else {
+            Ok(self.hardcoded_quote_template(ctx))
+        }
+    }
+
+    fn hardcoded_quote_template(&self, ctx: &TemplateContext) -> String {
+        let title = ctx.title.clone().unwrap_or_default();
+        let component_id = ctx.component_id.clone().unwrap_or_default();
+        let supplier = ctx.supplier.clone().unwrap_or_default();
+        let created = ctx.created.to_rfc3339();
+
+        format!(
+            r#"# Quote: {title}
+# Created by PDT - Plain-text Product Development Toolkit
+
+id: {id}
+title: "{title}"
+
+# Supplier ID (SUP@N or full ID) - REQUIRED
+supplier: {supplier}
+
+# Component this quote is for (use --component or --assembly, not both)
+component: {component_id}
+# assembly: null
+
+# Supplier's quote reference number
+# quote_ref: ""
+
+description: |
+  # Notes about this quote
+  # Include any special terms or conditions
+
+# Currency for all prices
+currency: USD
+
+# Price breaks (quantity-based pricing)
+price_breaks:
+  - min_qty: 1
+    unit_price: 0.00
+    lead_time_days: 14
+
+# Order constraints
+moq: null
+lead_time_days: 14
+
+# One-time costs
+tooling_cost: null
+nre_costs: []
+
+# Validity
+quote_date: null
+valid_until: null
+
+# Quote-specific status
+quote_status: pending
+
+tags: []
+status: draft
+
+links:
+  related_quotes: []
+
+# Auto-managed metadata
+created: {created}
+author: {author}
+entity_revision: 1
+"#,
+            id = ctx.id,
+            title = title,
+            component_id = component_id,
+            supplier = supplier,
+            created = created,
+            author = ctx.author,
+        )
+    }
+
+    /// Generate a supplier template
+    pub fn generate_supplier(&self, ctx: &TemplateContext) -> Result<String, TemplateError> {
+        let mut context = tera::Context::new();
+        context.insert("id", &ctx.id.to_string());
+        context.insert("author", &ctx.author);
+        context.insert("created", &ctx.created.to_rfc3339());
+        context.insert("name", &ctx.title.clone().unwrap_or_default());
+        context.insert("short_name", &ctx.short_name.clone().unwrap_or_default());
+        context.insert("website", &ctx.website.clone().unwrap_or_default());
+        context.insert("payment_terms", &ctx.payment_terms.clone().unwrap_or_default());
+        context.insert("notes", &ctx.notes.clone().unwrap_or_default());
+
+        if self.tera.get_template_names().any(|n| n == "supplier.yaml.tera") {
+            self.tera
+                .render("supplier.yaml.tera", &context)
+                .map_err(|e| TemplateError::RenderError(e.to_string()))
+        } else {
+            Ok(self.hardcoded_supplier_template(ctx))
+        }
+    }
+
+    fn hardcoded_supplier_template(&self, ctx: &TemplateContext) -> String {
+        let name = ctx.title.clone().unwrap_or_default();
+        let short_name = ctx.short_name.clone();
+        let website = ctx.website.clone();
+        let payment_terms = ctx.payment_terms.clone();
+        let notes = ctx.notes.clone();
+        let created = ctx.created.to_rfc3339();
+
+        let short_name_line = short_name
+            .map(|s| format!("short_name: \"{}\"\n", s))
+            .unwrap_or_default();
+        let website_line = website
+            .map(|w| format!("website: \"{}\"\n", w))
+            .unwrap_or_default();
+        let payment_terms_line = payment_terms
+            .map(|t| format!("payment_terms: \"{}\"\n", t))
+            .unwrap_or_default();
+        let notes_line = notes
+            .map(|n| format!("notes: |\n  {}\n", n))
+            .unwrap_or_default();
+
+        format!(
+            r#"# Supplier: {name}
+# Created by PDT - Plain-text Product Development Toolkit
+
+id: {id}
+name: "{name}"
+{short_name_line}{website_line}
+# Contact information
+contacts: []
+# Example:
+#   - name: "John Smith"
+#     role: "Sales"
+#     email: "john@example.com"
+#     phone: "+1-555-0100"
+#     primary: true
+
+# Physical addresses
+addresses: []
+# Example:
+#   - type: headquarters
+#     street: "123 Main St"
+#     city: "San Francisco"
+#     state: "CA"
+#     postal: "94102"
+#     country: "USA"
+
+# Payment and currency
+{payment_terms_line}currency: USD
+
+# Quality certifications
+certifications: []
+# Example:
+#   - name: "ISO 9001:2015"
+#     expiry: 2025-12-31
+#     certificate_number: "CERT-12345"
+
+# Manufacturing capabilities
+capabilities: []
+# Options: machining, sheet_metal, casting, injection, extrusion, pcb,
+#          pcb_assembly, cable_assembly, assembly, testing, finishing, packaging
+
+{notes_line}tags: []
+status: draft
+
+links:
+  approved_for: []
+
+# Auto-managed metadata
+created: {created}
+author: {author}
+entity_revision: 1
+"#,
+            id = ctx.id,
+            name = name,
+            short_name_line = short_name_line,
+            website_line = website_line,
+            payment_terms_line = payment_terms_line,
+            notes_line = notes_line,
             created = created,
             author = ctx.author,
         )

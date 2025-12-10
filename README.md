@@ -254,6 +254,35 @@ pdt asm bom ASM@1                             # Show flattened BOM
 pdt asm edit ASM@1                            # Open in editor
 ```
 
+### Suppliers (Approved Vendors)
+
+```bash
+pdt sup new --name "Acme Manufacturing Corp"  # Create supplier
+pdt sup new -n "Acme Corp" --short-name "Acme" --website "https://acme.com"
+pdt sup new -i                                # Interactive mode
+pdt sup list                                  # List all suppliers
+pdt sup list -c machining                     # Filter by capability
+pdt sup list --search "acme"                  # Search in name
+pdt sup show SUP@1                            # Show details
+pdt sup edit SUP@1                            # Open in editor
+```
+
+### Quotes (Supplier Quotations)
+
+```bash
+pdt quote new --component CMP@1 --supplier SUP@1        # Quote for component
+pdt quote new --assembly ASM@1 --supplier SUP@1         # Quote for assembly
+pdt quote new -c CMP@1 -s SUP@1 --price 12.50 --lead-time 14
+pdt quote new -i                              # Interactive mode
+pdt quote list                                # List all quotes
+pdt quote list -Q pending                     # Filter by quote status
+pdt quote list --component CMP@1              # Filter by component
+pdt quote list --supplier SUP@1               # Filter by supplier
+pdt quote show QUOT@1                         # Show details
+pdt quote compare CMP@1                       # Compare quotes for item
+pdt quote edit QUOT@1                         # Open in editor
+```
+
 ### Features (Tolerances)
 
 ```bash
@@ -586,6 +615,99 @@ status: approved
 
 links:
   used_in: []
+
+created: 2024-01-15T10:30:00Z
+author: Jack Hale
+entity_revision: 1
+```
+
+## Supplier Example
+
+```yaml
+id: SUP-01HC2JB7SMQX7RS1Y0GFKBHPTA
+name: "Acme Manufacturing Corp"
+short_name: "Acme"
+website: "https://acme-mfg.com"
+
+contacts:
+  - name: "John Smith"
+    role: "Sales Manager"
+    email: "john.smith@acme-mfg.com"
+    phone: "+1-555-123-4567"
+    primary: true
+
+addresses:
+  - type: headquarters
+    street: "123 Industrial Way"
+    city: "San Francisco"
+    state: "CA"
+    postal: "94102"
+    country: "USA"
+
+payment_terms: "Net 30"
+currency: USD
+
+certifications:
+  - name: "ISO 9001:2015"
+    expiry: 2026-06-30
+
+capabilities: [machining, sheet_metal, assembly, finishing]
+
+notes: "Preferred supplier for precision machined parts."
+tags: [preferred, machining]
+status: approved
+
+links:
+  approved_for: []
+
+created: 2024-01-10T09:00:00Z
+author: Jack Hale
+entity_revision: 1
+```
+
+## Quote Example (Supplier Quotation)
+
+```yaml
+id: QUOT-01HC2JB7SMQX7RS1Y0GFKBHPTD
+title: "Acme Corp Quote"
+
+# Link to supplier entity (create supplier first with pdt sup new)
+supplier: SUP-01HC2JB7SMQX7RS1Y0GFKBHPTA
+
+# Quotes link to either component OR assembly (not both)
+component: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTC
+# assembly: ASM-...  # Use this instead for assembly quotes
+
+# Supplier's quote reference number
+quote_ref: "ACM-Q-2024-001"
+
+currency: USD
+
+# Quantity-based pricing tiers
+price_breaks:
+  - min_qty: 1
+    unit_price: 15.00
+    lead_time_days: 14
+  - min_qty: 100
+    unit_price: 12.50
+    lead_time_days: 14
+  - min_qty: 500
+    unit_price: 10.00
+    lead_time_days: 21
+
+moq: 1
+tooling_cost: 500.00
+lead_time_days: 14
+
+quote_date: 2024-01-15
+valid_until: 2024-04-15
+
+quote_status: received   # pending | received | accepted | rejected | expired
+tags: [bracket]
+status: draft
+
+links:
+  related_quotes: []
 
 created: 2024-01-15T10:30:00Z
 author: Jack Hale

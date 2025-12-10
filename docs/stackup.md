@@ -270,6 +270,31 @@ pdt tol analyze TOL@1 --iterations 50000
 pdt tol analyze TOL@1 --verbose
 ```
 
+### Add features as contributors
+
+```bash
+# Add features with direction prefix
+# Use + for positive direction, ~ for negative
+# Distribution is pulled from the feature's dimension
+pdt tol add TOL@1 +FEAT@1 ~FEAT@2 +FEAT@3
+
+# Specify which dimension to use (default: first dimension)
+pdt tol add TOL@1 --dimension length +FEAT@1
+
+# Run analysis after adding
+pdt tol add TOL@1 --analyze +FEAT@1 ~FEAT@2
+```
+
+### Remove contributors
+
+```bash
+# Remove contributor(s) by feature ID
+pdt tol rm TOL@1 FEAT@1
+
+# Remove multiple contributors
+pdt tol rm TOL@1 FEAT@1 FEAT@2
+```
+
 ### Edit a stackup
 
 ```bash

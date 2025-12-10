@@ -26,6 +26,8 @@ fn main() -> Result<()> {
         Commands::Rslt(cmd) => pdt::cli::commands::rslt::run(cmd, &global),
         Commands::Cmp(cmd) => pdt::cli::commands::cmp::run(cmd, &global),
         Commands::Asm(cmd) => pdt::cli::commands::asm::run(cmd, &global),
+        Commands::Quote(cmd) => pdt::cli::commands::quote::run(cmd, &global),
+        Commands::Sup(cmd) => pdt::cli::commands::sup::run(cmd, &global),
         Commands::Feat(cmd) => pdt::cli::commands::feat::run(cmd, &global),
         Commands::Mate(cmd) => pdt::cli::commands::mate::run(cmd, &global),
         Commands::Tol(cmd) => pdt::cli::commands::tol::run(cmd, &global),

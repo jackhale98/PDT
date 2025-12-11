@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/ncr.schema.json",
+  "title": "NCR",
+  "description": "A non-conformance report",
+  "type": "object",
+  "required": ["id", "title", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^NCR-[0-9A-Z]{26}$",
+      "description": "Unique identifier (NCR prefix + ULID)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "ncr_number": {
+      "type": ["string", "null"],
+      "description": "Company NCR number"
+    },
+    "report_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date issue was reported"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description"
+    },
+    "ncr_type": {
+      "type": "string",
+      "enum": ["internal", "supplier", "customer"],
+      "description": "NCR type"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["minor", "major", "critical"],
+      "description": "Severity level"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["dimensional", "cosmetic", "material", "functional", "documentation", "process", "packaging"],
+      "description": "Category of non-conformance"
+    },
+    "detection": {
+      "type": "object",
+      "properties": {
+        "found_at": {
+          "type": "string",
+          "enum": ["incoming", "in_process", "final", "customer", "field"]
+        },
+        "found_by": { "type": "string" },
+        "found_date": { "type": "string", "format": "date" },
+        "operation": { "type": "string" }
+      },
+      "description": "Detection information"
+    },
+    "affected_items": {
+      "type": "object",
+      "properties": {
+        "part_number": { "type": "string" },
+        "lot_number": { "type": "string" },
+        "serial_numbers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "quantity_affected": { "type": "integer" }
+      },
+      "description": "Affected items"
+    },
+    "defect": {
+      "type": "object",
+      "properties": {
+        "characteristic": { "type": ["string", "null"] },
+        "specification": { "type": ["string", "null"] },
+        "actual": { "type": ["string", "null"] },
+        "deviation": { "type": ["number", "null"] }
+      },
+      "description": "Defect details"
+    },
+    "containment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string" },
+          "date": { "type": "string", "format": "date" },
+          "completed_by": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["open", "completed"]
+          }
+        }
+      },
+      "description": "Containment actions"
+    },
+    "disposition": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": ["string", "null"],
+          "enum": ["use_as_is", "rework", "scrap", "return_to_supplier", null]
+        },
+        "decision_date": { "type": ["string", "null"], "format": "date" },
+        "decision_by": { "type": ["string", "null"] },
+        "justification": { "type": ["string", "null"] },
+        "mrb_required": { "type": "boolean" }
+      },
+      "description": "Disposition decision"
+    },
+    "cost_impact": {
+      "type": "object",
+      "properties": {
+        "rework_cost": { "type": "number" },
+        "scrap_cost": { "type": "number" },
+        "currency": { "type": "string" }
+      },
+      "description": "Cost impact"
+    },
+    "ncr_status": {
+      "type": "string",
+      "enum": ["open", "containment", "investigation", "disposition", "closed"],
+      "description": "NCR workflow status"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for filtering"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "component": { "type": ["string", "null"] },
+        "process": { "type": ["string", "null"] },
+        "control": { "type": ["string", "null"] },
+        "capa": { "type": ["string", "null"] }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "entity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Entity revision number"
+    }
+  },
+  "additionalProperties": true
+}

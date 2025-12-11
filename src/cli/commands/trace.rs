@@ -3,12 +3,22 @@
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::entities::requirement::Requirement;
+
+/// A generic entity with extracted link information
+#[derive(Debug, Clone)]
+struct GenericEntity {
+    id: String,
+    title: String,
+    prefix: EntityPrefix,
+    outgoing_links: Vec<(String, String)>, // (link_type, target_id)
+}
 
 #[derive(clap::Subcommand, Debug)]
 pub enum TraceCommands {
@@ -65,13 +75,17 @@ pub struct ToArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct OrphansArgs {
-    /// Only show requirements without outgoing links
+    /// Only show entities without outgoing links
     #[arg(long)]
     pub no_outgoing: bool,
 
-    /// Only show requirements without incoming links
+    /// Only show entities without incoming links
     #[arg(long)]
     pub no_incoming: bool,
+
+    /// Filter by entity type (e.g., REQ, PROC, CTRL, NCR)
+    #[arg(long, short = 't')]
+    pub entity_type: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -98,8 +112,21 @@ pub fn run(cmd: TraceCommands, global: &GlobalOpts) -> Result<()> {
 fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
-    // Build the traceability data
-    let reqs = load_all_requirements(&project)?;
+    // Load all entities generically
+    let entities = load_all_entities(&project)?;
+
+    // Parse source/target type filters
+    let source_filter: Option<EntityPrefix> = args.source_type.as_ref().and_then(|t| {
+        t.to_uppercase().parse().ok()
+    });
+    let target_filter: Option<EntityPrefix> = args.target_type.as_ref().and_then(|t| {
+        t.to_uppercase().parse().ok()
+    });
+
+    // Build a map of entity IDs to prefixes for target filtering
+    let id_to_prefix: HashMap<String, EntityPrefix> = entities.iter()
+        .map(|e| (e.id.clone(), e.prefix))
+        .collect();
 
     // Determine format - prefer args.output, fallback to global
     let use_dot = args.output == "dot";
@@ -111,27 +138,37 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
         #[derive(serde::Serialize)]
         struct Link {
             source_id: String,
+            source_type: String,
             source_title: String,
             link_type: String,
             target_id: String,
         }
 
         let mut links = Vec::new();
-        for req in &reqs {
-            for target in &req.links.satisfied_by {
-                links.push(Link {
-                    source_id: req.id.to_string(),
-                    source_title: req.title.clone(),
-                    link_type: "satisfied_by".to_string(),
-                    target_id: target.to_string(),
-                });
+        for entity in &entities {
+            // Apply source filter
+            if let Some(filter) = source_filter {
+                if entity.prefix != filter {
+                    continue;
+                }
             }
-            for target in &req.links.verified_by {
+
+            for (link_type, target) in &entity.outgoing_links {
+                // Apply target filter
+                if let Some(filter) = target_filter {
+                    if let Some(target_prefix) = id_to_prefix.get(target) {
+                        if *target_prefix != filter {
+                            continue;
+                        }
+                    }
+                }
+
                 links.push(Link {
-                    source_id: req.id.to_string(),
-                    source_title: req.title.clone(),
-                    link_type: "verified_by".to_string(),
-                    target_id: target.to_string(),
+                    source_id: entity.id.clone(),
+                    source_type: entity.prefix.to_string(),
+                    source_title: entity.title.clone(),
+                    link_type: link_type.clone(),
+                    target_id: target.clone(),
                 });
             }
         }
@@ -152,28 +189,52 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
         println!("  node [shape=box];");
         println!();
 
-        for req in &reqs {
-            let short_id = format_short_id(&req.id);
-            let label = format!("{}\\n{}", short_id, truncate(&req.title, 20));
-            println!("  \"{}\" [label=\"{}\"];", req.id, label);
-
-            for target in &req.links.satisfied_by {
-                println!("  \"{}\" -> \"{}\" [label=\"satisfied_by\"];", req.id, target);
+        for entity in &entities {
+            // Apply source filter
+            if let Some(filter) = source_filter {
+                if entity.prefix != filter {
+                    continue;
+                }
             }
-            for target in &req.links.verified_by {
-                println!("  \"{}\" -> \"{}\" [label=\"verified_by\", style=dashed];", req.id, target);
+
+            let short_id = format_id_short(&entity.id);
+            let label = format!("{}\\n{}", short_id, truncate(&entity.title, 20));
+            println!("  \"{}\" [label=\"{}\"];", entity.id, label);
+
+            for (link_type, target) in &entity.outgoing_links {
+                // Apply target filter
+                if let Some(filter) = target_filter {
+                    if let Some(target_prefix) = id_to_prefix.get(target) {
+                        if *target_prefix != filter {
+                            continue;
+                        }
+                    }
+                }
+                println!("  \"{}\" -> \"{}\" [label=\"{}\"];", entity.id, target, link_type);
             }
         }
         println!("}}");
     } else if use_csv {
         // CSV format
-        println!("source_id,source_title,link_type,target_id");
-        for req in &reqs {
-            for target in &req.links.satisfied_by {
-                println!("{},{},satisfied_by,{}", req.id, escape_csv(&req.title), target);
+        println!("source_id,source_type,source_title,link_type,target_id");
+        for entity in &entities {
+            // Apply source filter
+            if let Some(filter) = source_filter {
+                if entity.prefix != filter {
+                    continue;
+                }
             }
-            for target in &req.links.verified_by {
-                println!("{},{},verified_by,{}", req.id, escape_csv(&req.title), target);
+
+            for (link_type, target) in &entity.outgoing_links {
+                // Apply target filter
+                if let Some(filter) = target_filter {
+                    if let Some(target_prefix) = id_to_prefix.get(target) {
+                        if *target_prefix != filter {
+                            continue;
+                        }
+                    }
+                }
+                println!("{},{},{},{},{}", entity.id, entity.prefix, escape_csv(&entity.title), link_type, target);
             }
         }
     } else {
@@ -188,29 +249,34 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
         println!("{}", "-".repeat(76));
 
         let mut has_links = false;
-        for req in &reqs {
-            let short_id = format_short_id(&req.id);
-            let title = truncate(&req.title, 28);
-
-            for target in &req.links.satisfied_by {
-                has_links = true;
-                let target_short = format_short_id(target);
-                println!(
-                    "{:<16} {:<30} {:<14} {:<16}",
-                    short_id,
-                    title,
-                    style("satisfied_by").cyan(),
-                    target_short
-                );
+        for entity in &entities {
+            // Apply source filter
+            if let Some(filter) = source_filter {
+                if entity.prefix != filter {
+                    continue;
+                }
             }
-            for target in &req.links.verified_by {
+
+            let short_id = format_id_short(&entity.id);
+            let title = truncate(&entity.title, 28);
+
+            for (link_type, target) in &entity.outgoing_links {
+                // Apply target filter
+                if let Some(filter) = target_filter {
+                    if let Some(target_prefix) = id_to_prefix.get(target) {
+                        if *target_prefix != filter {
+                            continue;
+                        }
+                    }
+                }
+
                 has_links = true;
-                let target_short = format_short_id(target);
+                let target_short = format_id_short(target);
                 println!(
                     "{:<16} {:<30} {:<14} {:<16}",
                     short_id,
                     title,
-                    style("verified_by").yellow(),
+                    style(link_type).cyan(),
                     target_short
                 );
             }
@@ -231,40 +297,36 @@ fn run_from(args: FromArgs) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
     let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
 
+    // Load all entities
+    let entities = load_all_entities(&project)?;
+
     // Find the starting entity
-    let reqs = load_all_requirements(&project)?;
-    let source = reqs.iter()
-        .find(|r| r.id.to_string().starts_with(&resolved_id) || r.title.to_lowercase().contains(&resolved_id.to_lowercase()))
+    let source = entities.iter()
+        .find(|e| e.id.starts_with(&resolved_id) || e.title.to_lowercase().contains(&resolved_id.to_lowercase()))
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
     println!(
         "{} Tracing from: {} - {}",
         style("→").blue(),
-        style(&source.id.to_string()).cyan(),
+        style(&source.id).cyan(),
         source.title
     );
     println!();
 
-    // Build adjacency list for incoming links
+    // Build adjacency list for incoming links (what points TO each entity)
     let mut incoming: HashMap<String, Vec<(String, String)>> = HashMap::new();
-    for req in &reqs {
-        for target in &req.links.satisfied_by {
+    for entity in &entities {
+        for (link_type, target) in &entity.outgoing_links {
             incoming
-                .entry(target.to_string())
+                .entry(target.clone())
                 .or_default()
-                .push((req.id.to_string(), "satisfied_by".to_string()));
-        }
-        for target in &req.links.verified_by {
-            incoming
-                .entry(target.to_string())
-                .or_default()
-                .push((req.id.to_string(), "verified_by".to_string()));
+                .push((entity.id.clone(), link_type.clone()));
         }
     }
 
     // BFS to find what depends on this entity
     let mut visited = HashSet::new();
-    let mut queue: Vec<(String, usize)> = vec![(source.id.to_string(), 0)];
+    let mut queue: Vec<(String, usize)> = vec![(source.id.clone(), 0)];
     let max_depth = args.depth.unwrap_or(usize::MAX);
 
     println!("{}", style("Entities that depend on this:").bold());
@@ -306,38 +368,33 @@ fn run_to(args: ToArgs) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
     let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
 
+    // Load all entities
+    let entities = load_all_entities(&project)?;
+
     // Find the target entity
-    let reqs = load_all_requirements(&project)?;
-    let target = reqs.iter()
-        .find(|r| r.id.to_string().starts_with(&resolved_id) || r.title.to_lowercase().contains(&resolved_id.to_lowercase()))
+    let target = entities.iter()
+        .find(|e| e.id.starts_with(&resolved_id) || e.title.to_lowercase().contains(&resolved_id.to_lowercase()))
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
     println!(
         "{} Tracing to: {} - {}",
         style("→").blue(),
-        style(&target.id.to_string()).cyan(),
+        style(&target.id).cyan(),
         target.title
     );
     println!();
 
     // Build adjacency list for outgoing links
     let mut outgoing: HashMap<String, Vec<(String, String)>> = HashMap::new();
-    for req in &reqs {
-        let mut links = Vec::new();
-        for t in &req.links.satisfied_by {
-            links.push((t.to_string(), "satisfied_by".to_string()));
-        }
-        for t in &req.links.verified_by {
-            links.push((t.to_string(), "verified_by".to_string()));
-        }
-        if !links.is_empty() {
-            outgoing.insert(req.id.to_string(), links);
+    for entity in &entities {
+        if !entity.outgoing_links.is_empty() {
+            outgoing.insert(entity.id.clone(), entity.outgoing_links.clone());
         }
     }
 
     // BFS to find what this entity depends on
     let mut visited = HashSet::new();
-    let mut queue: Vec<(String, usize)> = vec![(target.id.to_string(), 0)];
+    let mut queue: Vec<(String, usize)> = vec![(target.id.clone(), 0)];
     let max_depth = args.depth.unwrap_or(usize::MAX);
 
     println!("{}", style("Dependencies:").bold());
@@ -357,7 +414,7 @@ fn run_to(args: ToArgs) -> Result<()> {
         }
 
         if let Some(deps) = outgoing.get(&id) {
-            for (dep_id, _link_type) in deps {
+            for (_, dep_id) in deps {
                 if !visited.contains(dep_id) {
                     queue.push((dep_id.clone(), depth + 1));
                 }
@@ -374,25 +431,33 @@ fn run_to(args: ToArgs) -> Result<()> {
 
 fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let reqs = load_all_requirements(&project)?;
+    let entities = load_all_entities(&project)?;
 
-    // Build incoming links map
+    // Parse entity type filter if provided
+    let type_filter: Option<EntityPrefix> = args.entity_type.as_ref().and_then(|t| {
+        t.to_uppercase().parse().ok()
+    });
+
+    // Build incoming links map (what entities are linked TO)
     let mut has_incoming: HashSet<String> = HashSet::new();
-    for req in &reqs {
-        for target in &req.links.satisfied_by {
-            has_incoming.insert(target.to_string());
-        }
-        for target in &req.links.verified_by {
-            has_incoming.insert(target.to_string());
+    for entity in &entities {
+        for (_, target) in &entity.outgoing_links {
+            has_incoming.insert(target.clone());
         }
     }
 
-    let mut orphans: Vec<(&Requirement, &str)> = Vec::new();
+    let mut orphans: Vec<(&GenericEntity, &str)> = Vec::new();
 
-    for req in &reqs {
-        let id_str = req.id.to_string();
-        let has_outgoing = !req.links.satisfied_by.is_empty() || !req.links.verified_by.is_empty();
-        let has_inc = has_incoming.contains(&id_str);
+    for entity in &entities {
+        // Apply type filter
+        if let Some(filter) = type_filter {
+            if entity.prefix != filter {
+                continue;
+            }
+        }
+
+        let has_outgoing = !entity.outgoing_links.is_empty();
+        let has_inc = has_incoming.contains(&entity.id);
 
         let is_orphan = if args.no_outgoing && args.no_incoming {
             !has_outgoing && !has_inc
@@ -412,7 +477,7 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
             } else {
                 "no incoming"
             };
-            orphans.push((req, reason));
+            orphans.push((entity, reason));
         }
     }
 
@@ -422,13 +487,15 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
             #[derive(serde::Serialize)]
             struct OrphanInfo {
                 id: String,
+                entity_type: String,
                 title: String,
                 reason: String,
             }
             let data: Vec<_> = orphans.iter()
-                .map(|(req, reason)| OrphanInfo {
-                    id: req.id.to_string(),
-                    title: req.title.clone(),
+                .map(|(entity, reason)| OrphanInfo {
+                    id: entity.id.clone(),
+                    entity_type: entity.prefix.to_string(),
+                    title: entity.title.clone(),
                     reason: reason.to_string(),
                 })
                 .collect();
@@ -436,20 +503,23 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", json);
         }
         OutputFormat::Id => {
-            for (req, _) in &orphans {
-                println!("{}", req.id);
+            for (entity, _) in &orphans {
+                println!("{}", entity.id);
             }
         }
         _ => {
-            println!("{}", style("Orphaned Requirements").bold());
+            let type_label = type_filter
+                .map(|t| format!("{} ", t))
+                .unwrap_or_default();
+            println!("{}", style(format!("Orphaned {}Entities", type_label)).bold());
             println!("{}", style("─".repeat(60)).dim());
 
-            for (req, reason) in &orphans {
+            for (entity, reason) in &orphans {
                 println!(
                     "{} {} - {} ({})",
                     style("○").yellow(),
-                    format_short_id(&req.id),
-                    truncate(&req.title, 40),
+                    format_id_short(&entity.id),
+                    truncate(&entity.title, 40),
                     style(reason).dim()
                 );
             }
@@ -457,12 +527,12 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
             println!();
             if orphans.is_empty() {
                 println!(
-                    "{} No orphaned requirements found!",
+                    "{} No orphaned entities found!",
                     style("✓").green().bold()
                 );
             } else {
                 println!(
-                    "Found {} orphaned requirement(s)",
+                    "Found {} orphaned entity(ies)",
                     style(orphans.len()).yellow()
                 );
             }
@@ -611,6 +681,96 @@ fn load_all_requirements(project: &Project) -> Result<Vec<Requirement>> {
     }
 
     Ok(reqs)
+}
+
+/// Load all entities from the project (generic version)
+fn load_all_entities(project: &Project) -> Result<Vec<GenericEntity>> {
+    let mut entities = Vec::new();
+
+    // Iterate over all entity types
+    for prefix in EntityPrefix::all() {
+        for path in project.iter_entity_files(*prefix) {
+            if let Ok(entity) = load_generic_entity(&path, *prefix) {
+                entities.push(entity);
+            }
+        }
+    }
+
+    // Also check additional directories that may not be covered by iter_entity_files
+    let additional_dirs = [
+        ("requirements/outputs", EntityPrefix::Req),
+        ("verification/results", EntityPrefix::Rslt),
+        ("validation/results", EntityPrefix::Rslt),
+        ("validation/protocols", EntityPrefix::Test),
+    ];
+
+    for (dir, prefix) in additional_dirs {
+        let full_path = project.root().join(dir);
+        if full_path.exists() {
+            for entry in walkdir::WalkDir::new(&full_path)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+                .filter(|e| e.path().to_string_lossy().ends_with(".pdt.yaml"))
+            {
+                if let Ok(entity) = load_generic_entity(&entry.path().to_path_buf(), prefix) {
+                    // Avoid duplicates
+                    if !entities.iter().any(|e| e.id == entity.id) {
+                        entities.push(entity);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(entities)
+}
+
+/// Load a single entity generically by parsing YAML
+fn load_generic_entity(path: &PathBuf, prefix: EntityPrefix) -> Result<GenericEntity> {
+    let content = std::fs::read_to_string(path).into_diagnostic()?;
+    let value: serde_yml::Value = serde_yml::from_str(&content).into_diagnostic()?;
+
+    let id = value.get("id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| miette::miette!("Missing id in {:?}", path))?
+        .to_string();
+
+    let title = value.get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
+    let mut outgoing_links = Vec::new();
+
+    // Extract links from the 'links' field
+    if let Some(links) = value.get("links") {
+        if let Some(links_map) = links.as_mapping() {
+            for (key, value) in links_map {
+                if let Some(link_type) = key.as_str() {
+                    // Handle array of links
+                    if let Some(arr) = value.as_sequence() {
+                        for item in arr {
+                            if let Some(target) = item.as_str() {
+                                outgoing_links.push((link_type.to_string(), target.to_string()));
+                            }
+                        }
+                    }
+                    // Handle single link
+                    else if let Some(target) = value.as_str() {
+                        outgoing_links.push((link_type.to_string(), target.to_string()));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(GenericEntity {
+        id,
+        title,
+        prefix,
+        outgoing_links,
+    })
 }
 
 /// Format an entity ID for short display

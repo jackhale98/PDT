@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/control.schema.json",
+  "title": "Control",
+  "description": "A control plan item",
+  "type": "object",
+  "required": ["id", "title", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^CTRL-[0-9A-Z]{26}$",
+      "description": "Unique identifier (CTRL prefix + ULID)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description"
+    },
+    "control_type": {
+      "type": "string",
+      "enum": ["spc", "inspection", "poka_yoke", "visual", "functional_test", "attribute"],
+      "description": "Type of control"
+    },
+    "control_category": {
+      "type": "string",
+      "enum": ["variable", "attribute"],
+      "description": "Control category"
+    },
+    "characteristic": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "nominal": { "type": "number" },
+        "upper_limit": { "type": "number" },
+        "lower_limit": { "type": "number" },
+        "units": { "type": "string" },
+        "critical": { "type": "boolean" }
+      },
+      "description": "Characteristic being controlled"
+    },
+    "measurement": {
+      "type": "object",
+      "properties": {
+        "method": { "type": "string" },
+        "equipment": { "type": "string" },
+        "gage_rr_percent": { "type": ["number", "null"] }
+      },
+      "description": "Measurement method"
+    },
+    "sampling": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["continuous", "periodic", "lot", "first_article"]
+        },
+        "frequency": { "type": "string" },
+        "sample_size": { "type": "integer" }
+      },
+      "description": "Sampling plan"
+    },
+    "control_limits": {
+      "type": ["object", "null"],
+      "properties": {
+        "ucl": { "type": "number" },
+        "lcl": { "type": "number" },
+        "target": { "type": "number" }
+      },
+      "description": "SPC control limits"
+    },
+    "reaction_plan": {
+      "type": "string",
+      "description": "Out-of-control reaction plan"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for filtering"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "process": {
+          "type": "string",
+          "description": "Parent process"
+        },
+        "feature": {
+          "type": ["string", "null"],
+          "description": "Feature being controlled"
+        },
+        "verifies": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Requirements verified"
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "entity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Entity revision number"
+    }
+  },
+  "additionalProperties": true
+}

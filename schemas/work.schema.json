@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/work_instruction.schema.json",
+  "title": "WorkInstruction",
+  "description": "A work instruction for operators",
+  "type": "object",
+  "required": ["id", "title", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^WORK-[0-9A-Z]{26}$",
+      "description": "Unique identifier (WORK prefix + ULID)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "document_number": {
+      "type": "string",
+      "description": "Document number (e.g., WI-MACH-015)"
+    },
+    "revision": {
+      "type": "string",
+      "description": "Document revision"
+    },
+    "description": {
+      "type": "string",
+      "description": "Purpose/description"
+    },
+    "safety": {
+      "type": "object",
+      "properties": {
+        "ppe_required": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "item": { "type": "string" },
+              "standard": { "type": "string" }
+            }
+          }
+        },
+        "hazards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hazard": { "type": "string" },
+              "control": { "type": "string" }
+            }
+          }
+        }
+      },
+      "description": "Safety requirements"
+    },
+    "tools_required": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "part_number": { "type": "string" }
+        }
+      },
+      "description": "Tools needed"
+    },
+    "materials_required": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "specification": { "type": "string" }
+        }
+      },
+      "description": "Materials needed"
+    },
+    "procedure": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": { "type": "integer" },
+          "action": { "type": "string" },
+          "verification": { "type": ["string", "null"] },
+          "caution": { "type": ["string", "null"] },
+          "image": { "type": ["string", "null"] },
+          "estimated_time_minutes": { "type": ["number", "null"] }
+        }
+      },
+      "description": "Step-by-step procedure"
+    },
+    "quality_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "at_step": { "type": "integer" },
+          "characteristic": { "type": "string" },
+          "specification": { "type": "string" }
+        }
+      },
+      "description": "In-process quality checks"
+    },
+    "estimated_duration_minutes": {
+      "type": ["number", "null"],
+      "description": "Total estimated time"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for filtering"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "process": {
+          "type": "string",
+          "description": "Parent process"
+        },
+        "controls": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Related control plan items"
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "entity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Entity revision number"
+    }
+  },
+  "additionalProperties": true
+}

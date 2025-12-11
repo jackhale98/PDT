@@ -3,8 +3,9 @@
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
+use std::path::PathBuf;
 
-use crate::core::identity::EntityId;
+use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::entities::requirement::Requirement;
@@ -118,11 +119,32 @@ fn run_add(args: AddLinkArgs) -> Result<()> {
     );
 
     if args.reciprocal {
-        // TODO: Add reciprocal link
-        println!(
-            "{} Reciprocal linking not yet implemented",
-            style("!").yellow()
-        );
+        // Determine reciprocal link type and add it
+        match add_reciprocal_link(&project, &source_req.id, &target_id, &link_type) {
+            Ok(Some(recip_type)) => {
+                println!(
+                    "{} Added reciprocal link: {} --[{}]--> {}",
+                    style("✓").green(),
+                    format_short_id(&target_id),
+                    style(&recip_type).cyan(),
+                    format_short_id(&source_req.id)
+                );
+            }
+            Ok(None) => {
+                println!(
+                    "{} No reciprocal link type defined for '{}' on target entity",
+                    style("!").yellow(),
+                    link_type
+                );
+            }
+            Err(e) => {
+                println!(
+                    "{} Failed to add reciprocal link: {}",
+                    style("!").yellow(),
+                    e
+                );
+            }
+        }
     }
 
     Ok(())
@@ -557,4 +579,118 @@ fn format_short_id(id: &EntityId) -> String {
     } else {
         full
     }
+}
+
+/// Add a reciprocal link from target back to source
+/// Returns Ok(Some(link_type)) if successful, Ok(None) if no reciprocal defined
+fn add_reciprocal_link(
+    project: &Project,
+    source_id: &EntityId,
+    target_id: &EntityId,
+    link_type: &str,
+) -> Result<Option<String>> {
+    // Determine the reciprocal link type based on source link type and target entity type
+    let target_prefix = target_id.prefix();
+
+    let reciprocal_type = get_reciprocal_link_type(link_type, target_prefix);
+
+    let recip_type = match reciprocal_type {
+        Some(t) => t,
+        None => return Ok(None),
+    };
+
+    // Find the target entity file
+    let target_path = find_entity_file(project, target_id)?;
+
+    // Read and update the target file
+    let content = fs::read_to_string(&target_path).into_diagnostic()?;
+    let updated_content = add_link_to_yaml(&content, &recip_type, &source_id.to_string())?;
+    fs::write(&target_path, &updated_content).into_diagnostic()?;
+
+    Ok(Some(recip_type))
+}
+
+/// Get the reciprocal link type for a given forward link type and target entity prefix
+fn get_reciprocal_link_type(link_type: &str, target_prefix: EntityPrefix) -> Option<String> {
+    match (link_type, target_prefix) {
+        // REQ.verified_by -> TEST means TEST.verifies -> REQ
+        ("verified_by", EntityPrefix::Test) => Some("verifies".to_string()),
+
+        // REQ.verified_by -> CTRL means CTRL.verifies -> REQ
+        ("verified_by", EntityPrefix::Ctrl) => Some("verifies".to_string()),
+
+        // REQ.satisfied_by -> REQ means bidirectional satisfaction
+        ("satisfied_by", EntityPrefix::Req) => Some("satisfied_by".to_string()),
+
+        // TEST.verifies -> REQ or CTRL.verifies -> REQ means REQ.verified_by
+        ("verifies", EntityPrefix::Req) => Some("verified_by".to_string()),
+
+        // related_to is symmetric
+        ("related_to", _) => Some("related_to".to_string()),
+
+        // process/control/ncr/capa links
+        ("process", EntityPrefix::Proc) => None, // Processes don't link back
+        ("controls", EntityPrefix::Ctrl) => Some("process".to_string()),
+        ("ncrs", EntityPrefix::Ncr) => None,
+        ("capa", EntityPrefix::Capa) => Some("ncrs".to_string()),
+
+        // No reciprocal defined for other cases
+        (_, _) => None,
+    }
+}
+
+/// Find an entity file by its ID
+fn find_entity_file(project: &Project, id: &EntityId) -> Result<PathBuf> {
+    let prefix = id.prefix();
+    let id_str = id.to_string();
+
+    // Determine search directories based on entity prefix
+    let search_dirs: Vec<PathBuf> = match prefix {
+        EntityPrefix::Req => vec![
+            project.root().join("requirements/inputs"),
+            project.root().join("requirements/outputs"),
+        ],
+        EntityPrefix::Risk => vec![project.root().join("design/risks")],
+        EntityPrefix::Test => vec![
+            project.root().join("verification/protocols"),
+            project.root().join("validation/protocols"),
+        ],
+        EntityPrefix::Rslt => vec![
+            project.root().join("verification/results"),
+            project.root().join("validation/results"),
+        ],
+        EntityPrefix::Cmp => vec![project.root().join("design/components")],
+        EntityPrefix::Asm => vec![project.root().join("design/assemblies")],
+        EntityPrefix::Feat => vec![project.root().join("tolerances/features")],
+        EntityPrefix::Mate => vec![project.root().join("tolerances/mates")],
+        EntityPrefix::Tol => vec![project.root().join("tolerances/stackups")],
+        EntityPrefix::Quot => vec![project.root().join("sourcing/quotes")],
+        EntityPrefix::Sup => vec![project.root().join("sourcing/suppliers")],
+        EntityPrefix::Proc => vec![project.root().join("manufacturing/processes")],
+        EntityPrefix::Ctrl => vec![project.root().join("manufacturing/controls")],
+        EntityPrefix::Work => vec![project.root().join("manufacturing/work_instructions")],
+        EntityPrefix::Ncr => vec![project.root().join("manufacturing/ncrs")],
+        EntityPrefix::Capa => vec![project.root().join("manufacturing/capas")],
+        EntityPrefix::Act => vec![project.root().join("manufacturing/actions")],
+    };
+
+    for dir in search_dirs {
+        if !dir.exists() {
+            continue;
+        }
+
+        for entry in walkdir::WalkDir::new(&dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().to_string_lossy().ends_with(".pdt.yaml"))
+        {
+            let filename = entry.file_name().to_string_lossy();
+            if filename.contains(&id_str) || filename.starts_with(&id_str) {
+                return Ok(entry.path().to_path_buf());
+            }
+        }
+    }
+
+    Err(miette::miette!("Entity file not found for {}", id_str))
 }

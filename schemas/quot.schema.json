@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/quote.schema.json",
+  "title": "Quote",
+  "description": "A supplier quote",
+  "type": "object",
+  "required": ["id", "title", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^QUOT-[0-9A-Z]{26}$",
+      "description": "Unique identifier (QUOT prefix + ULID)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "quote_number": {
+      "type": "string",
+      "description": "Supplier quote number"
+    },
+    "description": {
+      "type": "string",
+      "description": "Quote description"
+    },
+    "quote_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of quote"
+    },
+    "valid_until": {
+      "type": "string",
+      "format": "date",
+      "description": "Quote expiration date"
+    },
+    "currency": {
+      "type": "string",
+      "description": "Currency code"
+    },
+    "line_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "line_number": { "type": "integer" },
+          "description": { "type": "string" },
+          "part_number": { "type": "string" },
+          "quantity": { "type": "number" },
+          "unit_price": { "type": "number" },
+          "extended_price": { "type": "number" },
+          "lead_time_days": { "type": "integer" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "Line items"
+    },
+    "terms": {
+      "type": "object",
+      "properties": {
+        "payment": { "type": "string" },
+        "shipping": { "type": "string" },
+        "incoterm": { "type": "string" },
+        "warranty": { "type": "string" }
+      },
+      "description": "Quote terms"
+    },
+    "total_price": {
+      "type": "number",
+      "description": "Total quoted price"
+    },
+    "quote_status": {
+      "type": "string",
+      "enum": ["pending", "accepted", "rejected", "expired", "superseded"],
+      "description": "Quote status"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for filtering"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "supplier": { "type": "string" },
+        "components": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "supersedes": { "type": "string" },
+        "superseded_by": { "type": "string" }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "entity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Entity revision number"
+    }
+  },
+  "additionalProperties": true
+}

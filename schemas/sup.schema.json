@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/supplier.schema.json",
+  "title": "Supplier",
+  "description": "A supplier record",
+  "type": "object",
+  "required": ["id", "title", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^SUP-[0-9A-Z]{26}$",
+      "description": "Unique identifier (SUP prefix + ULID)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Supplier name"
+    },
+    "supplier_code": {
+      "type": "string",
+      "description": "Internal supplier code"
+    },
+    "description": {
+      "type": "string",
+      "description": "Supplier description"
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "title": { "type": "string" }
+      },
+      "description": "Primary contact"
+    },
+    "address": {
+      "type": "object",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "state": { "type": "string" },
+        "postal_code": { "type": "string" },
+        "country": { "type": "string" }
+      },
+      "description": "Address"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Manufacturing capabilities"
+    },
+    "certifications": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "number": { "type": "string" },
+          "expiry_date": { "type": "string", "format": "date" }
+        }
+      },
+      "description": "Quality certifications"
+    },
+    "quality_rating": {
+      "type": "string",
+      "enum": ["approved", "conditional", "probation", "disqualified", "pending"],
+      "description": "Quality status"
+    },
+    "performance": {
+      "type": "object",
+      "properties": {
+        "on_time_delivery": { "type": "number" },
+        "quality_score": { "type": "number" },
+        "responsiveness": { "type": "number" },
+        "last_review_date": { "type": "string", "format": "date" }
+      },
+      "description": "Performance metrics"
+    },
+    "payment_terms": {
+      "type": "string",
+      "description": "Standard payment terms"
+    },
+    "lead_time_days": {
+      "type": "integer",
+      "description": "Typical lead time in days"
+    },
+    "minimum_order_value": {
+      "type": "number",
+      "description": "Minimum order value"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for filtering"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "quotes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "components": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "entity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Entity revision number"
+    }
+  },
+  "additionalProperties": true
+}

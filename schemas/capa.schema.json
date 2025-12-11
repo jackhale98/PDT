@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/capa.schema.json",
+  "title": "CAPA",
+  "description": "A corrective and preventive action",
+  "type": "object",
+  "required": ["id", "title", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^CAPA-[0-9A-Z]{26}$",
+      "description": "Unique identifier (CAPA prefix + ULID)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "capa_number": {
+      "type": ["string", "null"],
+      "description": "Company CAPA number"
+    },
+    "capa_type": {
+      "type": "string",
+      "enum": ["corrective", "preventive"],
+      "description": "CAPA type"
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["ncr", "audit", "customer_complaint", "trend_analysis", "risk"]
+        },
+        "reference": { "type": "string" }
+      },
+      "description": "Source of the CAPA"
+    },
+    "problem_statement": {
+      "type": "string",
+      "description": "Description of the problem"
+    },
+    "root_cause_analysis": {
+      "type": "object",
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["five_why", "fishbone", "fault_tree", "eight_d"]
+        },
+        "root_cause": { "type": "string" },
+        "contributing_factors": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "description": "Root cause analysis"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "action_number": { "type": "integer" },
+          "description": { "type": "string" },
+          "action_type": {
+            "type": "string",
+            "enum": ["corrective", "preventive"]
+          },
+          "owner": { "type": "string" },
+          "due_date": { "type": "string", "format": "date" },
+          "completed_date": { "type": "string", "format": "date" },
+          "status": {
+            "type": "string",
+            "enum": ["open", "in_progress", "completed", "verified"]
+          },
+          "evidence": { "type": "string" }
+        }
+      },
+      "description": "Action items"
+    },
+    "effectiveness": {
+      "type": "object",
+      "properties": {
+        "verified": { "type": "boolean" },
+        "verified_date": { "type": ["string", "null"], "format": "date" },
+        "result": {
+          "type": ["string", "null"],
+          "enum": ["effective", "partially_effective", "ineffective", null]
+        },
+        "evidence": { "type": ["string", "null"] }
+      },
+      "description": "Effectiveness verification"
+    },
+    "closure": {
+      "type": "object",
+      "properties": {
+        "closed": { "type": "boolean" },
+        "closed_date": { "type": ["string", "null"], "format": "date" },
+        "closed_by": { "type": ["string", "null"] }
+      },
+      "description": "Closure information"
+    },
+    "timeline": {
+      "type": "object",
+      "properties": {
+        "initiated_date": { "type": ["string", "null"], "format": "date" },
+        "target_date": { "type": ["string", "null"], "format": "date" }
+      },
+      "description": "Timeline"
+    },
+    "capa_status": {
+      "type": "string",
+      "enum": ["initiation", "investigation", "implementation", "verification", "closed"],
+      "description": "CAPA workflow status"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for filtering"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "ncrs": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "risks": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "processes_modified": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "controls_added": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "entity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Entity revision number"
+    }
+  },
+  "additionalProperties": true
+}

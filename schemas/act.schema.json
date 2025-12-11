@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/action.schema.json",
+  "title": "Action",
+  "description": "An action item",
+  "type": "object",
+  "required": ["id", "title", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^ACT-[0-9A-Z]{26}$",
+      "description": "Unique identifier (ACT prefix + ULID)"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Action item title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Action description"
+    },
+    "owner": {
+      "type": ["string", "null"],
+      "description": "Person responsible"
+    },
+    "due_date": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Due date"
+    },
+    "completed_date": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Completion date"
+    },
+    "action_status": {
+      "type": "string",
+      "enum": ["open", "in_progress", "completed", "verified", "cancelled"],
+      "description": "Action status"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for filtering"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "capa": { "type": ["string", "null"] },
+        "related_to": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author name"
+    },
+    "entity_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Entity revision number"
+    }
+  },
+  "additionalProperties": true
+}

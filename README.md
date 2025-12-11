@@ -420,770 +420,156 @@ tdt trace coverage                # Verification coverage report
 tdt trace coverage --uncovered    # Show uncovered requirements
 ```
 
-## Requirement Example
+## Example Workflows
 
-```yaml
-id: REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD
-type: input
-title: "Operating Temperature Range"
+TDT is more than requirements tracking. Here are some powerful workflows:
 
-source:
-  document: "Customer Requirements Spec"
-  revision: "A"
-  section: "3.2.1"
-  date: 2024-01-15
+### Tolerance Stackup Analysis
 
-category: "Environmental"
-tags: [thermal, environmental, reliability]
+Define features on components, create mates, and run worst-case, RSS, and Monte Carlo analysis:
 
-text: |
-  The device shall operate continuously in ambient temperatures
-  from -20C to +50C without degradation of performance.
+```bash
+# Create a component
+$ tdt cmp new --title "Housing" --part-number "PN-001"
+✓ Created component CMP@1
 
-rationale: |
-  Required for outdoor deployment in various climates.
+# Add features with tolerances
+$ tdt feat new --component CMP@1 --type hole --title "Bore"
+✓ Created feature FEAT@1
 
-acceptance_criteria:
-  - "Unit powers on at -20C after 4h cold soak"
-  - "Unit powers on at +50C after 4h hot soak"
+$ tdt feat new --component CMP@1 --type shaft --title "Locating Pin"
+✓ Created feature FEAT@2
 
-priority: high
-status: approved
+# Create a mate to analyze fit
+$ tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --title "Pin-Hole Fit"
+✓ Created mate MATE@1
 
-links:
-  satisfied_by:
-    - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTE
-  verified_by:
-    - TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
+# Check the fit calculation
+$ tdt mate show MATE@1
+Fit Analysis:
+  Worst-case clearance: 0.02 to 0.15 mm
+  Result: CLEARANCE FIT ✓
 
-created: 2024-01-15T10:30:00Z
-author: Jane Doe
-revision: 1
+# Create a tolerance stackup
+$ tdt tol new --title "Gap Analysis" --target-nominal 1.0 --target-upper 1.5 --target-lower 0.5
+✓ Created stackup TOL@1
+
+# Run Monte Carlo analysis
+$ tdt tol analyze TOL@1 --iterations 50000
+═══════════════════════════════════════════
+  Tolerance Stackup: Gap Analysis
+═══════════════════════════════════════════
+
+  Worst Case: 0.87 to 1.18 mm      PASS
+  RSS (3σ):   0.89 to 1.11 mm      Cpk: 4.56
+  Monte Carlo: 99.98% yield (50000 iterations)
 ```
 
-## Risk Example (FMEA)
+### FMEA Risk Management
 
-```yaml
-id: RISK-01HC2JB7SMQX7RS1Y0GFKBHPTD
-type: design
-title: "Battery Thermal Runaway"
+Track design and process risks with full FMEA methodology:
 
-category: "Electrical Safety"
-tags: [battery, thermal, safety]
+```bash
+# Create a risk with FMEA ratings
+$ tdt risk new --title "Motor Overheating" -t design \
+    --severity 8 --occurrence 4 --detection 5
+✓ Created risk RISK@1 (RPN: 160, Level: high)
 
-description: |
-  Risk of thermal runaway in lithium-ion battery pack during
-  charging or high-temperature operation.
+# View risks sorted by RPN
+$ tdt risk list --by-rpn
+@        ID              TYPE      TITLE                    RPN    LEVEL
+------------------------------------------------------------------------
+RISK@1   RISK-01HC2...   design    Motor Overheating        160    high
+RISK@2   RISK-01HC3...   process   Seal Degradation          84    medium
+RISK@3   RISK-01HC4...   design    EMI Susceptibility        48    low
 
-failure_mode: |
-  Battery cells exceed thermal limits causing cascading
-  thermal runaway across the pack.
-
-cause: |
-  Internal short circuit, overcharging, or external heat source
-  causing cell temperature to exceed safe limits.
-
-effect: |
-  Fire, explosion, or toxic gas release endangering users
-  and damaging equipment.
-
-# FMEA Risk Assessment (1-10 scale)
-severity: 9      # Impact if failure occurs
-occurrence: 3    # Likelihood of occurrence
-detection: 4     # Ability to detect before failure
-rpn: 108         # Risk Priority Number (S x O x D)
-
-mitigations:
-  - action: "Add thermal cutoff protection circuit"
-    type: prevention
-    status: completed
-    owner: "John Smith"
-  - action: "Add temperature monitoring sensors"
-    type: detection
-    status: in_progress
-    owner: "Jane Doe"
-
-status: review
-risk_level: medium
-
-links:
-  related_to:
-    - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTE
-  mitigated_by:
-    - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTF
-  verified_by:
-    - TEST-01HC2JB7SMQX7RS1Y0GFKBHPTG
-
-created: 2024-01-15T10:30:00Z
-author: Jane Doe
-revision: 2
+# Find unmitigated risks
+$ tdt risk list --unmitigated
+2 risks without mitigations
 ```
 
-## Test Example (Verification/Validation Protocol)
+### Manufacturing Quality Loop
 
-```yaml
-id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
-type: verification
-test_level: system
-test_method: test
-title: "Temperature Cycling Test"
+Define processes, controls, and track quality issues through to resolution:
 
-category: "Environmental"
-tags: [thermal, environmental, reliability]
+```bash
+# Define a manufacturing process
+$ tdt proc new --title "CNC Milling" --type machining --op-number "OP-010"
+✓ Created process PROC@1
 
-objective: |
-  Verify the device operates within specified temperature range
-  as required by REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD.
+# Add an SPC control point
+$ tdt ctrl new --title "Bore Diameter SPC" --type spc --process PROC@1 --critical
+✓ Created control CTRL@1
 
-preconditions:
-  - "Unit at room temperature (23C +/- 2C)"
-  - "All test equipment calibrated"
-  - "Power supply connected"
+# Create work instructions
+$ tdt work new --title "Mill Setup" --process PROC@1 --doc-number "WI-MACH-001"
+✓ Created work instruction WORK@1
 
-equipment:
-  - name: "Temperature Chamber"
-    specification: "-40C to +100C range, 0.5C accuracy"
-    calibration_required: true
-  - name: "Multimeter"
-    specification: "DC voltage measurement"
-    calibration_required: true
+# Log a non-conformance
+$ tdt ncr new --title "Bore Out of Tolerance" --severity major --type internal
+✓ Created NCR NCR@1
 
-procedure:
-  - step: 1
-    action: "Place unit in chamber at 23C, power on"
-    expected: "Unit boots successfully"
-    acceptance: "All LEDs illuminate correctly"
-  - step: 2
-    action: "Ramp chamber to -20C at 2C/min"
-    expected: "Unit remains operational"
-    acceptance: "No errors logged"
-  - step: 3
-    action: "Hold at -20C for 4 hours"
-    expected: "Continuous operation"
-    acceptance: "All functions pass self-test"
-  - step: 4
-    action: "Ramp chamber to +50C at 2C/min"
-    expected: "Unit remains operational"
-    acceptance: "No errors logged"
+# Create corrective action linked to NCR
+$ tdt capa new --title "Tool Wear Detection" --type corrective --ncr NCR@1
+✓ Created CAPA CAPA@1 linked to NCR@1
 
-acceptance_criteria:
-  - "All steps pass"
-  - "No errors in system log"
-  - "All functions operational at temperature extremes"
-
-environment:
-  temperature: "Per procedure"
-  humidity: "< 80% RH (non-condensing)"
-
-estimated_duration: "8 hours"
-
-priority: high
-status: approved
-
-links:
-  verifies:
-    - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD
-  mitigates:
-    - RISK-01HC2JB7SMQX7RS1Y0GFKBHPTE
-
-created: 2024-01-15T10:30:00Z
-author: Jane Doe
-revision: 1
+# Track overdue CAPAs
+$ tdt capa list --overdue
+1 overdue CAPA(s)
 ```
 
-## Result Example
+### Full Traceability
 
-```yaml
-id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTG
-test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
-test_revision: 1
-title: "Temperature Cycling Test - Run 1"
+Link requirements to tests, risks to mitigations, and generate coverage reports:
 
-verdict: pass
-verdict_rationale: |
-  All steps completed successfully. Device operated within
-  specification at both temperature extremes.
+```bash
+# Link a requirement to a test
+$ tdt link add REQ@1 --type verified_by TEST@1
+✓ Added link: REQ@1 --verified_by--> TEST@1
 
-category: "Environmental"
+# Trace from a requirement
+$ tdt trace from REQ@1
+REQ@1 Operating Temperature Range
+├── satisfied_by → REQ@3 Thermal Management Spec
+├── verified_by  → TEST@1 Thermal Chamber Test
+└── related_to   → RISK@1 Overheating Risk
 
-executed_date: 2024-02-01T09:00:00Z
-executed_by: "John Smith"
+# Check verification coverage
+$ tdt trace coverage
+Requirements: 24 total, 22 verified (92%)
+Uncovered: REQ@12, REQ@18
 
-sample_info:
-  sample_id: "SN-001234"
-  serial_number: "001234"
-  lot_number: "LOT-2024-001"
-  configuration: "Rev B hardware, v1.2.0 firmware"
-
-environment:
-  temperature: "-20C to +50C per procedure"
-  humidity: "45% RH"
-  location: "Lab A, Environmental Chamber #3"
-
-equipment_used:
-  - name: "Temperature Chamber"
-    asset_id: "ENV-CHAM-003"
-    calibration_date: "2024-01-15"
-    calibration_due: "2025-01-15"
-
-step_results:
-  - step: 1
-    result: pass
-    observed: "Unit booted in 12 seconds"
-  - step: 2
-    result: pass
-    observed: "No anomalies during ramp"
-  - step: 3
-    result: pass
-    observed: "Self-test passed at 1h, 2h, 3h, 4h intervals"
-    measurement:
-      value: -20.1
-      unit: "C"
-      min: -21
-      max: -19
-  - step: 4
-    result: pass
-    observed: "No anomalies during ramp"
-
-deviations: []
-failures: []
-
-duration: "8h 15m"
-notes: |
-  Test completed without incident. Minor temperature overshoot
-  observed during cold ramp (reached -20.5C briefly).
-
-status: approved
-
-links:
-  test: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
-
-created: 2024-02-01T17:30:00Z
-author: John Smith
-revision: 1
+# Find orphaned entities
+$ tdt trace orphans
+3 requirements with no links
+2 tests with no linked requirements
 ```
 
-## Component Example (BOM)
+### Supply Chain Management
 
-```yaml
-id: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD
-part_number: "PN-001"
-revision: "A"
-title: "Widget Bracket"
+Track suppliers, quotes, and compare pricing:
 
-make_buy: buy
-category: mechanical
-material: "6061-T6 Aluminum"
-mass_kg: 0.125
-unit_cost: 12.50
+```bash
+# Create a supplier
+$ tdt sup new --name "Acme Manufacturing" --short-name "Acme"
+✓ Created supplier SUP@1
 
-suppliers:
-  - name: "Acme Corp"
-    supplier_pn: "ACM-123"
-    lead_time_days: 14
-    moq: 100
-    unit_cost: 11.00
+# Add a quote for a component
+$ tdt quote new --component CMP@1 --supplier SUP@1 --price 12.50 --lead-time 14
+✓ Created quote QUOT@1
 
-documents:
-  - type: "drawing"
-    path: "drawings/PN-001.pdf"
-    revision: "A"
-
-tags: [mechanical, bracket]
-status: approved
-
-links:
-  used_in: []
-
-created: 2024-01-15T10:30:00Z
-author: Jack Hale
-entity_revision: 1
+# Compare quotes for a component
+$ tdt quote compare CMP@1
+Component: Widget Bracket (CMP@1)
+───────────────────────────────────────────
+Supplier         Price    Lead Time   MOQ
+───────────────────────────────────────────
+Acme Corp        $12.50   14 days     100
+Quality Parts    $13.75   21 days      50
+Budget Metals    $10.00   45 days     500
 ```
 
-## Supplier Example
-
-```yaml
-id: SUP-01HC2JB7SMQX7RS1Y0GFKBHPTA
-name: "Acme Manufacturing Corp"
-short_name: "Acme"
-website: "https://acme-mfg.com"
-
-contacts:
-  - name: "John Smith"
-    role: "Sales Manager"
-    email: "john.smith@acme-mfg.com"
-    phone: "+1-555-123-4567"
-    primary: true
-
-addresses:
-  - type: headquarters
-    street: "123 Industrial Way"
-    city: "San Francisco"
-    state: "CA"
-    postal: "94102"
-    country: "USA"
-
-payment_terms: "Net 30"
-currency: USD
-
-certifications:
-  - name: "ISO 9001:2015"
-    expiry: 2026-06-30
-
-capabilities: [machining, sheet_metal, assembly, finishing]
-
-notes: "Preferred supplier for precision machined parts."
-tags: [preferred, machining]
-status: approved
-
-links:
-  approved_for: []
-
-created: 2024-01-10T09:00:00Z
-author: Jack Hale
-entity_revision: 1
-```
-
-## Quote Example (Supplier Quotation)
-
-```yaml
-id: QUOT-01HC2JB7SMQX7RS1Y0GFKBHPTD
-title: "Acme Corp Quote"
-
-# Link to supplier entity (create supplier first with tdt sup new)
-supplier: SUP-01HC2JB7SMQX7RS1Y0GFKBHPTA
-
-# Quotes link to either component OR assembly (not both)
-component: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTC
-# assembly: ASM-...  # Use this instead for assembly quotes
-
-# Supplier's quote reference number
-quote_ref: "ACM-Q-2024-001"
-
-currency: USD
-
-# Quantity-based pricing tiers
-price_breaks:
-  - min_qty: 1
-    unit_price: 15.00
-    lead_time_days: 14
-  - min_qty: 100
-    unit_price: 12.50
-    lead_time_days: 14
-  - min_qty: 500
-    unit_price: 10.00
-    lead_time_days: 21
-
-moq: 1
-tooling_cost: 500.00
-lead_time_days: 14
-
-quote_date: 2024-01-15
-valid_until: 2024-04-15
-
-quote_status: received   # pending | received | accepted | rejected | expired
-tags: [bracket]
-status: draft
-
-links:
-  related_quotes: []
-
-created: 2024-01-15T10:30:00Z
-author: Jack Hale
-entity_revision: 1
-```
-
-## Feature Example (Tolerances)
-
-```yaml
-id: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTE
-component: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD
-feature_type: hole
-title: "Mounting Hole A"
-
-# Dimensions use plus_tol/minus_tol (NOT +/- symbol)
-dimensions:
-  - name: "diameter"
-    nominal: 10.0
-    plus_tol: 0.1      # +0.1
-    minus_tol: 0.05    # -0.05
-    units: "mm"
-
-gdt:
-  - symbol: position
-    value: 0.25
-    units: "mm"
-    datum_refs: ["A", "B", "C"]
-    material_condition: mmc
-
-drawing:
-  number: "DWG-001"
-  revision: "A"
-  zone: "B3"
-
-tags: [mounting]
-status: approved
-
-links:
-  used_in_mates: []
-  used_in_stackups: []
-
-created: 2024-01-15T10:30:00Z
-author: Jack Hale
-entity_revision: 1
-```
-
-## Mate Example (Fit Calculation)
-
-```yaml
-id: MATE-01HC2JB7SMQX7RS1Y0GFKBHPTF
-title: "Pin-Hole Mate"
-description: "Locating pin engagement"
-
-feature_a: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTE  # Hole
-feature_b: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTG  # Shaft
-
-mate_type: clearance_fit
-
-# Auto-calculated from feature dimensions
-fit_analysis:
-  worst_case_min_clearance: 0.02
-  worst_case_max_clearance: 0.15
-  fit_result: clearance    # clearance | interference | transition
-
-notes: "Critical for alignment"
-tags: [alignment, locating]
-status: approved
-
-links:
-  used_in_stackups: []
-  verifies: []
-
-created: 2024-01-15T10:30:00Z
-author: Jack Hale
-entity_revision: 1
-```
-
-## Stackup Example (Tolerance Analysis)
-
-```yaml
-id: TOL-01HC2JB7SMQX7RS1Y0GFKBHPTH
-title: "Gap Analysis"
-
-target:
-  name: "Gap"
-  nominal: 1.0
-  upper_limit: 1.5
-  lower_limit: 0.5
-  units: "mm"
-  critical: true
-
-# Contributors use plus_tol/minus_tol (NOT +/- symbol)
-contributors:
-  - name: "Part A Length"
-    feature_id: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTE
-    direction: positive
-    nominal: 10.0
-    plus_tol: 0.1
-    minus_tol: 0.05
-    distribution: normal
-    source: "DWG-001 Rev A"
-  - name: "Part B Length"
-    direction: negative
-    nominal: 9.0
-    plus_tol: 0.08
-    minus_tol: 0.08
-    distribution: normal
-    source: "DWG-002 Rev A"
-
-# Auto-calculated by 'tdt tol analyze'
-analysis_results:
-  worst_case:
-    min: 0.87
-    max: 1.18
-    margin: 0.32
-    result: pass
-  rss:
-    mean: 1.0
-    sigma_3: 0.11
-    margin: 0.39
-    cpk: 4.56
-    yield_percent: 99.9999
-  monte_carlo:
-    iterations: 10000
-    mean: 1.0
-    std_dev: 0.037
-    min: 0.85
-    max: 1.14
-    yield_percent: 100.0
-    percentile_2_5: 0.93
-    percentile_97_5: 1.07
-
-disposition: approved
-tags: [critical, assembly]
-status: approved
-
-links:
-  verifies: []
-  mates_used: []
-
-created: 2024-01-15T10:30:00Z
-author: Jack Hale
-entity_revision: 1
-```
-
-## Manufacturing Process Example
-
-```yaml
-id: PROC-01KC5B2GDDQ0JAXFVXYYZ9DWDZ
-title: "CNC Milling - Housing"
-description: |
-  Precision CNC milling of main housing from aluminum billet.
-
-process_type: machining
-operation_number: "OP-010"
-
-equipment:
-  - name: "Haas VF-2 CNC Mill"
-    equipment_id: "EQ-001"
-    capability: "3-axis, 30x16x20 travel"
-
-parameters:
-  - name: "Spindle Speed"
-    value: 8000
-    units: "RPM"
-    min: 7500
-    max: 8500
-  - name: "Feed Rate"
-    value: 500
-    units: "mm/min"
-
-cycle_time_minutes: 15.5
-setup_time_minutes: 30
-
-capability:
-  cpk: 1.45
-  sample_size: 50
-  study_date: 2024-01-15
-
-operator_skill: intermediate
-
-safety:
-  ppe: [safety_glasses, hearing_protection, steel_toe_boots]
-  hazards: ["rotating machinery", "sharp edges", "coolant splash"]
-
-tags: [machining, housing, critical]
-status: approved
-
-links:
-  produces:
-    - CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD
-  controls:
-    - CTRL-01KC5B5M87QMYVJT048X27TJ5S
-  work_instructions:
-    - WORK-01KC5B5XKGWKFTTA9YWTGJB9GE
-
-created: 2024-01-15T10:30:00Z
-author: Jack Hale
-entity_revision: 1
-```
-
-## Control Plan Item Example (SPC)
-
-```yaml
-id: CTRL-01KC5B5M87QMYVJT048X27TJ5S
-title: "Bore Diameter SPC"
-description: |
-  Statistical process control for critical bore diameter.
-
-control_type: spc
-control_category: variable
-
-characteristic:
-  name: "Bore Diameter"
-  nominal: 25.0
-  upper_limit: 25.025
-  lower_limit: 25.000
-  units: "mm"
-  critical: true
-
-measurement:
-  method: "Bore gauge measurement"
-  equipment: "Mitutoyo Bore Gauge GA-045"
-  gage_rr_percent: 12.5
-
-sampling:
-  type: continuous
-  frequency: "5 parts"
-  sample_size: 1
-
-control_limits:
-  ucl: 25.018
-  lcl: 25.007
-  target: 25.0125
-
-reaction_plan: |
-  1. Quarantine affected parts
-  2. Notify supervisor immediately
-  3. Adjust offset per SOP-123
-  4. Verify correction with 3 consecutive good parts
-
-tags: [spc, bore, critical]
-status: approved
-
-links:
-  process: PROC-01KC5B2GDDQ0JAXFVXYYZ9DWDZ
-  feature: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTE
-  verifies:
-    - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD
-
-created: 2024-01-15T10:30:00Z
-author: Jack Hale
-entity_revision: 1
-```
-
-## NCR Example (Non-Conformance Report)
-
-```yaml
-id: NCR-01KC5B6E1RKCPKGACCH569FX5R
-title: "Bore Diameter Out of Tolerance"
-ncr_number: "NCR-2024-0042"
-report_date: 2024-01-20
-
-ncr_type: internal
-severity: major
-category: dimensional
-
-detection:
-  found_at: in_process
-  found_by: "J. Smith"
-  found_date: 2024-01-20
-  operation: "CNC Milling - Op 010"
-
-affected_items:
-  part_number: "PN-12345"
-  lot_number: "LOT-2024-01-20A"
-  serial_numbers: ["SN-001", "SN-002", "SN-003"]
-  quantity_affected: 3
-
-defect:
-  characteristic: "Bore Diameter"
-  specification: "25.00 +0.025/-0.000 mm"
-  actual: "24.985 mm"
-  deviation: -0.015
-
-containment:
-  - action: "Quarantine affected lot"
-    date: 2024-01-20
-    completed_by: "J. Smith"
-    status: completed
-  - action: "100% inspection of in-process inventory"
-    date: 2024-01-20
-    completed_by: "Q. Team"
-    status: completed
-
-disposition:
-  decision: rework
-  decision_date: 2024-01-21
-  decision_by: "R. Williams"
-  justification: "Can re-bore to next oversized tolerance per ECN-123"
-  mrb_required: true
-
-cost_impact:
-  rework_cost: 150.00
-  scrap_cost: 0.00
-  currency: "USD"
-
-ncr_status: closed
-tags: [bore, rework]
-status: approved
-
-links:
-  component: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD
-  process: PROC-01KC5B2GDDQ0JAXFVXYYZ9DWDZ
-  control: CTRL-01KC5B5M87QMYVJT048X27TJ5S
-  capa: CAPA-01KC5B6P6PSHZ6TMCSDJQQ6HG3
-
-created: 2024-01-20T14:30:00Z
-author: J. Smith
-entity_revision: 2
-```
-
-## CAPA Example (Corrective Action)
-
-```yaml
-id: CAPA-01KC5B6P6PSHZ6TMCSDJQQ6HG3
-title: "Tool Wear Detection Improvement"
-capa_number: "CAPA-2024-0015"
-
-capa_type: corrective
-
-source:
-  type: ncr
-  reference: NCR-01KC5B6E1RKCPKGACCH569FX5R
-
-problem_statement: |
-  Bore diameter NCRs occurring due to undetected tool wear.
-  3 NCRs in past month related to undersized bores.
-
-root_cause_analysis:
-  method: five_why
-  root_cause: |
-    Lack of systematic tool life monitoring in CNC program.
-    Operators relying on visual inspection which is unreliable.
-  contributing_factors:
-    - "No tool life tracking in CNC controller"
-    - "Insufficient in-process inspection frequency"
-    - "No automatic tool wear compensation"
-
-actions:
-  - action_number: 1
-    description: "Implement tool life management in CNC controller"
-    action_type: corrective
-    owner: "Manufacturing Engineering"
-    due_date: 2024-02-15
-    completed_date: 2024-02-10
-    status: completed
-    evidence: "ECN-456 implemented, verified in production"
-  - action_number: 2
-    description: "Increase SPC sampling frequency from 5 to 3 parts"
-    action_type: preventive
-    owner: "Quality Engineering"
-    due_date: 2024-02-01
-    completed_date: 2024-02-01
-    status: verified
-    evidence: "Control plan updated, operators trained"
-
-effectiveness:
-  verified: true
-  verified_date: 2024-03-15
-  result: effective
-  evidence: "Zero bore diameter NCRs in 60 days post-implementation"
-
-closure:
-  closed: true
-  closed_date: 2024-03-20
-  closed_by: "Quality Manager"
-
-timeline:
-  initiated_date: 2024-01-21
-  target_date: 2024-03-31
-
-capa_status: closed
-tags: [tool_wear, machining]
-status: approved
-
-links:
-  ncrs:
-    - NCR-01KC5B6E1RKCPKGACCH569FX5R
-  processes_modified:
-    - PROC-01KC5B2GDDQ0JAXFVXYYZ9DWDZ
-  controls_added: []
-
-created: 2024-01-21T09:00:00Z
-author: Quality Manager
-entity_revision: 3
-```
+> **Note:** For complete YAML schema documentation and field references, see the individual entity docs in the [docs/](docs/) directory.
 
 ## Manufacturing Quality Loop
 

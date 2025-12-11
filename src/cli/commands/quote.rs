@@ -79,9 +79,28 @@ pub struct ListArgs {
     #[arg(long)]
     pub search: Option<String>,
 
+    /// Filter by author (substring match)
+    #[arg(long)]
+    pub author: Option<String>,
+
+    /// Show quotes created in last N days
+    #[arg(long)]
+    pub recent: Option<u32>,
+
+    /// Columns to display (can specify multiple)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Title,
+        ListColumn::Supplier,
+        ListColumn::Component,
+        ListColumn::Price,
+        ListColumn::QuoteStatus
+    ])]
+    pub columns: Vec<ListColumn>,
+
     /// Sort by field
     #[arg(long, default_value = "created")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -96,13 +115,34 @@ pub struct ListArgs {
     pub count: bool,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
+/// Columns to display in list output
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ListColumn {
+    Id,
     Title,
     Supplier,
     Component,
+    Price,
+    QuoteStatus,
     Status,
+    Author,
     Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::Supplier => write!(f, "supplier"),
+            ListColumn::Component => write!(f, "component"),
+            ListColumn::Price => write!(f, "price"),
+            ListColumn::QuoteStatus => write!(f, "quote-status"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
 }
 
 #[derive(clap::Args, Debug)]
@@ -278,20 +318,43 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 true
             }
         })
+        .filter(|q| {
+            args.author.as_ref().map_or(true, |author| {
+                q.author.to_lowercase().contains(&author.to_lowercase())
+            })
+        })
+        .filter(|q| {
+            args.recent.map_or(true, |days| {
+                let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+                q.created >= cutoff
+            })
+        })
         .collect();
 
     // Sort
     let mut quotes = quotes;
     match args.sort {
-        SortField::Title => quotes.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::Supplier => quotes.sort_by(|a, b| a.supplier.cmp(&b.supplier)),
-        SortField::Component => quotes.sort_by(|a, b| a.component.cmp(&b.component)),
-        SortField::Status => {
+        ListColumn::Id => quotes.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Title => quotes.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::Supplier => quotes.sort_by(|a, b| a.supplier.cmp(&b.supplier)),
+        ListColumn::Component => quotes.sort_by(|a, b| a.component.cmp(&b.component)),
+        ListColumn::Price => quotes.sort_by(|a, b| {
+            let price_a = a.price_for_qty(1).unwrap_or(0.0);
+            let price_b = b.price_for_qty(1).unwrap_or(0.0);
+            price_a.partial_cmp(&price_b).unwrap_or(std::cmp::Ordering::Equal)
+        }),
+        ListColumn::QuoteStatus => {
             quotes.sort_by(|a, b| {
                 format!("{:?}", a.quote_status).cmp(&format!("{:?}", b.quote_status))
             })
         }
-        SortField::Created => quotes.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Status => {
+            quotes.sort_by(|a, b| {
+                format!("{:?}", a.status).cmp(&format!("{:?}", b.status))
+            })
+        }
+        ListColumn::Author => quotes.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => quotes.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
@@ -360,50 +423,62 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<20} {:<15} {:<12} {:<10} {:<10} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TITLE").bold(),
-                style("SUPPLIER").bold(),
-                style("FOR").bold(),
-                style("PRICE").bold(),
-                style("LEAD").bold(),
-                style("Q-STATUS").bold()
-            );
+            // Build header based on selected columns
+            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
+            for col in &args.columns {
+                let header = match col {
+                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
+                    ListColumn::Title => format!("{:<20}", style("TITLE").bold()),
+                    ListColumn::Supplier => format!("{:<15}", style("SUPPLIER").bold()),
+                    ListColumn::Component => format!("{:<12}", style("FOR").bold()),
+                    ListColumn::Price => format!("{:<10}", style("PRICE").bold()),
+                    ListColumn::QuoteStatus => format!("{:<10}", style("Q-STATUS").bold()),
+                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
+                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
+                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
+                };
+                header_parts.push(header);
+            }
+            println!("{}", header_parts.join(" "));
             println!("{}", "-".repeat(110));
 
             for quote in &quotes {
                 let short_id = short_ids
                     .get_short_id(&quote.id.to_string())
                     .unwrap_or_default();
-                let id_display = format_short_id(&quote.id);
-                let title_truncated = truncate_str(&quote.title, 18);
-                let supplier_short = short_ids
-                    .get_short_id(&quote.supplier)
-                    .unwrap_or_else(|| truncate_str(&quote.supplier, 13).to_string());
-                let linked_item = quote.linked_item().unwrap_or("-");
-                let item_short = short_ids.get_short_id(linked_item).unwrap_or_else(|| {
-                    truncate_str(linked_item, 10).to_string()
-                });
-                let unit_price = quote
-                    .price_for_qty(1)
-                    .map_or("-".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote
-                    .lead_time_days
-                    .map_or("-".to_string(), |d| format!("{}d", d));
+                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
-                println!(
-                    "{:<8} {:<17} {:<20} {:<15} {:<12} {:<10} {:<10} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    title_truncated,
-                    supplier_short,
-                    item_short,
-                    unit_price,
-                    lead_time,
-                    quote.quote_status
-                );
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format!("{:<17}", format_short_id(&quote.id)),
+                        ListColumn::Title => format!("{:<20}", truncate_str(&quote.title, 18)),
+                        ListColumn::Supplier => {
+                            let supplier_short = short_ids
+                                .get_short_id(&quote.supplier)
+                                .unwrap_or_else(|| truncate_str(&quote.supplier, 13).to_string());
+                            format!("{:<15}", supplier_short)
+                        }
+                        ListColumn::Component => {
+                            let linked_item = quote.linked_item().unwrap_or("-");
+                            let item_short = short_ids.get_short_id(linked_item).unwrap_or_else(|| {
+                                truncate_str(linked_item, 10).to_string()
+                            });
+                            format!("{:<12}", item_short)
+                        }
+                        ListColumn::Price => {
+                            let unit_price = quote
+                                .price_for_qty(1)
+                                .map_or("-".to_string(), |p| format!("{:.2}", p));
+                            format!("{:<10}", unit_price)
+                        }
+                        ListColumn::QuoteStatus => format!("{:<10}", quote.quote_status),
+                        ListColumn::Status => format!("{:<10}", quote.status),
+                        ListColumn::Author => format!("{:<14}", truncate_str(&quote.author, 12)),
+                        ListColumn::Created => format!("{:<12}", quote.created.format("%Y-%m-%d")),
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

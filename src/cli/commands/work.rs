@@ -29,6 +29,30 @@ pub enum WorkCommands {
     Edit(EditArgs),
 }
 
+/// Column to display in list output
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ListColumn {
+    Id,
+    Title,
+    DocNumber,
+    Status,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::DocNumber => write!(f, "doc-number"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 /// Status filter
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum StatusFilter {
@@ -50,13 +74,30 @@ pub struct ListArgs {
     #[arg(long, short = 'p')]
     pub process: Option<String>,
 
+    /// Filter by author
+    #[arg(long, short = 'a')]
+    pub author: Option<String>,
+
+    /// Show only recent items (last 10)
+    #[arg(long)]
+    pub recent: bool,
+
     /// Search in title and description
     #[arg(long)]
     pub search: Option<String>,
 
+    /// Columns to display
+    #[arg(long, short = 'c', value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::DocNumber,
+        ListColumn::Title,
+        ListColumn::Status,
+    ])]
+    pub columns: Vec<ListColumn>,
+
     /// Sort by field
     #[arg(long, default_value = "title")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -69,14 +110,6 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
-    Title,
-    DocNumber,
-    Status,
-    Created,
 }
 
 #[derive(clap::Args, Debug)]
@@ -186,6 +219,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .filter(|w| {
+            if let Some(ref author) = args.author {
+                w.author.to_lowercase().contains(&author.to_lowercase())
+            } else {
+                true
+            }
+        })
+        .filter(|w| {
             if let Some(ref search) = args.search {
                 let search_lower = search.to_lowercase();
                 w.title.to_lowercase().contains(&search_lower)
@@ -204,21 +244,29 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort
     let mut work_instructions = work_instructions;
     match args.sort {
-        SortField::Title => work_instructions.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::DocNumber => work_instructions.sort_by(|a, b| {
+        ListColumn::Id => work_instructions.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Title => work_instructions.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::DocNumber => work_instructions.sort_by(|a, b| {
             a.document_number
                 .as_deref()
                 .unwrap_or("")
                 .cmp(b.document_number.as_deref().unwrap_or(""))
         }),
-        SortField::Status => {
+        ListColumn::Status => {
             work_instructions.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
-        SortField::Created => work_instructions.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Author => work_instructions.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => work_instructions.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
         work_instructions.reverse();
+    }
+
+    // Apply recent filter (last 10 by creation date)
+    if args.recent {
+        work_instructions.sort_by(|a, b| b.created.cmp(&a.created));
+        work_instructions.truncate(10);
     }
 
     // Apply limit
@@ -276,36 +324,75 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<14} {:<30} {:<6} {:<8} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("DOC #").bold(),
-                style("TITLE").bold(),
-                style("STEPS").bold(),
-                style("TIME").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(95));
+            // Build header based on columns
+            let mut header_parts = Vec::new();
+            let mut widths = Vec::new();
+
+            for col in &args.columns {
+                match col {
+                    ListColumn::Id => {
+                        header_parts.push(format!("{:<17}", style("ID").bold()));
+                        widths.push(17);
+                    }
+                    ListColumn::Title => {
+                        header_parts.push(format!("{:<30}", style("TITLE").bold()));
+                        widths.push(30);
+                    }
+                    ListColumn::DocNumber => {
+                        header_parts.push(format!("{:<14}", style("DOC #").bold()));
+                        widths.push(14);
+                    }
+                    ListColumn::Status => {
+                        header_parts.push(format!("{:<10}", style("STATUS").bold()));
+                        widths.push(10);
+                    }
+                    ListColumn::Author => {
+                        header_parts.push(format!("{:<20}", style("AUTHOR").bold()));
+                        widths.push(20);
+                    }
+                    ListColumn::Created => {
+                        header_parts.push(format!("{:<20}", style("CREATED").bold()));
+                        widths.push(20);
+                    }
+                }
+            }
+
+            println!("{}", header_parts.join(" "));
+            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
 
             for work in &work_instructions {
-                let short_id = short_ids.get_short_id(&work.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&work.id);
-                let title_truncated = truncate_str(&work.title, 28);
-                let duration_str = work
-                    .estimated_duration_minutes
-                    .map_or("-".to_string(), |d| format!("{:.0}m", d));
+                let mut row_parts = Vec::new();
 
-                println!(
-                    "{:<8} {:<17} {:<14} {:<30} {:<6} {:<8} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    truncate_str(work.document_number.as_deref().unwrap_or("-"), 12),
-                    title_truncated,
-                    work.procedure.len(),
-                    duration_str,
-                    work.status
-                );
+                for (col, width) in args.columns.iter().zip(&widths) {
+                    let value = match col {
+                        ListColumn::Id => {
+                            let id_display = format_short_id(&work.id);
+                            format!("{:<width$}", id_display, width = width)
+                        }
+                        ListColumn::Title => {
+                            let title_truncated = truncate_str(&work.title, width - 2);
+                            format!("{:<width$}", title_truncated, width = width)
+                        }
+                        ListColumn::DocNumber => {
+                            let doc_num = truncate_str(work.document_number.as_deref().unwrap_or("-"), width - 2);
+                            format!("{:<width$}", doc_num, width = width)
+                        }
+                        ListColumn::Status => {
+                            format!("{:<width$}", work.status, width = width)
+                        }
+                        ListColumn::Author => {
+                            let author = truncate_str(&work.author, width - 2);
+                            format!("{:<width$}", author, width = width)
+                        }
+                        ListColumn::Created => {
+                            let created = work.created.format("%Y-%m-%d %H:%M").to_string();
+                            format!("{:<width$}", created, width = width)
+                        }
+                    };
+                    row_parts.push(value);
+                }
+
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

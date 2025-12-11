@@ -58,6 +58,32 @@ pub enum StatusFilter {
     All,
 }
 
+/// Columns to display in list output
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ListColumn {
+    Id,
+    Title,
+    FeatureType,
+    Component,
+    Status,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::FeatureType => write!(f, "feature-type"),
+            ListColumn::Component => write!(f, "component"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by parent component (CMP@N or full ID)
@@ -75,6 +101,32 @@ pub struct ListArgs {
     /// Search in title
     #[arg(long)]
     pub search: Option<String>,
+
+    /// Filter by author (substring match)
+    #[arg(long, short = 'a')]
+    pub author: Option<String>,
+
+    /// Show features created in last N days
+    #[arg(long)]
+    pub recent: Option<u32>,
+
+    /// Columns to display (can specify multiple)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Title,
+        ListColumn::FeatureType,
+        ListColumn::Component,
+        ListColumn::Status
+    ])]
+    pub columns: Vec<ListColumn>,
+
+    /// Sort by field
+    #[arg(long, default_value = "created")]
+    pub sort: ListColumn,
+
+    /// Reverse sort order
+    #[arg(long, short = 'r')]
+    pub reverse: bool,
 
     /// Limit number of results
     #[arg(long, short = 'n')]
@@ -211,10 +263,40 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 true
             }
         })
+        .filter(|f| {
+            args.author.as_ref().map_or(true, |author| {
+                f.author.to_lowercase().contains(&author.to_lowercase())
+            })
+        })
+        .filter(|f| {
+            args.recent.map_or(true, |days| {
+                let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+                f.created >= cutoff
+            })
+        })
         .collect();
 
-    // Apply limit
+    // Sort
     let mut features = features;
+    match args.sort {
+        ListColumn::Id => features.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Title => features.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::FeatureType => features.sort_by(|a, b| {
+            format!("{:?}", a.feature_type).cmp(&format!("{:?}", b.feature_type))
+        }),
+        ListColumn::Component => features.sort_by(|a, b| a.component.cmp(&b.component)),
+        ListColumn::Status => features.sort_by(|a, b| {
+            format!("{:?}", a.status).cmp(&format!("{:?}", b.status))
+        }),
+        ListColumn::Author => features.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => features.sort_by(|a, b| a.created.cmp(&b.created)),
+    }
+
+    if args.reverse {
+        features.reverse();
+    }
+
+    // Apply limit
     if let Some(limit) = args.limit {
         features.truncate(limit);
     }
@@ -268,32 +350,40 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<15} {:<12} {:<25} {:<5} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("COMPONENT").bold(),
-                style("TYPE").bold(),
-                style("TITLE").bold(),
-                style("DIMS").bold(),
-                style("STATUS").bold()
-            );
+            // Build header based on selected columns
+            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
+            for col in &args.columns {
+                let header = match col {
+                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
+                    ListColumn::Title => format!("{:<25}", style("TITLE").bold()),
+                    ListColumn::FeatureType => format!("{:<12}", style("TYPE").bold()),
+                    ListColumn::Component => format!("{:<15}", style("COMPONENT").bold()),
+                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
+                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
+                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
+                };
+                header_parts.push(header);
+            }
+            println!("{}", header_parts.join(" "));
             println!("{}", "-".repeat(95));
 
             for feat in &features {
                 let short_id = short_ids.get_short_id(&feat.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&feat.id);
+                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
-                println!(
-                    "{:<8} {:<17} {:<15} {:<12} {:<25} {:<5} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    truncate_str(&feat.component, 13),
-                    feat.feature_type,
-                    truncate_str(&feat.title, 23),
-                    feat.dimensions.len(),
-                    feat.status()
-                );
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format!("{:<17}", format_short_id(&feat.id)),
+                        ListColumn::Title => format!("{:<25}", truncate_str(&feat.title, 23)),
+                        ListColumn::FeatureType => format!("{:<12}", feat.feature_type),
+                        ListColumn::Component => format!("{:<15}", truncate_str(&feat.component, 13)),
+                        ListColumn::Status => format!("{:<10}", feat.status()),
+                        ListColumn::Author => format!("{:<14}", truncate_str(&feat.author, 12)),
+                        ListColumn::Created => format!("{:<12}", feat.created.format("%Y-%m-%d")),
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

@@ -56,6 +56,34 @@ pub enum StatusFilter {
     All,
 }
 
+/// List column selection
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ListColumn {
+    Id,
+    Title,
+    FeatureA,
+    FeatureB,
+    FitType,
+    Status,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::FeatureA => write!(f, "feature-a"),
+            ListColumn::FeatureB => write!(f, "feature-b"),
+            ListColumn::FitType => write!(f, "fit-type"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by mate type
@@ -70,6 +98,14 @@ pub struct ListArgs {
     #[arg(long)]
     pub search: Option<String>,
 
+    /// Filter by author name (case-insensitive substring match)
+    #[arg(long, short = 'a')]
+    pub author: Option<String>,
+
+    /// Filter by recent days (e.g., --recent 7 for last 7 days)
+    #[arg(long)]
+    pub recent: Option<u32>,
+
     /// Limit number of results
     #[arg(long, short = 'n')]
     pub limit: Option<usize>,
@@ -77,6 +113,14 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Sort by column
+    #[arg(long)]
+    pub sort: Option<ListColumn>,
+
+    /// Columns to display
+    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::Title, ListColumn::FeatureA, ListColumn::FeatureB, ListColumn::FitType, ListColumn::Status])]
+    pub columns: Vec<ListColumn>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -197,10 +241,39 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 true
             }
         })
+        .filter(|m| {
+            args.author
+                .as_ref()
+                .map_or(true, |a| m.author.to_lowercase().contains(&a.to_lowercase()))
+        })
+        .filter(|m| {
+            args.recent.map_or(true, |days| {
+                let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+                m.created >= cutoff
+            })
+        })
         .collect();
 
-    // Apply limit
+    // Apply sorting
     let mut mates = mates;
+    if let Some(sort_column) = args.sort {
+        match sort_column {
+            ListColumn::Id => mates.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+            ListColumn::Title => mates.sort_by(|a, b| a.title.cmp(&b.title)),
+            ListColumn::FeatureA => mates.sort_by(|a, b| a.feature_a.cmp(&b.feature_a)),
+            ListColumn::FeatureB => mates.sort_by(|a, b| a.feature_b.cmp(&b.feature_b)),
+            ListColumn::FitType => mates.sort_by(|a, b| {
+                let fit_a = a.fit_analysis.as_ref().map(|f| format!("{}", f.fit_result)).unwrap_or_default();
+                let fit_b = b.fit_analysis.as_ref().map(|f| format!("{}", f.fit_result)).unwrap_or_default();
+                fit_a.cmp(&fit_b)
+            }),
+            ListColumn::Status => mates.sort_by(|a, b| a.status().cmp(b.status())),
+            ListColumn::Author => mates.sort_by(|a, b| a.author.cmp(&b.author)),
+            ListColumn::Created => mates.sort_by(|a, b| a.created.cmp(&b.created)),
+        }
+    }
+
+    // Apply limit
     if let Some(limit) = args.limit {
         mates.truncate(limit);
     }
@@ -256,33 +329,67 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<25} {:<15} {:<12} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TITLE").bold(),
-                style("TYPE").bold(),
-                style("FIT").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(90));
+            // Build header
+            let mut header_parts = Vec::new();
+            for col in &args.columns {
+                let header = match col {
+                    ListColumn::Id => "ID",
+                    ListColumn::Title => "TITLE",
+                    ListColumn::FeatureA => "FEATURE A",
+                    ListColumn::FeatureB => "FEATURE B",
+                    ListColumn::FitType => "FIT TYPE",
+                    ListColumn::Status => "STATUS",
+                    ListColumn::Author => "AUTHOR",
+                    ListColumn::Created => "CREATED",
+                };
+                header_parts.push(format!("{:<20}", style(header).bold()));
+            }
+            println!("{}", header_parts.join(" "));
+            println!("{}", "-".repeat(20 * args.columns.len() + args.columns.len() - 1));
 
+            // Build rows
             for mate in &mates {
                 let short_id = short_ids.get_short_id(&mate.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&mate.id);
-                let fit_result = mate.fit_analysis.as_ref()
-                    .map(|a| format!("{}", a.fit_result))
-                    .unwrap_or_else(|| "n/a".to_string());
+                let mut row_parts = Vec::new();
 
-                println!(
-                    "{:<8} {:<17} {:<25} {:<15} {:<12} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    truncate_str(&mate.title, 23),
-                    mate.mate_type,
-                    fit_result,
-                    mate.status()
-                );
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => {
+                            let id_str = if !short_id.is_empty() {
+                                short_id.clone()
+                            } else {
+                                format_short_id(&mate.id)
+                            };
+                            format!("{:<20}", style(&id_str).cyan())
+                        }
+                        ListColumn::Title => {
+                            format!("{:<20}", truncate_str(&mate.title, 18))
+                        }
+                        ListColumn::FeatureA => {
+                            format!("{:<20}", truncate_str(&mate.feature_a, 18))
+                        }
+                        ListColumn::FeatureB => {
+                            format!("{:<20}", truncate_str(&mate.feature_b, 18))
+                        }
+                        ListColumn::FitType => {
+                            let fit_result = mate.fit_analysis.as_ref()
+                                .map(|a| format!("{}", a.fit_result))
+                                .unwrap_or_else(|| "n/a".to_string());
+                            format!("{:<20}", fit_result)
+                        }
+                        ListColumn::Status => {
+                            format!("{:<20}", mate.status())
+                        }
+                        ListColumn::Author => {
+                            format!("{:<20}", truncate_str(&mate.author, 18))
+                        }
+                        ListColumn::Created => {
+                            format!("{:<20}", mate.created.format("%Y-%m-%d"))
+                        }
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

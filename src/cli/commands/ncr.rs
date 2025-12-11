@@ -58,6 +58,32 @@ pub enum NcrStatusFilter {
     All,
 }
 
+/// List column for display and sorting
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ListColumn {
+    Id,
+    Title,
+    NcrType,
+    Severity,
+    Status,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::NcrType => write!(f, "ncr-type"),
+            ListColumn::Severity => write!(f, "severity"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by NCR type
@@ -72,13 +98,31 @@ pub struct ListArgs {
     #[arg(long, default_value = "all")]
     pub ncr_status: NcrStatusFilter,
 
+    /// Filter by author
+    #[arg(long)]
+    pub author: Option<String>,
+
+    /// Show only recent NCRs (last 30 days)
+    #[arg(long)]
+    pub recent: bool,
+
     /// Search in title and description
     #[arg(long)]
     pub search: Option<String>,
 
-    /// Sort by field
+    /// Columns to display
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Title,
+        ListColumn::NcrType,
+        ListColumn::Severity,
+        ListColumn::Status
+    ])]
+    pub columns: Vec<ListColumn>,
+
+    /// Sort by column
     #[arg(long, default_value = "created")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -91,15 +135,6 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
-    Title,
-    Type,
-    Severity,
-    NcrStatus,
-    Created,
 }
 
 #[derive(clap::Args, Debug)]
@@ -207,6 +242,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             NcrStatusFilter::All => true,
         })
         .filter(|n| {
+            if let Some(ref author) = args.author {
+                n.author.to_lowercase().contains(&author.to_lowercase())
+            } else {
+                true
+            }
+        })
+        .filter(|n| {
+            if args.recent {
+                let thirty_days_ago = chrono::Utc::now() - chrono::Duration::days(30);
+                n.created >= thirty_days_ago
+            } else {
+                true
+            }
+        })
+        .filter(|n| {
             if let Some(ref search) = args.search {
                 let search_lower = search.to_lowercase();
                 n.title.to_lowercase().contains(&search_lower)
@@ -225,17 +275,19 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort
     let mut ncrs = ncrs;
     match args.sort {
-        SortField::Title => ncrs.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::Type => {
+        ListColumn::Id => ncrs.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Title => ncrs.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::NcrType => {
             ncrs.sort_by(|a, b| format!("{:?}", a.ncr_type).cmp(&format!("{:?}", b.ncr_type)))
         }
-        SortField::Severity => {
+        ListColumn::Severity => {
             ncrs.sort_by(|a, b| format!("{:?}", a.severity).cmp(&format!("{:?}", b.severity)))
         }
-        SortField::NcrStatus => {
+        ListColumn::Status => {
             ncrs.sort_by(|a, b| format!("{:?}", a.ncr_status).cmp(&format!("{:?}", b.ncr_status)))
         }
-        SortField::Created => ncrs.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Author => ncrs.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => ncrs.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
@@ -296,38 +348,58 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<26} {:<10} {:<10} {:<12} {:<12}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TITLE").bold(),
-                style("TYPE").bold(),
-                style("SEVERITY").bold(),
-                style("CATEGORY").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(100));
+            // Build header
+            let mut headers = vec![];
+            let mut widths = vec![];
 
+            for col in &args.columns {
+                let (header, width) = match col {
+                    ListColumn::Id => ("ID", 17),
+                    ListColumn::Title => ("TITLE", 26),
+                    ListColumn::NcrType => ("TYPE", 10),
+                    ListColumn::Severity => ("SEVERITY", 10),
+                    ListColumn::Status => ("STATUS", 12),
+                    ListColumn::Author => ("AUTHOR", 16),
+                    ListColumn::Created => ("CREATED", 20),
+                };
+                headers.push((header, *col));
+                widths.push(width);
+            }
+
+            // Print header
+            print!("{:<8} ", style("SHORT").bold().dim());
+            for (i, (header, _)) in headers.iter().enumerate() {
+                print!("{:<width$} ", style(header).bold(), width = widths[i]);
+            }
+            println!();
+            println!("{}", "-".repeat(8 + widths.iter().sum::<usize>() + widths.len() * 1));
+
+            // Print rows
             for ncr in &ncrs {
                 let short_id = short_ids.get_short_id(&ncr.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&ncr.id);
-                let title_truncated = truncate_str(&ncr.title, 24);
-                let severity_styled = match ncr.severity {
-                    NcrSeverity::Critical => style(ncr.severity.to_string()).red().bold(),
-                    NcrSeverity::Major => style(ncr.severity.to_string()).yellow(),
-                    NcrSeverity::Minor => style(ncr.severity.to_string()).white(),
-                };
+                print!("{:<8} ", style(&short_id).cyan());
 
-                println!(
-                    "{:<8} {:<17} {:<26} {:<10} {:<10} {:<12} {:<12}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    title_truncated,
-                    ncr.ncr_type,
-                    severity_styled,
-                    ncr.category,
-                    ncr.ncr_status
-                );
+                for (i, (_, col)) in headers.iter().enumerate() {
+                    let cell = match col {
+                        ListColumn::Id => format_short_id(&ncr.id),
+                        ListColumn::Title => truncate_str(&ncr.title, widths[i] - 2),
+                        ListColumn::NcrType => ncr.ncr_type.to_string(),
+                        ListColumn::Severity => {
+                            let severity_styled = match ncr.severity {
+                                NcrSeverity::Critical => style(ncr.severity.to_string()).red().bold(),
+                                NcrSeverity::Major => style(ncr.severity.to_string()).yellow(),
+                                NcrSeverity::Minor => style(ncr.severity.to_string()).white(),
+                            };
+                            print!("{:<width$} ", severity_styled, width = widths[i]);
+                            continue;
+                        }
+                        ListColumn::Status => ncr.ncr_status.to_string(),
+                        ListColumn::Author => truncate_str(&ncr.author, widths[i] - 2),
+                        ListColumn::Created => ncr.created.format("%Y-%m-%d %H:%M").to_string(),
+                    };
+                    print!("{:<width$} ", cell, width = widths[i]);
+                }
+                println!();
             }
 
             println!();

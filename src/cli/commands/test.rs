@@ -149,6 +149,18 @@ pub struct ListArgs {
     #[arg(long)]
     pub recent: Option<u32>,
 
+    /// Columns to display (comma-separated)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Type,
+        ListColumn::Level,
+        ListColumn::Method,
+        ListColumn::Title,
+        ListColumn::Status,
+        ListColumn::Priority,
+    ])]
+    pub columns: Vec<ListColumn>,
+
     /// Sort by field (default: created)
     #[arg(long, default_value = "created")]
     pub sort: ListColumn,
@@ -464,37 +476,62 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<12} {:<8} {:<12} {:<24} {:<10} {:<8}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TYPE").bold(),
-                style("LEVEL").bold(),
-                style("METHOD").bold(),
-                style("TITLE").bold(),
-                style("STATUS").bold(),
-                style("PRIO").bold()
-            );
-            println!("{}", "-".repeat(105));
+            // Dynamically build header based on selected columns
+            let mut header_parts = vec![style("SHORT").bold().dim().to_string()];
+            for col in &args.columns {
+                let col_name = match col {
+                    ListColumn::Id => "ID",
+                    ListColumn::Type => "TYPE",
+                    ListColumn::Level => "LEVEL",
+                    ListColumn::Method => "METHOD",
+                    ListColumn::Title => "TITLE",
+                    ListColumn::Status => "STATUS",
+                    ListColumn::Priority => "PRIO",
+                    ListColumn::Category => "CATEGORY",
+                    ListColumn::Author => "AUTHOR",
+                    ListColumn::Created => "CREATED",
+                };
+                header_parts.push(style(col_name).bold().to_string());
+            }
+            println!("{}", header_parts.join("  "));
+
+            // Calculate total width for separator
+            let total_width = 8 + args.columns.len() * 2 + args.columns.iter().map(|col| {
+                match col {
+                    ListColumn::Id => 17,
+                    ListColumn::Type => 12,
+                    ListColumn::Level => 8,
+                    ListColumn::Method => 12,
+                    ListColumn::Title => 24,
+                    ListColumn::Status => 10,
+                    ListColumn::Priority => 8,
+                    ListColumn::Category => 12,
+                    ListColumn::Author => 16,
+                    ListColumn::Created => 16,
+                }
+            }).sum::<usize>();
+            println!("{}", "-".repeat(total_width));
 
             for test in &tests {
                 let short_id = short_ids.get_short_id(&test.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&test.id);
-                let title_truncated = truncate_str(&test.title, 22);
-                let level_str = test.test_level.map_or("-".to_string(), |l| l.to_string());
-                let method_str = test.test_method.map_or("-".to_string(), |m| m.to_string());
+                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
-                println!(
-                    "{:<8} {:<17} {:<12} {:<8} {:<12} {:<24} {:<10} {:<8}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    test.test_type,
-                    level_str,
-                    method_str,
-                    title_truncated,
-                    test.status,
-                    test.priority
-                );
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format!("{:<17}", format_short_id(&test.id)),
+                        ListColumn::Type => format!("{:<12}", test.test_type),
+                        ListColumn::Level => format!("{:<8}", test.test_level.map_or("-".to_string(), |l| l.to_string())),
+                        ListColumn::Method => format!("{:<12}", test.test_method.map_or("-".to_string(), |m| m.to_string())),
+                        ListColumn::Title => format!("{:<24}", truncate_str(&test.title, 22)),
+                        ListColumn::Status => format!("{:<10}", test.status),
+                        ListColumn::Priority => format!("{:<8}", test.priority),
+                        ListColumn::Category => format!("{:<12}", test.category.as_deref().unwrap_or("-")),
+                        ListColumn::Author => format!("{:<16}", truncate_str(&test.author, 14)),
+                        ListColumn::Created => format!("{:<16}", test.created.format("%Y-%m-%d %H:%M")),
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join("  "));
             }
 
             println!();

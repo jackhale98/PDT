@@ -78,6 +78,14 @@ pub struct ListArgs {
     #[arg(long)]
     pub search: Option<String>,
 
+    /// Filter by author
+    #[arg(long, short = 'a')]
+    pub author: Option<String>,
+
+    /// Show only components created in the last N days
+    #[arg(long)]
+    pub recent: Option<u32>,
+
     /// Columns to display (can specify multiple)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
         ListColumn::Id,
@@ -263,6 +271,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             } else {
                 true
             }
+        })
+        .filter(|c| {
+            args.author.as_ref().map_or(true, |author| {
+                c.author.to_lowercase().contains(&author.to_lowercase())
+            })
+        })
+        .filter(|c| {
+            args.recent.map_or(true, |days| {
+                let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+                c.created >= cutoff
+            })
         })
         .collect();
 

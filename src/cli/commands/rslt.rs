@@ -61,13 +61,10 @@ pub enum StatusFilter {
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum ListColumn {
     Id,
-    TestId,
     Title,
+    Test,
     Verdict,
     Status,
-    ExecutedBy,
-    ExecutedDate,
-    Category,
     Author,
     Created,
 }
@@ -76,13 +73,10 @@ impl std::fmt::Display for ListColumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ListColumn::Id => write!(f, "id"),
-            ListColumn::TestId => write!(f, "test_id"),
             ListColumn::Title => write!(f, "title"),
+            ListColumn::Test => write!(f, "test"),
             ListColumn::Verdict => write!(f, "verdict"),
             ListColumn::Status => write!(f, "status"),
-            ListColumn::ExecutedBy => write!(f, "executed_by"),
-            ListColumn::ExecutedDate => write!(f, "executed_date"),
-            ListColumn::Category => write!(f, "category"),
             ListColumn::Author => write!(f, "author"),
             ListColumn::Created => write!(f, "created"),
         }
@@ -135,8 +129,12 @@ pub struct ListArgs {
     #[arg(long)]
     pub recent: Option<u32>,
 
-    /// Sort by field (default: executed_date)
-    #[arg(long, default_value = "executed-date")]
+    /// Columns to display (comma-separated)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::Test, ListColumn::Verdict, ListColumn::Status, ListColumn::Author, ListColumn::Created])]
+    pub columns: Vec<ListColumn>,
+
+    /// Sort by field (default: created)
+    #[arg(long, default_value = "created")]
     pub sort: ListColumn,
 
     /// Reverse sort order
@@ -354,10 +352,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort by specified column
     match args.sort {
         ListColumn::Id => results.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
-        ListColumn::TestId => results.sort_by(|a, b| a.test_id.to_string().cmp(&b.test_id.to_string())),
         ListColumn::Title => results.sort_by(|a, b| {
             a.title.as_deref().unwrap_or("").cmp(b.title.as_deref().unwrap_or(""))
         }),
+        ListColumn::Test => results.sort_by(|a, b| a.test_id.to_string().cmp(&b.test_id.to_string())),
         ListColumn::Verdict => results.sort_by(|a, b| {
             let verdict_order = |v: &Verdict| match v {
                 Verdict::Fail => 0,
@@ -369,11 +367,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             verdict_order(&a.verdict).cmp(&verdict_order(&b.verdict))
         }),
         ListColumn::Status => results.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string())),
-        ListColumn::ExecutedBy => results.sort_by(|a, b| a.executed_by.cmp(&b.executed_by)),
-        ListColumn::ExecutedDate => results.sort_by(|a, b| a.executed_date.cmp(&b.executed_date)),
-        ListColumn::Category => results.sort_by(|a, b| {
-            a.category.as_deref().unwrap_or("").cmp(b.category.as_deref().unwrap_or(""))
-        }),
         ListColumn::Author => results.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => results.sort_by(|a, b| a.created.cmp(&b.created)),
     }
@@ -431,50 +424,74 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<17} {:<12} {:<10} {:<15} {:<12}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TEST").bold(),
-                style("VERDICT").bold(),
-                style("STATUS").bold(),
-                style("EXECUTED BY").bold(),
-                style("DATE").bold()
-            );
-            println!("{}", "-".repeat(98));
+            // Build header parts based on columns
+            let mut header_parts = Vec::new();
+            let mut widths = Vec::new();
+
+            for col in &args.columns {
+                let (header, width) = match col {
+                    ListColumn::Id => ("ID", 17),
+                    ListColumn::Title => ("TITLE", 25),
+                    ListColumn::Test => ("TEST", 17),
+                    ListColumn::Verdict => ("VERDICT", 12),
+                    ListColumn::Status => ("STATUS", 10),
+                    ListColumn::Author => ("AUTHOR", 15),
+                    ListColumn::Created => ("CREATED", 12),
+                };
+                header_parts.push(style(header).bold().to_string());
+                widths.push(width);
+            }
+
+            // Print header
+            let header_line = header_parts.iter().zip(&widths)
+                .map(|(h, w)| format!("{:<width$}", h, width = w))
+                .collect::<Vec<_>>()
+                .join(" ");
+            println!("{}", header_line);
+
+            let total_width: usize = widths.iter().sum::<usize>() + (widths.len() - 1);
+            println!("{}", "-".repeat(total_width));
 
             for result in &results {
-                let short_id = short_ids.get_short_id(&result.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&result.id);
-                let test_display = format_short_id(&result.test_id);
-                let executor_truncated = truncate_str(&result.executed_by, 13);
+                // Build row parts based on columns
+                let mut row_parts = Vec::new();
 
-                // Color verdict based on result
-                let verdict_display = match result.verdict {
-                    Verdict::Pass => style(result.verdict.to_string()).green().to_string(),
-                    Verdict::Fail => style(result.verdict.to_string()).red().bold().to_string(),
-                    Verdict::Conditional => style(result.verdict.to_string()).yellow().to_string(),
-                    Verdict::Incomplete => style(result.verdict.to_string()).yellow().to_string(),
-                    Verdict::NotApplicable => style("n/a").dim().to_string(),
-                };
+                for col in &args.columns {
+                    let part = match col {
+                        ListColumn::Id => format_short_id(&result.id),
+                        ListColumn::Title => {
+                            let title = result.title.as_deref().unwrap_or("Untitled");
+                            truncate_str(title, 23)
+                        },
+                        ListColumn::Test => format_short_id(&result.test_id),
+                        ListColumn::Verdict => {
+                            match result.verdict {
+                                Verdict::Pass => style(result.verdict.to_string()).green().to_string(),
+                                Verdict::Fail => style(result.verdict.to_string()).red().bold().to_string(),
+                                Verdict::Conditional => style(result.verdict.to_string()).yellow().to_string(),
+                                Verdict::Incomplete => style(result.verdict.to_string()).yellow().to_string(),
+                                Verdict::NotApplicable => style("n/a").dim().to_string(),
+                            }
+                        },
+                        ListColumn::Status => result.status.to_string(),
+                        ListColumn::Author => truncate_str(&result.author, 13),
+                        ListColumn::Created => result.created.format("%Y-%m-%d").to_string(),
+                    };
+                    row_parts.push(part);
+                }
 
-                println!(
-                    "{:<8} {:<17} {:<17} {:<12} {:<10} {:<15} {:<12}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    test_display,
-                    verdict_display,
-                    result.status,
-                    executor_truncated,
-                    result.executed_date.format("%Y-%m-%d")
-                );
+                // Print row
+                let row_line = row_parts.iter().zip(&widths)
+                    .map(|(p, w)| format!("{:<width$}", p, width = w))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                println!("{}", row_line);
             }
 
             println!();
             println!(
-                "{} result(s) found. Use {} to reference by short ID.",
-                style(results.len()).cyan(),
-                style("RSLT@N").cyan()
+                "{} result(s) found.",
+                style(results.len()).cyan()
             );
         }
         OutputFormat::Id => {

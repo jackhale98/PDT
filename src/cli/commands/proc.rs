@@ -66,17 +66,35 @@ pub struct ListArgs {
     #[arg(long, short = 's', default_value = "all")]
     pub status: StatusFilter,
 
+    /// Filter by author
+    #[arg(long)]
+    pub author: Option<String>,
+
+    /// Show only recent processes (last 30 days)
+    #[arg(long)]
+    pub recent: bool,
+
     /// Search in title and description
     #[arg(long)]
     pub search: Option<String>,
 
-    /// Sort by field
+    /// Sort by column
     #[arg(long, default_value = "title")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
     pub reverse: bool,
+
+    /// Columns to display (comma-separated)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Title,
+        ListColumn::ProcessType,
+        ListColumn::Operation,
+        ListColumn::Status,
+    ])]
+    pub columns: Vec<ListColumn>,
 
     /// Limit number of results
     #[arg(long, short = 'n')]
@@ -85,6 +103,32 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+}
+
+/// Column selection for list output
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ListColumn {
+    Id,
+    Title,
+    ProcessType,
+    Operation,
+    Status,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::ProcessType => write!(f, "process-type"),
+            ListColumn::Operation => write!(f, "operation"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -205,6 +249,23 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::All => true,
         })
         .filter(|p| {
+            if let Some(ref author) = args.author {
+                let author_lower = author.to_lowercase();
+                p.author.to_lowercase().contains(&author_lower)
+            } else {
+                true
+            }
+        })
+        .filter(|p| {
+            if args.recent {
+                let now = chrono::Utc::now();
+                let thirty_days_ago = now - chrono::Duration::days(30);
+                p.created >= thirty_days_ago
+            } else {
+                true
+            }
+        })
+        .filter(|p| {
             if let Some(ref search) = args.search {
                 let search_lower = search.to_lowercase();
                 p.title.to_lowercase().contains(&search_lower)
@@ -220,14 +281,19 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort
     let mut processes = processes;
     match args.sort {
-        SortField::Title => processes.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::Type => processes.sort_by(|a, b| {
+        ListColumn::Id => processes.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Title => processes.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::ProcessType => processes.sort_by(|a, b| {
             format!("{:?}", a.process_type).cmp(&format!("{:?}", b.process_type))
         }),
-        SortField::Status => {
+        ListColumn::Operation => processes.sort_by(|a, b| {
+            a.operation_number.as_deref().unwrap_or("").cmp(b.operation_number.as_deref().unwrap_or(""))
+        }),
+        ListColumn::Status => {
             processes.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
-        SortField::Created => processes.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Author => processes.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => processes.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
@@ -288,36 +354,69 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<30} {:<12} {:<8} {:<8} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TITLE").bold(),
-                style("TYPE").bold(),
-                style("OP #").bold(),
-                style("CYCLE").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(95));
+            // Build header
+            let mut headers = Vec::new();
+            let mut widths = Vec::new();
 
+            // Always show SHORT first
+            headers.push(style("SHORT").bold().dim().to_string());
+            widths.push(8);
+
+            for col in &args.columns {
+                let (header, width) = match col {
+                    ListColumn::Id => ("ID", 17),
+                    ListColumn::Title => ("TITLE", 30),
+                    ListColumn::ProcessType => ("TYPE", 12),
+                    ListColumn::Operation => ("OP #", 8),
+                    ListColumn::Status => ("STATUS", 10),
+                    ListColumn::Author => ("AUTHOR", 20),
+                    ListColumn::Created => ("CREATED", 20),
+                };
+                headers.push(style(header).bold().to_string());
+                widths.push(width);
+            }
+
+            // Print header
+            for (i, header) in headers.iter().enumerate() {
+                if i > 0 {
+                    print!(" ");
+                }
+                print!("{:<width$}", header, width = widths[i]);
+            }
+            println!();
+            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+
+            // Print rows
             for proc in &processes {
                 let short_id = short_ids.get_short_id(&proc.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&proc.id);
-                let title_truncated = truncate_str(&proc.title, 28);
-                let cycle_str = proc
-                    .cycle_time_minutes
-                    .map_or("-".to_string(), |t| format!("{:.1}m", t));
 
-                println!(
-                    "{:<8} {:<17} {:<30} {:<12} {:<8} {:<8} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    title_truncated,
-                    proc.process_type,
-                    proc.operation_number.as_deref().unwrap_or("-"),
-                    cycle_str,
-                    proc.status
-                );
+                // Always show SHORT first
+                print!("{:<8} ", style(&short_id).cyan());
+
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format_short_id(&proc.id),
+                        ListColumn::Title => truncate_str(&proc.title, 28),
+                        ListColumn::ProcessType => proc.process_type.to_string(),
+                        ListColumn::Operation => proc.operation_number.as_deref().unwrap_or("-").to_string(),
+                        ListColumn::Status => proc.status.to_string(),
+                        ListColumn::Author => truncate_str(&proc.author, 18),
+                        ListColumn::Created => proc.created.format("%Y-%m-%d %H:%M").to_string(),
+                    };
+
+                    let width = match col {
+                        ListColumn::Id => 17,
+                        ListColumn::Title => 30,
+                        ListColumn::ProcessType => 12,
+                        ListColumn::Operation => 8,
+                        ListColumn::Status => 10,
+                        ListColumn::Author => 20,
+                        ListColumn::Created => 20,
+                    };
+
+                    print!("{:<width$} ", value, width = width);
+                }
+                println!();
             }
 
             println!();

@@ -48,6 +48,30 @@ pub enum CapaStatusFilter {
     All,
 }
 
+/// List column selection
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ListColumn {
+    Id,
+    Title,
+    CapaType,
+    Status,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::CapaType => write!(f, "capa-type"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by CAPA type
@@ -66,9 +90,26 @@ pub struct ListArgs {
     #[arg(long)]
     pub search: Option<String>,
 
+    /// Filter by author
+    #[arg(long)]
+    pub author: Option<String>,
+
+    /// Show only recent CAPAs (last 30 days)
+    #[arg(long)]
+    pub recent: bool,
+
+    /// Columns to display
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Title,
+        ListColumn::CapaType,
+        ListColumn::Status,
+    ])]
+    pub columns: Vec<ListColumn>,
+
     /// Sort by field
     #[arg(long, default_value = "created")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -81,14 +122,6 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
-    Title,
-    Type,
-    CapaStatus,
-    Created,
 }
 
 #[derive(clap::Args, Debug)]
@@ -173,6 +206,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     let today = chrono::Local::now().date_naive();
+    let thirty_days_ago = chrono::Utc::now() - chrono::Duration::days(30);
 
     // Apply filters
     let capas: Vec<Capa> = capas
@@ -214,19 +248,35 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 true
             }
         })
+        .filter(|c| {
+            if let Some(ref author) = args.author {
+                c.author.to_lowercase().contains(&author.to_lowercase())
+            } else {
+                true
+            }
+        })
+        .filter(|c| {
+            if args.recent {
+                c.created >= thirty_days_ago
+            } else {
+                true
+            }
+        })
         .collect();
 
     // Sort
     let mut capas = capas;
     match args.sort {
-        SortField::Title => capas.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::Type => {
+        ListColumn::Id => capas.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Title => capas.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::CapaType => {
             capas.sort_by(|a, b| format!("{:?}", a.capa_type).cmp(&format!("{:?}", b.capa_type)))
         }
-        SortField::CapaStatus => {
+        ListColumn::Status => {
             capas.sort_by(|a, b| format!("{:?}", a.capa_status).cmp(&format!("{:?}", b.capa_status)))
         }
-        SortField::Created => capas.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Author => capas.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => capas.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
@@ -286,44 +336,81 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<30} {:<12} {:<8} {:<14}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TITLE").bold(),
-                style("TYPE").bold(),
-                style("ACTIONS").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(95));
+            // Build header dynamically based on columns
+            let mut headers = vec![style("SHORT").bold().dim().to_string()];
+            let mut widths = vec![8];
 
+            for col in &args.columns {
+                let (header, width) = match col {
+                    ListColumn::Id => ("ID", 17),
+                    ListColumn::Title => ("TITLE", 30),
+                    ListColumn::CapaType => ("TYPE", 12),
+                    ListColumn::Status => ("STATUS", 14),
+                    ListColumn::Author => ("AUTHOR", 20),
+                    ListColumn::Created => ("CREATED", 20),
+                };
+                headers.push(style(header).bold().to_string());
+                widths.push(width);
+            }
+
+            // Print header
+            for (i, header) in headers.iter().enumerate() {
+                if i > 0 {
+                    print!(" ");
+                }
+                print!("{:<width$}", header, width = widths[i]);
+            }
+            println!();
+            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+
+            // Print rows
             for capa in &capas {
                 let short_id = short_ids.get_short_id(&capa.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&capa.id);
-                let title_truncated = truncate_str(&capa.title, 28);
 
-                // Check if overdue
-                let is_overdue = capa
-                    .timeline
-                    .as_ref()
-                    .and_then(|t| t.target_date)
-                    .map_or(false, |target| target < today && capa.capa_status != CapaStatus::Closed);
+                // Print SHORT column
+                print!("{:<8}", style(&short_id).cyan());
 
-                let status_styled = if is_overdue {
-                    style(format!("{} !", capa.capa_status)).red().bold()
-                } else {
-                    style(capa.capa_status.to_string()).white()
-                };
+                // Print selected columns
+                for col in &args.columns {
+                    print!(" ");
+                    match col {
+                        ListColumn::Id => {
+                            let id_display = format_short_id(&capa.id);
+                            print!("{:<17}", id_display);
+                        }
+                        ListColumn::Title => {
+                            let title_truncated = truncate_str(&capa.title, 28);
+                            print!("{:<30}", title_truncated);
+                        }
+                        ListColumn::CapaType => {
+                            print!("{:<12}", capa.capa_type);
+                        }
+                        ListColumn::Status => {
+                            // Check if overdue
+                            let is_overdue = capa
+                                .timeline
+                                .as_ref()
+                                .and_then(|t| t.target_date)
+                                .map_or(false, |target| target < today && capa.capa_status != CapaStatus::Closed);
 
-                println!(
-                    "{:<8} {:<17} {:<30} {:<12} {:<8} {:<14}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    title_truncated,
-                    capa.capa_type,
-                    capa.actions.len(),
-                    status_styled
-                );
+                            let status_styled = if is_overdue {
+                                style(format!("{} !", capa.capa_status)).red().bold()
+                            } else {
+                                style(capa.capa_status.to_string()).white()
+                            };
+                            print!("{:<14}", status_styled);
+                        }
+                        ListColumn::Author => {
+                            let author_truncated = truncate_str(&capa.author, 18);
+                            print!("{:<20}", author_truncated);
+                        }
+                        ListColumn::Created => {
+                            let created_str = capa.created.format("%Y-%m-%d %H:%M").to_string();
+                            print!("{:<20}", created_str);
+                        }
+                    }
+                }
+                println!();
             }
 
             println!();

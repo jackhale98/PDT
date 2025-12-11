@@ -1,5 +1,6 @@
 //! `tdt tol` command - Stackup/tolerance analysis management
 
+use chrono::{Duration, Utc};
 use clap::{Subcommand, ValueEnum};
 use console::style;
 use miette::{IntoDiagnostic, Result};
@@ -71,6 +72,34 @@ pub enum ResultFilter {
     All,
 }
 
+/// List column selection
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ListColumn {
+    Id,
+    Title,
+    Disposition,
+    Status,
+    Result,
+    Critical,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::Disposition => write!(f, "disposition"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Result => write!(f, "result"),
+            ListColumn::Critical => write!(f, "critical"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by disposition
@@ -92,6 +121,26 @@ pub struct ListArgs {
     /// Show only critical stackups
     #[arg(long)]
     pub critical: bool,
+
+    /// Filter by author
+    #[arg(long, short = 'a')]
+    pub author: Option<String>,
+
+    /// Show only stackups created in the last N days
+    #[arg(long)]
+    pub recent: Option<u32>,
+
+    /// Columns to display
+    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::Title, ListColumn::Disposition, ListColumn::Status])]
+    pub columns: Vec<ListColumn>,
+
+    /// Sort by column
+    #[arg(long)]
+    pub sort: Option<ListColumn>,
+
+    /// Reverse sort order
+    #[arg(long)]
+    pub reverse: bool,
 
     /// Limit number of results
     #[arg(long, short = 'n')]
@@ -296,10 +345,63 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 true
             }
         })
+        .filter(|s| {
+            if let Some(ref author_filter) = args.author {
+                let author_lower = author_filter.to_lowercase();
+                s.author.to_lowercase().contains(&author_lower)
+            } else {
+                true
+            }
+        })
+        .filter(|s| {
+            if let Some(days) = args.recent {
+                let cutoff = Utc::now() - Duration::days(days as i64);
+                s.created >= cutoff
+            } else {
+                true
+            }
+        })
         .collect();
 
-    // Apply limit
+    // Apply sorting
     let mut stackups = stackups;
+    if let Some(sort_col) = args.sort {
+        stackups.sort_by(|a, b| {
+            let cmp = match sort_col {
+                ListColumn::Id => a.id.to_string().cmp(&b.id.to_string()),
+                ListColumn::Title => a.title.cmp(&b.title),
+                ListColumn::Disposition => {
+                    format!("{}", a.disposition).cmp(&format!("{}", b.disposition))
+                }
+                ListColumn::Status => a.status().cmp(&b.status()),
+                ListColumn::Result => {
+                    let a_result = a
+                        .analysis_results
+                        .worst_case
+                        .as_ref()
+                        .map(|wc| format!("{}", wc.result))
+                        .unwrap_or_else(|| "zzz".to_string()); // Sort missing results last
+                    let b_result = b
+                        .analysis_results
+                        .worst_case
+                        .as_ref()
+                        .map(|wc| format!("{}", wc.result))
+                        .unwrap_or_else(|| "zzz".to_string());
+                    a_result.cmp(&b_result)
+                }
+                ListColumn::Critical => b.target.critical.cmp(&a.target.critical), // Critical first
+                ListColumn::Author => a.author.cmp(&b.author),
+                ListColumn::Created => a.created.cmp(&b.created),
+            };
+            if args.reverse {
+                cmp.reverse()
+            } else {
+                cmp
+            }
+        });
+    }
+
+    // Apply limit
     if let Some(limit) = args.limit {
         stackups.truncate(limit);
     }
@@ -366,51 +468,82 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<16} {:<22} {:<12} {:<8} {:<8} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TITLE").bold(),
-                style("TARGET").bold(),
-                style("W/C").bold(),
-                style("CPK").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(90));
+            // Build header based on columns
+            let mut header_parts = Vec::new();
+            let mut widths = Vec::new();
+
+            for col in &args.columns {
+                let (label, width) = match col {
+                    ListColumn::Id => ("SHORT", 8),
+                    ListColumn::Title => ("TITLE", 22),
+                    ListColumn::Disposition => ("DISPOSITION", 14),
+                    ListColumn::Status => ("STATUS", 10),
+                    ListColumn::Result => ("RESULT", 10),
+                    ListColumn::Critical => ("CRIT", 5),
+                    ListColumn::Author => ("AUTHOR", 15),
+                    ListColumn::Created => ("CREATED", 12),
+                };
+                header_parts.push(format!("{:<width$}", style(label).bold(), width = width));
+                widths.push(width);
+            }
+
+            println!("{}", header_parts.join(" "));
+            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
 
             for s in &stackups {
-                let short_id = short_ids.get_short_id(&s.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&s.id);
-                let wc_result = s
-                    .analysis_results
-                    .worst_case
-                    .as_ref()
-                    .map(|wc| format!("{}", wc.result))
-                    .unwrap_or_else(|| "n/a".to_string());
-                let cpk = s
-                    .analysis_results
-                    .rss
-                    .as_ref()
-                    .map(|rss| format!("{:.2}", rss.cpk))
-                    .unwrap_or_else(|| "n/a".to_string());
+                let mut row_parts = Vec::new();
 
-                let wc_styled = match wc_result.as_str() {
-                    "pass" => style(wc_result).green(),
-                    "marginal" => style(wc_result).yellow(),
-                    "fail" => style(wc_result).red(),
-                    _ => style(wc_result).dim(),
-                };
+                for (i, col) in args.columns.iter().enumerate() {
+                    let width = widths[i];
+                    let value = match col {
+                        ListColumn::Id => {
+                            let short_id = short_ids.get_short_id(&s.id.to_string()).unwrap_or_default();
+                            format!("{:<width$}", style(&short_id).cyan(), width = width)
+                        }
+                        ListColumn::Title => {
+                            format!("{:<width$}", truncate_str(&s.title, width - 2), width = width)
+                        }
+                        ListColumn::Disposition => {
+                            format!("{:<width$}", format!("{}", s.disposition), width = width)
+                        }
+                        ListColumn::Status => {
+                            format!("{:<width$}", s.status(), width = width)
+                        }
+                        ListColumn::Result => {
+                            let wc_result = s
+                                .analysis_results
+                                .worst_case
+                                .as_ref()
+                                .map(|wc| format!("{}", wc.result))
+                                .unwrap_or_else(|| "n/a".to_string());
+                            let wc_styled = match wc_result.as_str() {
+                                "pass" => style(wc_result).green(),
+                                "marginal" => style(wc_result).yellow(),
+                                "fail" => style(wc_result).red(),
+                                _ => style(wc_result).dim(),
+                            };
+                            format!("{:<width$}", wc_styled, width = width)
+                        }
+                        ListColumn::Critical => {
+                            let crit = if s.target.critical { "yes" } else { "no" };
+                            let crit_styled = if s.target.critical {
+                                style(crit).red().bold()
+                            } else {
+                                style(crit).dim()
+                            };
+                            format!("{:<width$}", crit_styled, width = width)
+                        }
+                        ListColumn::Author => {
+                            format!("{:<width$}", truncate_str(&s.author, width - 2), width = width)
+                        }
+                        ListColumn::Created => {
+                            format!("{:<width$}", s.created.format("%Y-%m-%d"), width = width)
+                        }
+                    };
+                    row_parts.push(value);
+                }
 
-                println!(
-                    "{:<8} {:<16} {:<22} {:<12} {:<8} {:<8} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    truncate_str(&s.title, 20),
-                    truncate_str(&s.target.name, 10),
-                    wc_styled,
-                    cpk,
-                    s.status()
-                );
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

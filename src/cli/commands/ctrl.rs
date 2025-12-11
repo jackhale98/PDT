@@ -52,6 +52,30 @@ pub enum StatusFilter {
     All,
 }
 
+/// Column selection for list output
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ListColumn {
+    Id,
+    Title,
+    ControlType,
+    Status,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::ControlType => write!(f, "control-type"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by control type
@@ -66,17 +90,29 @@ pub struct ListArgs {
     #[arg(long, short = 'p')]
     pub process: Option<String>,
 
+    /// Filter by author
+    #[arg(long, short = 'a')]
+    pub author: Option<String>,
+
     /// Show only critical (CTQ) controls
     #[arg(long)]
     pub critical: bool,
+
+    /// Show only recent controls (last 30 days)
+    #[arg(long)]
+    pub recent: bool,
 
     /// Search in title and description
     #[arg(long)]
     pub search: Option<String>,
 
-    /// Sort by field
+    /// Columns to display
+    #[arg(long, short = 'c', value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::Title, ListColumn::ControlType, ListColumn::Status])]
+    pub columns: Vec<ListColumn>,
+
+    /// Sort by column
     #[arg(long, default_value = "title")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -89,14 +125,6 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
-    Title,
-    Type,
-    Status,
-    Created,
 }
 
 #[derive(clap::Args, Debug)]
@@ -196,6 +224,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         None
     };
 
+    // Calculate recent cutoff if needed
+    let recent_cutoff = if args.recent {
+        Some(chrono::Utc::now() - chrono::Duration::days(30))
+    } else {
+        None
+    };
+
     // Apply filters
     let controls: Vec<Control> = controls
         .into_iter()
@@ -227,8 +262,22 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .filter(|c| {
+            if let Some(ref author_filter) = args.author {
+                c.author.to_lowercase().contains(&author_filter.to_lowercase())
+            } else {
+                true
+            }
+        })
+        .filter(|c| {
             if args.critical {
                 c.characteristic.critical
+            } else {
+                true
+            }
+        })
+        .filter(|c| {
+            if let Some(cutoff) = recent_cutoff {
+                c.created >= cutoff
             } else {
                 true
             }
@@ -250,14 +299,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort
     let mut controls = controls;
     match args.sort {
-        SortField::Title => controls.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::Type => controls.sort_by(|a, b| {
+        ListColumn::Id => controls.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Title => controls.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::ControlType => controls.sort_by(|a, b| {
             format!("{:?}", a.control_type).cmp(&format!("{:?}", b.control_type))
         }),
-        SortField::Status => {
+        ListColumn::Status => {
             controls.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
-        SortField::Created => controls.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Author => controls.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => controls.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
@@ -318,35 +369,60 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<28} {:<14} {:<16} {:<4} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TITLE").bold(),
-                style("TYPE").bold(),
-                style("CHARACTERISTIC").bold(),
-                style("CTQ").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(100));
+            // Build header based on selected columns
+            let mut header_parts = Vec::new();
+            let mut widths = Vec::new();
+
+            for col in &args.columns {
+                let (name, width) = match col {
+                    ListColumn::Id => ("ID", 20),
+                    ListColumn::Title => ("TITLE", 30),
+                    ListColumn::ControlType => ("TYPE", 16),
+                    ListColumn::Status => ("STATUS", 10),
+                    ListColumn::Author => ("AUTHOR", 20),
+                    ListColumn::Created => ("CREATED", 20),
+                };
+                header_parts.push(format!("{:<width$}", style(name).bold(), width = width));
+                widths.push(width);
+            }
+
+            println!("{}", header_parts.join(" "));
+            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
 
             for ctrl in &controls {
                 let short_id = short_ids.get_short_id(&ctrl.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&ctrl.id);
-                let title_truncated = truncate_str(&ctrl.title, 26);
-                let char_truncated = truncate_str(&ctrl.characteristic.name, 14);
-                let ctq = if ctrl.characteristic.critical { "*" } else { "" };
+                let mut row_parts = Vec::new();
 
-                println!(
-                    "{:<8} {:<17} {:<28} {:<14} {:<16} {:<4} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    title_truncated,
-                    ctrl.control_type,
-                    char_truncated,
-                    style(ctq).red().bold(),
-                    ctrl.status
-                );
+                for (col, &width) in args.columns.iter().zip(&widths) {
+                    let value = match col {
+                        ListColumn::Id => {
+                            let id_str = if short_id.is_empty() {
+                                format_short_id(&ctrl.id)
+                            } else {
+                                short_id.clone()
+                            };
+                            style(truncate_str(&id_str, width)).cyan().to_string()
+                        }
+                        ListColumn::Title => {
+                            truncate_str(&ctrl.title, width)
+                        }
+                        ListColumn::ControlType => {
+                            format!("{}", ctrl.control_type)
+                        }
+                        ListColumn::Status => {
+                            format!("{}", ctrl.status)
+                        }
+                        ListColumn::Author => {
+                            truncate_str(&ctrl.author, width)
+                        }
+                        ListColumn::Created => {
+                            ctrl.created.format("%Y-%m-%d %H:%M").to_string()
+                        }
+                    };
+                    row_parts.push(format!("{:<width$}", value, width = width));
+                }
+
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

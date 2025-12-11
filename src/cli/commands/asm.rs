@@ -3,6 +3,7 @@
 use clap::{Subcommand, ValueEnum};
 use console::style;
 use miette::{IntoDiagnostic, Result};
+use std::fmt;
 use std::fs;
 
 use crate::cli::{GlobalOpts, OutputFormat};
@@ -33,6 +34,30 @@ pub enum AsmCommands {
     Bom(BomArgs),
 }
 
+/// List column types
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum ListColumn {
+    Id,
+    PartNumber,
+    Title,
+    Status,
+    Author,
+    Created,
+}
+
+impl fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::PartNumber => write!(f, "part-number"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 /// Status filter
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum StatusFilter {
@@ -55,9 +80,21 @@ pub struct ListArgs {
     #[arg(long)]
     pub search: Option<String>,
 
-    /// Sort by field
+    /// Filter by author
+    #[arg(long)]
+    pub author: Option<String>,
+
+    /// Show recent assemblies (limit to 10 most recent)
+    #[arg(long)]
+    pub recent: bool,
+
+    /// Columns to display
+    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::PartNumber, ListColumn::Title, ListColumn::Status])]
+    pub columns: Vec<ListColumn>,
+
+    /// Sort by column
     #[arg(long, default_value = "part-number")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -70,14 +107,6 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
-    PartNumber,
-    Title,
-    Status,
-    Created,
 }
 
 #[derive(clap::Args, Debug)]
@@ -191,21 +220,37 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 true
             }
         })
+        .filter(|a| {
+            if let Some(ref author) = args.author {
+                let author_lower = author.to_lowercase();
+                a.author.to_lowercase().contains(&author_lower)
+            } else {
+                true
+            }
+        })
         .collect();
 
     // Sort
     let mut assemblies = assemblies;
     match args.sort {
-        SortField::PartNumber => assemblies.sort_by(|a, b| a.part_number.cmp(&b.part_number)),
-        SortField::Title => assemblies.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::Status => {
+        ListColumn::Id => assemblies.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::PartNumber => assemblies.sort_by(|a, b| a.part_number.cmp(&b.part_number)),
+        ListColumn::Title => assemblies.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::Status => {
             assemblies.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
-        SortField::Created => assemblies.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Author => assemblies.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => assemblies.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
         assemblies.reverse();
+    }
+
+    // Apply recent filter (show 10 most recent)
+    if args.recent {
+        assemblies.sort_by(|a, b| b.created.cmp(&a.created));
+        assemblies.truncate(10);
     }
 
     // Apply limit
@@ -262,38 +307,84 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<12} {:<30} {:<6} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("PART #").bold(),
-                style("TITLE").bold(),
-                style("BOM").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(90));
+            // Build dynamic header based on columns
+            let mut header_parts = Vec::new();
+            let mut header_widths = Vec::new();
 
+            for col in &args.columns {
+                match col {
+                    ListColumn::Id => {
+                        header_parts.push(style("ID").bold().to_string());
+                        header_widths.push(17);
+                    }
+                    ListColumn::PartNumber => {
+                        header_parts.push(style("PART #").bold().to_string());
+                        header_widths.push(12);
+                    }
+                    ListColumn::Title => {
+                        header_parts.push(style("TITLE").bold().to_string());
+                        header_widths.push(30);
+                    }
+                    ListColumn::Status => {
+                        header_parts.push(style("STATUS").bold().to_string());
+                        header_widths.push(10);
+                    }
+                    ListColumn::Author => {
+                        header_parts.push(style("AUTHOR").bold().to_string());
+                        header_widths.push(15);
+                    }
+                    ListColumn::Created => {
+                        header_parts.push(style("CREATED").bold().to_string());
+                        header_widths.push(20);
+                    }
+                }
+            }
+
+            // Print header
+            for (i, part) in header_parts.iter().enumerate() {
+                if i > 0 {
+                    print!(" ");
+                }
+                print!("{:<width$}", part, width = header_widths[i]);
+            }
+            println!();
+            println!("{}", "-".repeat(header_widths.iter().sum::<usize>() + args.columns.len() - 1));
+
+            // Print rows
             for asm in &assemblies {
-                let short_id = short_ids.get_short_id(&asm.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&asm.id);
-                let title_truncated = truncate_str(&asm.title, 28);
-
-                println!(
-                    "{:<8} {:<17} {:<12} {:<30} {:<6} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    truncate_str(&asm.part_number, 10),
-                    title_truncated,
-                    asm.bom.len(),
-                    asm.status
-                );
+                for (i, col) in args.columns.iter().enumerate() {
+                    if i > 0 {
+                        print!(" ");
+                    }
+                    let width = header_widths[i];
+                    match col {
+                        ListColumn::Id => {
+                            print!("{:<width$}", format_short_id(&asm.id), width = width);
+                        }
+                        ListColumn::PartNumber => {
+                            print!("{:<width$}", truncate_str(&asm.part_number, width - 2), width = width);
+                        }
+                        ListColumn::Title => {
+                            print!("{:<width$}", truncate_str(&asm.title, width - 2), width = width);
+                        }
+                        ListColumn::Status => {
+                            print!("{:<width$}", asm.status, width = width);
+                        }
+                        ListColumn::Author => {
+                            print!("{:<width$}", truncate_str(&asm.author, width - 2), width = width);
+                        }
+                        ListColumn::Created => {
+                            print!("{:<width$}", asm.created.format("%Y-%m-%d %H:%M"), width = width);
+                        }
+                    }
+                }
+                println!();
             }
 
             println!();
             println!(
-                "{} assembly(s) found. Use {} to reference by short ID.",
-                style(assemblies.len()).cyan(),
-                style("ASM@N").cyan()
+                "{} assembly(s) found.",
+                style(assemblies.len()).cyan()
             );
         }
         OutputFormat::Id => {

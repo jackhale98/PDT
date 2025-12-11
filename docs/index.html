@@ -489,6 +489,26 @@ nav .container {
 }
 
 /* Entity Types */
+.entity-group {
+  margin-bottom: 40px;
+}
+
+.entity-group:last-child {
+  margin-bottom: 0;
+}
+
+.entity-group-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 .entities-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -536,6 +556,99 @@ nav .container {
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* Workflows Section */
+.workflows-section {
+  background: var(--bg-primary);
+}
+
+.workflow-showcase {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .workflow-showcase {
+    grid-template-columns: 1fr;
+  }
+}
+
+.workflow-item {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s;
+}
+
+.workflow-item:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.workflow-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.workflow-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--accent-glow);
+  border: 1px solid var(--border-accent);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.workflow-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.workflow-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.workflow-desc {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.workflow-code {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.workflow-code pre {
+  padding: 16px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.workflow-code .comment { color: var(--text-muted); }
+.workflow-code .cmd { color: var(--accent); }
+.workflow-code .output { color: var(--text-secondary); }
+.workflow-code .symbol { color: var(--warning); }
+.workflow-code .highlight { color: var(--accent); }
+.workflow-code .status-approved { color: var(--success); }
+.workflow-code .status-draft { color: var(--warning); }
+.workflow-code .priority-high { color: #ff7b72; }
 
 /* Installation */
 .install-section {
@@ -1074,9 +1187,9 @@ footer {
       </a>
       <div class="nav-links">
         <a href="#features">Features</a>
+        <a href="#workflows">Workflows</a>
         <a href="#entities">Entities</a>
         <a href="#install">Install</a>
-        <a href="#demo">Demo</a>
         <a href="https://github.com/jackhale98/TDT" class="nav-btn">
           <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
           GitHub
@@ -1096,9 +1209,9 @@ footer {
 
   <div class="mobile-menu" id="mobileMenu">
     <a href="#features" onclick="closeMobileMenu()">Features</a>
+    <a href="#workflows" onclick="closeMobileMenu()">Workflows</a>
     <a href="#entities" onclick="closeMobileMenu()">Entities</a>
     <a href="#install" onclick="closeMobileMenu()">Install</a>
-    <a href="#demo" onclick="closeMobileMenu()">Demo</a>
     <a href="https://github.com/jackhale98/TDT" onclick="closeMobileMenu()">GitHub</a>
   </div>
 
@@ -1233,6 +1346,121 @@ footer {
 
   </section>
 
+  <!-- Advanced Workflows -->
+
+  <section id="workflows" class="workflows-section">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">// Advanced Workflows</div>
+        <h2 class="section-title">More Than Requirements</h2>
+        <p class="section-desc">TDT powers your entire product lifecycle with specialized engineering tools.</p>
+      </div>
+
+      <div class="workflow-showcase">
+        <!-- Tolerance Analysis -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            </div>
+            <h3>Tolerance Stackup Analysis</h3>
+          </div>
+          <p class="workflow-desc">Define features on components, create mates, and run worst-case, RSS, and Monte Carlo analysis on tolerance chains.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Create features on components</span>
+<span class="symbol">$</span> <span class="cmd">tdt feat new --component CMP@1 --type hole --title "Bore"</span>
+<span class="output">✓ Created feature FEAT@1</span>
+
+<span class="comment"># Define a stackup with contributors</span>
+<span class="symbol">$</span> <span class="cmd">tdt tol new --title "Gap Analysis" --target-nominal 1.0</span>
+<span class="output">✓ Created stackup TOL@1</span>
+
+<span class="comment"># Run Monte Carlo analysis</span>
+<span class="symbol">$</span> <span class="cmd">tdt tol analyze TOL@1 --iterations 50000</span>
+<span class="output">Worst Case: 0.87 to 1.18 mm  <span class="status-approved">PASS</span>
+RSS (3σ):   0.89 to 1.11 mm  Cpk: 4.56
+Monte Carlo: 99.98% yield (50000 iterations)</span></pre>
+          </div>
+        </div>
+
+        <!-- FMEA Risk -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+            </div>
+            <h3>FMEA Risk Management</h3>
+          </div>
+          <p class="workflow-desc">Create design and process risks with severity, occurrence, and detection ratings. Auto-calculate RPN and track mitigations.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Create a risk with FMEA ratings</span>
+<span class="symbol">$</span> <span class="cmd">tdt risk new --title "Motor Overheating" -t design \</span>
+    <span class="cmd">--severity 8 --occurrence 4 --detection 5</span>
+<span class="output">✓ Created risk RISK@1 (RPN: 160, Level: high)</span>
+
+<span class="comment"># View risks sorted by RPN</span>
+<span class="symbol">$</span> <span class="cmd">tdt risk list --by-rpn</span>
+<span class="output">@        TITLE                    RPN    LEVEL
+RISK@1   Motor Overheating        <span class="priority-high">160</span>    <span class="priority-high">high</span>
+RISK@2   Seal Degradation         <span class="status-draft">84</span>     <span class="status-draft">medium</span></span></pre>
+          </div>
+        </div>
+
+        <!-- Manufacturing Quality -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20"/><path d="M5 20V8l7-5 7 5v12"/><path d="M9 20v-6h6v6"/></svg>
+            </div>
+            <h3>Manufacturing Quality Loop</h3>
+          </div>
+          <p class="workflow-desc">Define processes, control plans, work instructions, and track NCRs back to CAPAs for continuous improvement.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Create a manufacturing process</span>
+<span class="symbol">$</span> <span class="cmd">tdt proc new --title "CNC Milling" --type machining</span>
+<span class="output">✓ Created process PROC@1</span>
+
+<span class="comment"># Add SPC control point</span>
+<span class="symbol">$</span> <span class="cmd">tdt ctrl new --title "Bore SPC" --type spc --process PROC@1</span>
+<span class="output">✓ Created control CTRL@1</span>
+
+<span class="comment"># Log a non-conformance</span>
+<span class="symbol">$</span> <span class="cmd">tdt ncr new --title "Bore OOT" --severity major</span>
+<span class="output">✓ Created NCR NCR@1</span>
+
+<span class="comment"># Create corrective action</span>
+<span class="symbol">$</span> <span class="cmd">tdt capa new --title "Tool Wear Fix" --ncr NCR@1</span>
+<span class="output">✓ Created CAPA CAPA@1 linked to NCR@1</span></pre>
+          </div>
+        </div>
+
+        <!-- Traceability -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            </div>
+            <h3>Full Traceability</h3>
+          </div>
+          <p class="workflow-desc">Link requirements to tests, risks to mitigations. Generate coverage reports and find orphaned entities.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Trace from a requirement</span>
+<span class="symbol">$</span> <span class="cmd">tdt trace from REQ@1</span>
+<span class="output"><span class="highlight">REQ@1</span> Operating Temperature
+├── satisfied_by → REQ@3 Thermal Spec
+├── verified_by  → TEST@1 Thermal Test
+└── related_to   → RISK@1 Overheating</span>
+
+<span class="comment"># Check verification coverage</span>
+<span class="symbol">$</span> <span class="cmd">tdt trace coverage</span>
+<span class="output">Requirements: 24 total, 22 verified (<span class="status-approved">92%</span>)
+Uncovered: REQ@12, REQ@18</span></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Entity Types -->
 
   <section id="entities">
@@ -1243,87 +1471,112 @@ footer {
         <p class="section-desc">Every artifact type you need for professional product development.</p>
       </div>
 
-      <div class="entities-grid">
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/requirements.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">REQ</div>
-          <div class="entity-name">Requirement</div>
-          <div class="entity-desc">Design inputs & outputs</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/risk.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">RISK</div>
-          <div class="entity-name">Risk</div>
-          <div class="entity-desc">FMEA items</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/test.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">TEST</div>
-          <div class="entity-name">Test</div>
-          <div class="entity-desc">Verification protocols</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/result.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">RSLT</div>
-          <div class="entity-name">Result</div>
-          <div class="entity-desc">Test execution records</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/assembly.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">ASM</div>
-          <div class="entity-name">Assembly</div>
-          <div class="entity-desc">Assembly definitions</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/component.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">CMP</div>
-          <div class="entity-name">Component</div>
-          <div class="entity-desc">Part definitions</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/feature.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">FEAT</div>
-          <div class="entity-name">Feature</div>
-          <div class="entity-desc">Dimensional features</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/stackup.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">TOL</div>
-          <div class="entity-name">Tolerance</div>
-          <div class="entity-desc">Stackup analysis</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/process.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">PROC</div>
-          <div class="entity-name">Process</div>
-          <div class="entity-desc">Manufacturing processes</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/control.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">CTRL</div>
-          <div class="entity-name">Control</div>
-          <div class="entity-desc">SPC & inspection</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/ncr.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">NCR</div>
-          <div class="entity-name">NCR</div>
-          <div class="entity-desc">Non-conformance reports</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/capa.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">CAPA</div>
-          <div class="entity-name">CAPA</div>
-          <div class="entity-desc">Corrective actions</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/work_instruction.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">WORK</div>
-          <div class="entity-name">Work Instruction</div>
-          <div class="entity-desc">Operator procedures</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/quote.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">QUOT</div>
-          <div class="entity-name">Quote</div>
-          <div class="entity-desc">Cost estimates</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/supplier.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">SUP</div>
-          <div class="entity-name">Supplier</div>
-          <div class="entity-desc">Vendor management</div>
-        </a>
-        <a href="https://github.com/jackhale98/TDT/blob/main/docs/mate.md" class="entity-card" target="_blank" rel="noopener">
-          <div class="entity-prefix">MATE</div>
-          <div class="entity-name">Mate</div>
-          <div class="entity-desc">Feature fits</div>
-        </a>
+      <!-- Design & Requirements -->
+      <div class="entity-group">
+        <h3 class="entity-group-title">Design & Requirements</h3>
+        <div class="entities-grid">
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/requirements.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">REQ</div>
+            <div class="entity-name">Requirement</div>
+            <div class="entity-desc">Design inputs & outputs</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/risk.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">RISK</div>
+            <div class="entity-name">Risk</div>
+            <div class="entity-desc">FMEA items</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/test.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">TEST</div>
+            <div class="entity-name">Test</div>
+            <div class="entity-desc">Verification protocols</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/result.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">RSLT</div>
+            <div class="entity-name">Result</div>
+            <div class="entity-desc">Test execution records</div>
+          </a>
+        </div>
+      </div>
+
+      <!-- BOM & Supply Chain -->
+      <div class="entity-group">
+        <h3 class="entity-group-title">BOM & Supply Chain</h3>
+        <div class="entities-grid">
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/assembly.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">ASM</div>
+            <div class="entity-name">Assembly</div>
+            <div class="entity-desc">Assembly definitions</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/component.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">CMP</div>
+            <div class="entity-name">Component</div>
+            <div class="entity-desc">Part definitions</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/supplier.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">SUP</div>
+            <div class="entity-name">Supplier</div>
+            <div class="entity-desc">Vendor management</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/quote.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">QUOT</div>
+            <div class="entity-name">Quote</div>
+            <div class="entity-desc">Cost estimates</div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Tolerance Analysis -->
+      <div class="entity-group">
+        <h3 class="entity-group-title">Tolerance Analysis</h3>
+        <div class="entities-grid">
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/feature.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">FEAT</div>
+            <div class="entity-name">Feature</div>
+            <div class="entity-desc">Dimensional features</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/mate.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">MATE</div>
+            <div class="entity-name">Mate</div>
+            <div class="entity-desc">Feature fits</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/stackup.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">TOL</div>
+            <div class="entity-name">Tolerance</div>
+            <div class="entity-desc">Stackup analysis</div>
+          </a>
+        </div>
+      </div>
+
+      <!-- Manufacturing & Quality -->
+      <div class="entity-group">
+        <h3 class="entity-group-title">Manufacturing & Quality</h3>
+        <div class="entities-grid">
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/process.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">PROC</div>
+            <div class="entity-name">Process</div>
+            <div class="entity-desc">Manufacturing processes</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/control.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">CTRL</div>
+            <div class="entity-name">Control</div>
+            <div class="entity-desc">SPC & inspection</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/work_instruction.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">WORK</div>
+            <div class="entity-name">Work Instruction</div>
+            <div class="entity-desc">Operator procedures</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/ncr.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">NCR</div>
+            <div class="entity-name">NCR</div>
+            <div class="entity-desc">Non-conformance reports</div>
+          </a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/docs/capa.md" class="entity-card" target="_blank" rel="noopener">
+            <div class="entity-prefix">CAPA</div>
+            <div class="entity-name">CAPA</div>
+            <div class="entity-desc">Corrective actions</div>
+          </a>
+        </div>
       </div>
     </div>
 

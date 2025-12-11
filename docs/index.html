@@ -1,0 +1,207 @@
+
+T
+TDT
+Features
+Entities
+Install
+Demo
+
+GitHub
+Open Source • MIT License
+Tessera Development Toolkit
+A powerful CLI toolkit for managing product development artifacts as plain-text YAML files. Version control your requirements, risks, tests, BOMs, and more with full traceability.
+
+Install Now View Documentation
+```
+
+
+
+# Initialize a new TDT project
+```
+
+$ tdt init
+✓ Initialized TDT project at /my-product
+
+# Create your first requirement
+$ tdt req new –title "Operating Temperature" –type input
+✓ Created requirement REQ@1
+
+# List all requirements
+$ tdt req list
+◆
+Plain-Text YAML Files
+◆
+JSON Schema Validation
+◆
+Full Traceability Matrices
+◆
+ULID-Based Unique IDs
+◆
+FMEA Risk Management
+◆
+Tolerance Analysis
+◆
+BOM Management
+◆
+Beautiful CLI Output
+◆
+Plain-Text YAML Files
+◆
+JSON Schema Validation
+◆
+Full Traceability Matrices
+◆
+ULID-Based Unique IDs
+◆
+FMEA Risk Management
+◆
+Tolerance Analysis
+◆
+BOM Management
+◆
+Beautiful CLI Output
+// FEATURES
+Built for Engineering Teams
+Everything you need to manage complex product development in plain text.
+```
+
+Plain-Text YAML
+Human-readable files that diff beautifully in git. No proprietary formats, no vendor lock-in. Your data stays yours forever.
+
+Schema Validation
+JSON Schema validation with beautiful error messages. Line numbers, context, and actionable suggestions for every issue.
+
+Full Traceability
+Link requirements to tests, risks to mitigations. Generate traceability matrices and find orphaned entities instantly.
+
+FMEA Risk Management
+Built-in Failure Mode and Effects Analysis. Track severity, occurrence, detection ratings. Auto-calculate RPN and risk levels.
+
+Short ID Aliases
+Use REQ@1, RISK@2 instead of 26-character ULIDs. Persistent, cross-entity linking that just works.
+
+Tolerance Analysis
+Features, mates, and stackups with worst-case, RSS, and Monte Carlo analysis. Built for mechanical engineering.
+```
+// ENTITY TYPES
+Complete Coverage
+Every artifact type you need for professional product development.
+```
+REQ
+Requirement
+Design inputs & outputs
+RISK
+Risk
+FMEA items
+TEST
+Test
+Verification protocols
+RSLT
+Result
+Test execution records
+ASM
+Assembly
+Assembly definitions
+CMP
+Component
+Part definitions
+FEAT
+Feature
+Dimensional features
+TOL
+Tolerance
+Stackup analysis
+PROC
+Process
+Manufacturing processes
+CTRL
+Control
+SPC & inspection
+NCR
+NCR
+Non-conformance reports
+CAPA
+CAPA
+Corrective actions
+```
+// GETTING STARTED
+Up and Running in Minutes
+Install TDT with a single command and initialize your first project. Works on macOS, Linux, and Windows.
+``` 1
+Install with Cargo
+Requires Rust toolchain installed
+2
+Initialize a Project
+Creates directory structure and config
+3
+Start Creating
+Add requirements, risks, tests, and more
+Terminal
+Copy
+# Install from crates.io
+```
+
+$ cargo install tdt
+
+# Or build from source
+$ git clone https://github.com/yourorg/tdt.git
+$ cd tdt && cargo build –release
+
+# Initialize your project
+$ tdt init
+✓ Initialized TDT project
+
+# Create your first requirement
+$ tdt req new -t input –title "Temperature Range"
+✓ Created requirement REQ@1
+
+# Validate everything
+$ tdt validate
+✓ All files valid
+// LIVE DEMO
+See It in Action
+A glimpse of TDT's powerful command-line interface.
+```
+
+
+
+tdt -- ~/my-product
+❯
+tdt req list
+@       ID               TYPE     TITLE                              STATUS     PRIORITY
+```
+
+REQ@1   REQ-01HC2JB7…  input    Operating Temperature Range        approved   high
+REQ@2   REQ-01HC2JB8…  input    Shock and Vibration Resistance     approved   critical
+REQ@3   REQ-01HC2JB9…  output   Thermal Management Specification   draft      high
+
+3 requirement(s)
+```
+❯
+tdt risk list --by-rpn
+@        ID                TYPE      TITLE                         RPN    LEVEL
+```
+
+RISK@1   RISK-01HC2JB…   design    Battery Thermal Runaway       280    high
+RISK@2   RISK-01HC2KC…   process   Solder Joint Fatigue          120    medium
+RISK@3   RISK-01HC2LC…   design    EMI Susceptibility            48     low
+
+3 risk(s)
+```
+❯
+tdt trace from REQ@1
+``` REQ@1 Operating Temperature Range ├── satisfied_by → REQ@3 Thermal Management Specification ├── verified_by → TEST@1 Thermal Chamber Test Protocol └── related_to → RISK@1 Battery Thermal Runaway
+```
+❯
+tdt validate
+✓ requirements/inputs/REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD.tdt.yaml ``` ✓ requirements/inputs/REQ-01HC2JB8SMQX7RS1Y0GFKBHPTE.tdt.yaml ✓ requirements/outputs/REQ-01HC2JB9SMQX7RS1Y0GFKBHPTF.tdt.yaml ✓ risks/design/RISK-01HC2JB7SMQX7RS1Y0GFKBHPTD.tdt.yaml Files checked: 4 Valid: 4 Errors: 0
+```
+❯
+_
+```
+T
+TDT -- Tessera Development Toolkit
+GitHub
+Documentation
+Issues
+MIT License

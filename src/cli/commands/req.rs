@@ -447,31 +447,44 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            // Print header with short ID column
-            println!(
-                "{:<8} {:<16} {:<8} {:<34} {:<10} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TYPE").bold(),
-                style("TITLE").bold(),
-                style("STATUS").bold(),
-                style("PRIORITY").bold()
-            );
+            // Build header based on selected columns
+            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
+            for col in &args.columns {
+                let header = match col {
+                    ListColumn::Id => format!("{:<16}", style("ID").bold()),
+                    ListColumn::Type => format!("{:<8}", style("TYPE").bold()),
+                    ListColumn::Title => format!("{:<34}", style("TITLE").bold()),
+                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
+                    ListColumn::Priority => format!("{:<10}", style("PRIORITY").bold()),
+                    ListColumn::Category => format!("{:<16}", style("CATEGORY").bold()),
+                    ListColumn::Author => format!("{:<16}", style("AUTHOR").bold()),
+                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
+                    ListColumn::Tags => format!("{:<20}", style("TAGS").bold()),
+                };
+                header_parts.push(header);
+            }
+            println!("{}", header_parts.join(" "));
             println!("{}", "-".repeat(90));
 
             for req in &reqs {
                 let short_id = short_ids.get_short_id(&req.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&req.id);
-                let title_truncated = truncate_str(&req.title, 32);
-                println!(
-                    "{:<8} {:<16} {:<8} {:<34} {:<10} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    req.req_type,
-                    title_truncated,
-                    req.status,
-                    req.priority
-                );
+                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
+
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format!("{:<16}", format_short_id(&req.id)),
+                        ListColumn::Type => format!("{:<8}", req.req_type),
+                        ListColumn::Title => format!("{:<34}", truncate_str(&req.title, 32)),
+                        ListColumn::Status => format!("{:<10}", req.status),
+                        ListColumn::Priority => format!("{:<10}", req.priority),
+                        ListColumn::Category => format!("{:<16}", truncate_str(req.category.as_deref().unwrap_or(""), 14)),
+                        ListColumn::Author => format!("{:<16}", truncate_str(&req.author, 14)),
+                        ListColumn::Created => format!("{:<12}", req.created.format("%Y-%m-%d")),
+                        ListColumn::Tags => format!("{:<20}", truncate_str(&req.tags.join(", "), 18)),
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

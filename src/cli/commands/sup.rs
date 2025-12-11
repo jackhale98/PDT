@@ -59,6 +59,34 @@ pub enum CapabilityFilter {
     All,
 }
 
+/// Columns to display in list output
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ListColumn {
+    Id,
+    Name,
+    ShortName,
+    Status,
+    Website,
+    Capabilities,
+    Author,
+    Created,
+}
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::Name => write!(f, "name"),
+            ListColumn::ShortName => write!(f, "short-name"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Website => write!(f, "website"),
+            ListColumn::Capabilities => write!(f, "capabilities"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by status
@@ -73,9 +101,27 @@ pub struct ListArgs {
     #[arg(long)]
     pub search: Option<String>,
 
+    /// Filter by author (substring match)
+    #[arg(long, short = 'a')]
+    pub author: Option<String>,
+
+    /// Show suppliers created in last N days
+    #[arg(long)]
+    pub recent: Option<u32>,
+
+    /// Columns to display (can specify multiple)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Name,
+        ListColumn::ShortName,
+        ListColumn::Status,
+        ListColumn::Capabilities
+    ])]
+    pub columns: Vec<ListColumn>,
+
     /// Sort by field
     #[arg(long, default_value = "name")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -88,13 +134,6 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
-}
-
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
-    Name,
-    Status,
-    Created,
 }
 
 #[derive(clap::Args, Debug)]
@@ -222,16 +261,32 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 true
             }
         })
+        .filter(|s| {
+            args.author.as_ref().map_or(true, |author| {
+                s.author.to_lowercase().contains(&author.to_lowercase())
+            })
+        })
+        .filter(|s| {
+            args.recent.map_or(true, |days| {
+                let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+                s.created >= cutoff
+            })
+        })
         .collect();
 
     // Sort
     let mut suppliers = suppliers;
     match args.sort {
-        SortField::Name => suppliers.sort_by(|a, b| a.name.cmp(&b.name)),
-        SortField::Status => {
+        ListColumn::Id => suppliers.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Name => suppliers.sort_by(|a, b| a.name.cmp(&b.name)),
+        ListColumn::ShortName => suppliers.sort_by(|a, b| a.short_name.cmp(&b.short_name)),
+        ListColumn::Status => {
             suppliers.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
-        SortField::Created => suppliers.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Website => suppliers.sort_by(|a, b| a.website.cmp(&b.website)),
+        ListColumn::Capabilities => suppliers.sort_by(|a, b| a.capabilities.len().cmp(&b.capabilities.len())),
+        ListColumn::Author => suppliers.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => suppliers.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
@@ -293,38 +348,50 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<25} {:<12} {:<10} {:<20}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("NAME").bold(),
-                style("SHORT").bold(),
-                style("STATUS").bold(),
-                style("CAPABILITIES").bold()
-            );
+            // Build header based on selected columns
+            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
+            for col in &args.columns {
+                let header = match col {
+                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
+                    ListColumn::Name => format!("{:<25}", style("NAME").bold()),
+                    ListColumn::ShortName => format!("{:<12}", style("SHORT").bold()),
+                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
+                    ListColumn::Website => format!("{:<25}", style("WEBSITE").bold()),
+                    ListColumn::Capabilities => format!("{:<20}", style("CAPABILITIES").bold()),
+                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
+                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
+                };
+                header_parts.push(header);
+            }
+            println!("{}", header_parts.join(" "));
             println!("{}", "-".repeat(95));
 
             for sup in &suppliers {
                 let short_id = short_ids.get_short_id(&sup.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&sup.id);
-                let name_truncated = truncate_str(&sup.name, 23);
-                let short_name = sup.short_name.as_deref().unwrap_or("-");
-                let caps: Vec<_> = sup.capabilities.iter().take(2).map(|c| c.to_string()).collect();
-                let caps_display = if sup.capabilities.len() > 2 {
-                    format!("{}+{}", caps.join(","), sup.capabilities.len() - 2)
-                } else {
-                    caps.join(",")
-                };
+                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
-                println!(
-                    "{:<8} {:<17} {:<25} {:<12} {:<10} {:<20}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    name_truncated,
-                    truncate_str(short_name, 10),
-                    sup.status,
-                    caps_display
-                );
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format!("{:<17}", format_short_id(&sup.id)),
+                        ListColumn::Name => format!("{:<25}", truncate_str(&sup.name, 23)),
+                        ListColumn::ShortName => format!("{:<12}", truncate_str(sup.short_name.as_deref().unwrap_or("-"), 10)),
+                        ListColumn::Status => format!("{:<10}", sup.status),
+                        ListColumn::Website => format!("{:<25}", truncate_str(sup.website.as_deref().unwrap_or("-"), 23)),
+                        ListColumn::Capabilities => {
+                            let caps: Vec<_> = sup.capabilities.iter().take(2).map(|c| c.to_string()).collect();
+                            let caps_display = if sup.capabilities.len() > 2 {
+                                format!("{}+{}", caps.join(","), sup.capabilities.len() - 2)
+                            } else {
+                                caps.join(",")
+                            };
+                            format!("{:<20}", caps_display)
+                        }
+                        ListColumn::Author => format!("{:<14}", truncate_str(&sup.author, 12)),
+                        ListColumn::Created => format!("{:<12}", sup.created.format("%Y-%m-%d")),
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

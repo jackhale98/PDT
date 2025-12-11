@@ -78,9 +78,20 @@ pub struct ListArgs {
     #[arg(long)]
     pub search: Option<String>,
 
+    /// Columns to display (can specify multiple)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::PartNumber,
+        ListColumn::Title,
+        ListColumn::MakeBuy,
+        ListColumn::Category,
+        ListColumn::Status
+    ])]
+    pub columns: Vec<ListColumn>,
+
     /// Sort by field
     #[arg(long, default_value = "part-number")]
-    pub sort: SortField,
+    pub sort: ListColumn,
 
     /// Reverse sort order
     #[arg(long, short = 'r')]
@@ -95,14 +106,38 @@ pub struct ListArgs {
     pub count: bool,
 }
 
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum SortField {
+/// Columns to display in list output
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ListColumn {
+    Id,
     PartNumber,
+    Revision,
     Title,
+    MakeBuy,
     Category,
     Status,
+    Author,
     Created,
 }
+
+impl std::fmt::Display for ListColumn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ListColumn::Id => write!(f, "id"),
+            ListColumn::PartNumber => write!(f, "part-number"),
+            ListColumn::Revision => write!(f, "revision"),
+            ListColumn::Title => write!(f, "title"),
+            ListColumn::MakeBuy => write!(f, "make-buy"),
+            ListColumn::Category => write!(f, "category"),
+            ListColumn::Status => write!(f, "status"),
+            ListColumn::Author => write!(f, "author"),
+            ListColumn::Created => write!(f, "created"),
+        }
+    }
+}
+
+/// Sort field (reuses ListColumn for consistency)
+pub type SortField = ListColumn;
 
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
@@ -234,15 +269,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort
     let mut components = components;
     match args.sort {
-        SortField::PartNumber => components.sort_by(|a, b| a.part_number.cmp(&b.part_number)),
-        SortField::Title => components.sort_by(|a, b| a.title.cmp(&b.title)),
-        SortField::Category => components.sort_by(|a, b| {
+        ListColumn::Id => components.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::PartNumber => components.sort_by(|a, b| a.part_number.cmp(&b.part_number)),
+        ListColumn::Revision => components.sort_by(|a, b| a.revision.cmp(&b.revision)),
+        ListColumn::Title => components.sort_by(|a, b| a.title.cmp(&b.title)),
+        ListColumn::MakeBuy => components.sort_by(|a, b| {
+            format!("{:?}", a.make_buy).cmp(&format!("{:?}", b.make_buy))
+        }),
+        ListColumn::Category => components.sort_by(|a, b| {
             format!("{:?}", a.category).cmp(&format!("{:?}", b.category))
         }),
-        SortField::Status => {
+        ListColumn::Status => {
             components.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
-        SortField::Created => components.sort_by(|a, b| a.created.cmp(&b.created)),
+        ListColumn::Author => components.sort_by(|a, b| a.author.cmp(&b.author)),
+        ListColumn::Created => components.sort_by(|a, b| a.created.cmp(&b.created)),
     }
 
     if args.reverse {
@@ -304,37 +345,47 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<12} {:<30} {:<6} {:<12} {:<10}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("PART #").bold(),
-                style("TITLE").bold(),
-                style("M/B").bold(),
-                style("CATEGORY").bold(),
-                style("STATUS").bold()
-            );
+            // Build header based on selected columns
+            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
+            for col in &args.columns {
+                let header = match col {
+                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
+                    ListColumn::PartNumber => format!("{:<12}", style("PART #").bold()),
+                    ListColumn::Revision => format!("{:<8}", style("REV").bold()),
+                    ListColumn::Title => format!("{:<30}", style("TITLE").bold()),
+                    ListColumn::MakeBuy => format!("{:<6}", style("M/B").bold()),
+                    ListColumn::Category => format!("{:<12}", style("CATEGORY").bold()),
+                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
+                    ListColumn::Author => format!("{:<16}", style("AUTHOR").bold()),
+                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
+                };
+                header_parts.push(header);
+            }
+            println!("{}", header_parts.join(" "));
             println!("{}", "-".repeat(100));
 
             for cmp in &components {
                 let short_id = short_ids.get_short_id(&cmp.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&cmp.id);
-                let title_truncated = truncate_str(&cmp.title, 28);
-                let make_buy_short = match cmp.make_buy {
-                    MakeBuy::Make => "make",
-                    MakeBuy::Buy => "buy",
-                };
+                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
-                println!(
-                    "{:<8} {:<17} {:<12} {:<30} {:<6} {:<12} {:<10}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    truncate_str(&cmp.part_number, 10),
-                    title_truncated,
-                    make_buy_short,
-                    cmp.category,
-                    cmp.status
-                );
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format!("{:<17}", format_short_id(&cmp.id)),
+                        ListColumn::PartNumber => format!("{:<12}", truncate_str(&cmp.part_number, 10)),
+                        ListColumn::Revision => format!("{:<8}", cmp.revision.as_deref().unwrap_or("-")),
+                        ListColumn::Title => format!("{:<30}", truncate_str(&cmp.title, 28)),
+                        ListColumn::MakeBuy => format!("{:<6}", match cmp.make_buy {
+                            MakeBuy::Make => "make",
+                            MakeBuy::Buy => "buy",
+                        }),
+                        ListColumn::Category => format!("{:<12}", cmp.category),
+                        ListColumn::Status => format!("{:<10}", cmp.status),
+                        ListColumn::Author => format!("{:<16}", truncate_str(&cmp.author, 14)),
+                        ListColumn::Created => format!("{:<12}", cmp.created.format("%Y-%m-%d")),
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

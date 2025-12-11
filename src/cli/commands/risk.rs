@@ -87,7 +87,7 @@ impl std::fmt::Display for ListColumn {
             ListColumn::Type => write!(f, "type"),
             ListColumn::Title => write!(f, "title"),
             ListColumn::Status => write!(f, "status"),
-            ListColumn::RiskLevel => write!(f, "risk_level"),
+            ListColumn::RiskLevel => write!(f, "risk-level"),
             ListColumn::Severity => write!(f, "severity"),
             ListColumn::Occurrence => write!(f, "occurrence"),
             ListColumn::Detection => write!(f, "detection"),
@@ -144,6 +144,17 @@ pub struct ListArgs {
     /// Show risks created in last N days
     #[arg(long)]
     pub recent: Option<u32>,
+
+    /// Columns to display (can specify multiple)
+    #[arg(long, value_delimiter = ',', default_values_t = vec![
+        ListColumn::Id,
+        ListColumn::Type,
+        ListColumn::Title,
+        ListColumn::Status,
+        ListColumn::RiskLevel,
+        ListColumn::Rpn
+    ])]
+    pub columns: Vec<ListColumn>,
 
     /// Sort by field (default: created)
     #[arg(long, default_value = "created")]
@@ -451,42 +462,58 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv => {
-            println!(
-                "{:<8} {:<17} {:<9} {:<28} {:<10} {:<8} {:<5}",
-                style("SHORT").bold().dim(),
-                style("ID").bold(),
-                style("TYPE").bold(),
-                style("TITLE").bold(),
-                style("STATUS").bold(),
-                style("LEVEL").bold(),
-                style("RPN").bold()
-            );
+            // Build header based on selected columns
+            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
+            for col in &args.columns {
+                let header = match col {
+                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
+                    ListColumn::Type => format!("{:<9}", style("TYPE").bold()),
+                    ListColumn::Title => format!("{:<28}", style("TITLE").bold()),
+                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
+                    ListColumn::RiskLevel => format!("{:<8}", style("LEVEL").bold()),
+                    ListColumn::Severity => format!("{:<4}", style("SEV").bold()),
+                    ListColumn::Occurrence => format!("{:<4}", style("OCC").bold()),
+                    ListColumn::Detection => format!("{:<4}", style("DET").bold()),
+                    ListColumn::Rpn => format!("{:<5}", style("RPN").bold()),
+                    ListColumn::Category => format!("{:<14}", style("CATEGORY").bold()),
+                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
+                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
+                };
+                header_parts.push(header);
+            }
+            println!("{}", header_parts.join(" "));
             println!("{}", "-".repeat(90));
 
             for risk in &risks {
                 let short_id = short_ids.get_short_id(&risk.id.to_string()).unwrap_or_default();
-                let id_display = format_short_id(&risk.id);
-                let title_truncated = truncate_str(&risk.title, 26);
-                let level_str = risk.risk_level.map_or("-".to_string(), |l| l.to_string());
-                let rpn_str = risk.rpn.map_or("-".to_string(), |r| r.to_string());
+                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
-                // Color RPN based on risk level
-                let rpn_display = match risk.rpn {
-                    Some(r) if r > 400 => style(rpn_str).red().to_string(),
-                    Some(r) if r > 150 => style(rpn_str).yellow().to_string(),
-                    _ => rpn_str,
-                };
-
-                println!(
-                    "{:<8} {:<17} {:<9} {:<28} {:<10} {:<8} {:<5}",
-                    style(&short_id).cyan(),
-                    id_display,
-                    risk.risk_type,
-                    title_truncated,
-                    risk.status,
-                    level_str,
-                    rpn_display
-                );
+                for col in &args.columns {
+                    let value = match col {
+                        ListColumn::Id => format!("{:<17}", format_short_id(&risk.id)),
+                        ListColumn::Type => format!("{:<9}", risk.risk_type),
+                        ListColumn::Title => format!("{:<28}", truncate_str(&risk.title, 26)),
+                        ListColumn::Status => format!("{:<10}", risk.status),
+                        ListColumn::RiskLevel => format!("{:<8}", risk.risk_level.map_or("-".to_string(), |l| l.to_string())),
+                        ListColumn::Severity => format!("{:<4}", risk.severity.map_or("-".to_string(), |s| s.to_string())),
+                        ListColumn::Occurrence => format!("{:<4}", risk.occurrence.map_or("-".to_string(), |o| o.to_string())),
+                        ListColumn::Detection => format!("{:<4}", risk.detection.map_or("-".to_string(), |d| d.to_string())),
+                        ListColumn::Rpn => {
+                            let rpn_str = risk.rpn.map_or("-".to_string(), |r| r.to_string());
+                            let colored = match risk.rpn {
+                                Some(r) if r > 400 => style(&rpn_str).red().to_string(),
+                                Some(r) if r > 150 => style(&rpn_str).yellow().to_string(),
+                                _ => rpn_str.clone(),
+                            };
+                            format!("{:<5}", colored)
+                        }
+                        ListColumn::Category => format!("{:<14}", truncate_str(risk.category.as_deref().unwrap_or(""), 12)),
+                        ListColumn::Author => format!("{:<14}", truncate_str(&risk.author, 12)),
+                        ListColumn::Created => format!("{:<12}", risk.created.format("%Y-%m-%d")),
+                    };
+                    row_parts.push(value);
+                }
+                println!("{}", row_parts.join(" "));
             }
 
             println!();

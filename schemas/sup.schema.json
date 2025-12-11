@@ -2,97 +2,96 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pdt.dev/schemas/supplier.schema.json",
   "title": "Supplier",
-  "description": "A supplier record",
+  "description": "A supplier entity for components and assemblies",
   "type": "object",
-  "required": ["id", "title", "status", "created", "author"],
+  "required": ["id", "name", "status", "created", "author"],
   "properties": {
     "id": {
       "type": "string",
       "pattern": "^SUP-[0-9A-Z]{26}$",
       "description": "Unique identifier (SUP prefix + ULID)"
     },
-    "title": {
+    "name": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 200,
-      "description": "Supplier name"
+      "description": "Company name"
     },
-    "supplier_code": {
-      "type": "string",
-      "description": "Internal supplier code"
+    "short_name": {
+      "type": ["string", "null"],
+      "description": "Short name for display"
     },
-    "description": {
-      "type": "string",
-      "description": "Supplier description"
+    "website": {
+      "type": ["string", "null"],
+      "description": "Website URL"
     },
-    "contact": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string" },
-        "email": { "type": "string", "format": "email" },
-        "phone": { "type": "string" },
-        "title": { "type": "string" }
-      },
-      "description": "Primary contact"
-    },
-    "address": {
-      "type": "object",
-      "properties": {
-        "street": { "type": "string" },
-        "city": { "type": "string" },
-        "state": { "type": "string" },
-        "postal_code": { "type": "string" },
-        "country": { "type": "string" }
-      },
-      "description": "Address"
-    },
-    "capabilities": {
+    "contacts": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Manufacturing capabilities"
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "role": { "type": ["string", "null"] },
+          "email": { "type": ["string", "null"] },
+          "phone": { "type": ["string", "null"] },
+          "primary": { "type": "boolean", "default": false }
+        }
+      },
+      "description": "Contact people"
+    },
+    "addresses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["headquarters", "manufacturing", "shipping", "billing"],
+            "default": "headquarters"
+          },
+          "street": { "type": ["string", "null"] },
+          "city": { "type": ["string", "null"] },
+          "state": { "type": ["string", "null"] },
+          "postal": { "type": ["string", "null"] },
+          "country": { "type": ["string", "null"] }
+        }
+      },
+      "description": "Physical addresses"
+    },
+    "payment_terms": {
+      "type": ["string", "null"],
+      "description": "Default payment terms"
+    },
+    "currency": {
+      "type": "string",
+      "enum": ["USD", "EUR", "GBP", "CNY", "JPY"],
+      "default": "USD",
+      "description": "Preferred currency"
     },
     "certifications": {
       "type": "array",
       "items": {
         "type": "object",
+        "required": ["name"],
         "properties": {
           "name": { "type": "string" },
-          "number": { "type": "string" },
-          "expiry_date": { "type": "string", "format": "date" }
+          "expiry": { "type": ["string", "null"], "format": "date" },
+          "certificate_number": { "type": ["string", "null"] }
         }
       },
       "description": "Quality certifications"
     },
-    "quality_rating": {
-      "type": "string",
-      "enum": ["approved", "conditional", "probation", "disqualified", "pending"],
-      "description": "Quality status"
-    },
-    "performance": {
-      "type": "object",
-      "properties": {
-        "on_time_delivery": { "type": "number" },
-        "quality_score": { "type": "number" },
-        "responsiveness": { "type": "number" },
-        "last_review_date": { "type": "string", "format": "date" }
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["machining", "sheet_metal", "casting", "injection", "extrusion", "pcb", "pcb_assembly", "cable_assembly", "assembly", "testing", "finishing"]
       },
-      "description": "Performance metrics"
-    },
-    "payment_terms": {
-      "type": "string",
-      "description": "Standard payment terms"
-    },
-    "lead_time_days": {
-      "type": "integer",
-      "description": "Typical lead time in days"
-    },
-    "minimum_order_value": {
-      "type": "number",
-      "description": "Minimum order value"
+      "description": "Manufacturing capabilities"
     },
     "notes": {
-      "type": "string",
-      "description": "Additional notes"
+      "type": ["string", "null"],
+      "description": "Notes about the supplier"
     },
     "tags": {
       "type": "array",
@@ -102,18 +101,15 @@
     "status": {
       "type": "string",
       "enum": ["draft", "review", "approved", "released", "obsolete"],
-      "description": "Current status"
+      "description": "Entity status"
     },
     "links": {
       "type": "object",
       "properties": {
-        "quotes": {
+        "approved_for": {
           "type": "array",
-          "items": { "type": "string" }
-        },
-        "components": {
-          "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "Components this supplier is approved for"
         }
       }
     },

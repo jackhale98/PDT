@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pdt.dev/schemas/quote.schema.json",
   "title": "Quote",
-  "description": "A supplier quote",
+  "description": "A supplier quote for a component or assembly",
   "type": "object",
-  "required": ["id", "title", "status", "created", "author"],
+  "required": ["id", "title", "supplier", "status", "created", "author"],
   "properties": {
     "id": {
       "type": "string",
@@ -15,65 +15,88 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 200,
-      "description": "Short descriptive title"
+      "description": "Quote title/description"
     },
-    "quote_number": {
+    "supplier": {
       "type": "string",
-      "description": "Supplier quote number"
+      "description": "Supplier ID (SUP-...)"
+    },
+    "component": {
+      "type": ["string", "null"],
+      "description": "Component ID this quote is for (mutually exclusive with assembly)"
+    },
+    "assembly": {
+      "type": ["string", "null"],
+      "description": "Assembly ID this quote is for (mutually exclusive with component)"
+    },
+    "quote_ref": {
+      "type": ["string", "null"],
+      "description": "Supplier's quote reference number"
     },
     "description": {
-      "type": "string",
-      "description": "Quote description"
-    },
-    "quote_date": {
-      "type": "string",
-      "format": "date",
-      "description": "Date of quote"
-    },
-    "valid_until": {
-      "type": "string",
-      "format": "date",
-      "description": "Quote expiration date"
+      "type": ["string", "null"],
+      "description": "Detailed description or notes"
     },
     "currency": {
       "type": "string",
-      "description": "Currency code"
+      "enum": ["USD", "EUR", "GBP", "CNY", "JPY"],
+      "default": "USD",
+      "description": "Currency for all prices"
     },
-    "line_items": {
+    "price_breaks": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
-          "line_number": { "type": "integer" },
-          "description": { "type": "string" },
-          "part_number": { "type": "string" },
-          "quantity": { "type": "number" },
+          "min_qty": { "type": "integer", "minimum": 1 },
           "unit_price": { "type": "number" },
-          "extended_price": { "type": "number" },
-          "lead_time_days": { "type": "integer" },
-          "notes": { "type": "string" }
-        }
+          "lead_time_days": { "type": ["integer", "null"] }
+        },
+        "required": ["min_qty", "unit_price"]
       },
-      "description": "Line items"
+      "description": "Price breaks (quantity-based pricing)"
     },
-    "terms": {
-      "type": "object",
-      "properties": {
-        "payment": { "type": "string" },
-        "shipping": { "type": "string" },
-        "incoterm": { "type": "string" },
-        "warranty": { "type": "string" }
+    "moq": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Minimum order quantity"
+    },
+    "tooling_cost": {
+      "type": ["number", "null"],
+      "description": "Tooling cost (one-time)"
+    },
+    "nre_costs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "cost": { "type": "number" },
+          "one_time": { "type": "boolean", "default": false }
+        },
+        "required": ["description", "cost"]
       },
-      "description": "Quote terms"
+      "description": "Non-recurring engineering costs"
     },
-    "total_price": {
-      "type": "number",
-      "description": "Total quoted price"
+    "lead_time_days": {
+      "type": ["integer", "null"],
+      "description": "Standard lead time in days"
+    },
+    "quote_date": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date quote was received"
+    },
+    "valid_until": {
+      "type": ["string", "null"],
+      "format": "date",
+      "description": "Date quote expires"
     },
     "quote_status": {
       "type": "string",
-      "enum": ["pending", "accepted", "rejected", "expired", "superseded"],
-      "description": "Quote status"
+      "enum": ["pending", "received", "accepted", "rejected", "expired"],
+      "default": "pending",
+      "description": "Quote-specific status"
     },
     "tags": {
       "type": "array",
@@ -83,18 +106,16 @@
     "status": {
       "type": "string",
       "enum": ["draft", "review", "approved", "released", "obsolete"],
-      "description": "Current status"
+      "description": "Entity status"
     },
     "links": {
       "type": "object",
       "properties": {
-        "supplier": { "type": "string" },
-        "components": {
+        "related_quotes": {
           "type": "array",
-          "items": { "type": "string" }
-        },
-        "supersedes": { "type": "string" },
-        "superseded_by": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "Related quotes (e.g., competing quotes)"
+        }
       }
     },
     "created": {

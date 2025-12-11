@@ -18,7 +18,7 @@
       "description": "Part number"
     },
     "revision": {
-      "type": "string",
+      "type": ["string", "null"],
       "maxLength": 20,
       "description": "Part revision"
     },
@@ -29,7 +29,7 @@
       "description": "Short descriptive title"
     },
     "description": {
-      "type": "string",
+      "type": ["string", "null"],
       "description": "Detailed description"
     },
     "make_buy": {
@@ -45,16 +45,16 @@
       "description": "Component category"
     },
     "material": {
-      "type": "string",
+      "type": ["string", "null"],
       "description": "Material specification"
     },
     "mass_kg": {
-      "type": "number",
+      "type": ["number", "null"],
       "minimum": 0,
       "description": "Mass in kilograms"
     },
     "unit_cost": {
-      "type": "number",
+      "type": ["number", "null"],
       "minimum": 0,
       "description": "Unit cost"
     },
@@ -65,25 +65,25 @@
         "required": ["name"],
         "properties": {
           "name": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "Supplier name"
           },
           "supplier_pn": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "Supplier's part number"
           },
           "lead_time_days": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "minimum": 0,
             "description": "Lead time in days"
           },
           "moq": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "minimum": 1,
             "description": "Minimum order quantity"
           },
           "unit_cost": {
-            "type": "number",
+            "type": ["number", "null"],
             "minimum": 0,
             "description": "Unit cost from this supplier"
           }
@@ -106,7 +106,7 @@
             "description": "Path to the document"
           },
           "revision": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "Document revision"
           }
         }
@@ -161,5 +161,5 @@
       "description": "Entity revision number"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

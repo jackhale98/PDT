@@ -765,6 +765,29 @@ fn load_generic_entity(path: &PathBuf, prefix: EntityPrefix) -> Result<GenericEn
         }
     }
 
+    // Also extract top-level reference fields that act as links
+    // These are fields that contain entity IDs but aren't in the links section
+    let reference_fields = [
+        "supplier",    // Quote -> Supplier
+        "component",   // Quote -> Component, NCR -> Component
+        "assembly",    // Quote -> Assembly
+        "process",     // Control -> Process, WorkInstruction -> Process, NCR -> Process
+        "feature",     // Control -> Feature
+        "control",     // NCR -> Control
+        "capa",        // NCR -> CAPA
+    ];
+
+    for field in reference_fields {
+        if let Some(val) = value.get(field) {
+            if let Some(target) = val.as_str() {
+                // Only add if it looks like an entity ID (contains a prefix pattern)
+                if target.contains('-') && target.len() > 4 {
+                    outgoing_links.push((field.to_string(), target.to_string()));
+                }
+            }
+        }
+    }
+
     Ok(GenericEntity {
         id,
         title,

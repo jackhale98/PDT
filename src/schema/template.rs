@@ -863,10 +863,25 @@ target:
   critical: false
 
 # Contributors to the stackup
-# Use plus_tol/minus_tol format (not +/- symbol)
+# Add linked features with: tdt tol add TOL@N +FEAT@1 ~FEAT@2
+# Or manually enter dimensions below
 contributors:
+  # Linked contributor example (added via 'tdt tol add'):
+  # - name: "Housing Depth"
+  #   feature:
+  #     id: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTE
+  #     name: "Depth"
+  #     component_id: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTA
+  #     component_name: "Housing"
+  #   direction: positive
+  #   nominal: 50.0
+  #   plus_tol: 0.1
+  #   minus_tol: 0.1
+  #   distribution: normal
+  #   source: "DWG-001 Rev A"
+  #
+  # Manual contributor (no feature link):
   - name: "Part A Length"
-    # feature_id: FEAT-...  # Optional: link to feature entity
     direction: positive
     nominal: 10.0
     plus_tol: 0.1

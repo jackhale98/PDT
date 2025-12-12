@@ -11,6 +11,8 @@ use crate::entities::risk::{Risk, RiskLevel};
 use crate::entities::result::{Result as TestResult, Verdict};
 use crate::entities::ncr::Ncr;
 use crate::entities::capa::Capa;
+use crate::entities::stackup::{AnalysisResult, Stackup};
+use crate::entities::mate::Mate;
 
 #[derive(clap::Args, Debug)]
 pub struct StatusArgs {
@@ -32,6 +34,7 @@ pub fn run(_args: StatusArgs, global: &GlobalOpts) -> Result<()> {
     let test_metrics = collect_test_metrics(&project);
     let quality_metrics = collect_quality_metrics(&project);
     let bom_metrics = collect_bom_metrics(&project);
+    let tol_metrics = collect_tolerance_metrics(&project);
 
     match global.format {
         OutputFormat::Json => {
@@ -41,6 +44,7 @@ pub fn run(_args: StatusArgs, global: &GlobalOpts) -> Result<()> {
                 "tests": test_metrics,
                 "quality": quality_metrics,
                 "bom": bom_metrics,
+                "tolerances": tol_metrics,
             });
             println!("{}", serde_json::to_string_pretty(&status).unwrap_or_default());
         }
@@ -74,14 +78,20 @@ pub fn run(_args: StatusArgs, global: &GlobalOpts) -> Result<()> {
 
             println!();
 
-            // BOM section
-            print_section("BILL OF MATERIALS", &format_bom_metrics(&bom_metrics), width);
+            // BOM and Tolerances side by side
+            print_two_columns(
+                "BILL OF MATERIALS",
+                &format_bom_metrics(&bom_metrics),
+                "TOLERANCE ANALYSIS",
+                &format_tolerance_metrics(&tol_metrics),
+                width,
+            );
 
             println!();
             println!("{}", "═".repeat(width));
 
             // Overall health indicator
-            let health = calculate_health(&req_metrics, &risk_metrics, &test_metrics, &quality_metrics);
+            let health = calculate_health(&req_metrics, &risk_metrics, &test_metrics, &quality_metrics, &tol_metrics);
             let health_style = match health.as_str() {
                 "Healthy" => style(health.clone()).green().bold(),
                 "Warning" => style(health.clone()).yellow().bold(),
@@ -140,6 +150,30 @@ struct BomMetrics {
     buy_parts: usize,
     single_source: usize,
     with_quotes: usize,
+}
+
+#[derive(serde::Serialize, Default)]
+struct ToleranceMetrics {
+    /// Total features defined
+    features: usize,
+    /// Total mates defined
+    mates: usize,
+    /// Mates with calculated fit analysis
+    mates_with_analysis: usize,
+    /// Total stackups defined
+    stackups: usize,
+    /// Stackups with analysis results
+    stackups_with_analysis: usize,
+    /// Stackups that pass worst-case
+    stackups_pass: usize,
+    /// Stackups that are marginal
+    stackups_marginal: usize,
+    /// Stackups that fail worst-case
+    stackups_fail: usize,
+    /// Contributors linked to features
+    contributors_linked: usize,
+    /// Contributors not linked to features
+    contributors_unlinked: usize,
 }
 
 fn collect_requirement_metrics(project: &Project) -> RequirementMetrics {
@@ -380,7 +414,7 @@ fn collect_bom_metrics(project: &Project) -> BomMetrics {
     }
 
     // Check quotes for supplier diversity
-    let quote_dir = project.root().join("procurement/quotes");
+    let quote_dir = project.root().join("bom/quotes");
     if quote_dir.exists() {
         for entry in walkdir::WalkDir::new(&quote_dir)
             .into_iter()
@@ -405,6 +439,79 @@ fn collect_bom_metrics(project: &Project) -> BomMetrics {
     for suppliers in component_suppliers.values() {
         if suppliers.len() == 1 {
             metrics.single_source += 1;
+        }
+    }
+
+    metrics
+}
+
+fn collect_tolerance_metrics(project: &Project) -> ToleranceMetrics {
+    let mut metrics = ToleranceMetrics::default();
+
+    // Count features
+    let feat_dir = project.root().join("tolerances/features");
+    if feat_dir.exists() {
+        for entry in walkdir::WalkDir::new(&feat_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        {
+            if crate::yaml::parse_yaml_file::<crate::entities::feature::Feature>(entry.path()).is_ok() {
+                metrics.features += 1;
+            }
+        }
+    }
+
+    // Count mates
+    let mate_dir = project.root().join("tolerances/mates");
+    if mate_dir.exists() {
+        for entry in walkdir::WalkDir::new(&mate_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        {
+            if let Ok(mate) = crate::yaml::parse_yaml_file::<Mate>(entry.path()) {
+                metrics.mates += 1;
+                if mate.fit_analysis.is_some() {
+                    metrics.mates_with_analysis += 1;
+                }
+            }
+        }
+    }
+
+    // Count stackups and analyze results
+    let stackup_dir = project.root().join("tolerances/stackups");
+    if stackup_dir.exists() {
+        for entry in walkdir::WalkDir::new(&stackup_dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        {
+            if let Ok(stackup) = crate::yaml::parse_yaml_file::<Stackup>(entry.path()) {
+                metrics.stackups += 1;
+
+                // Count linked vs unlinked contributors
+                for contrib in &stackup.contributors {
+                    if contrib.feature.is_some() {
+                        metrics.contributors_linked += 1;
+                    } else {
+                        metrics.contributors_unlinked += 1;
+                    }
+                }
+
+                // Check worst-case analysis result
+                if let Some(ref results) = stackup.analysis_results.worst_case {
+                    metrics.stackups_with_analysis += 1;
+                    match results.result {
+                        AnalysisResult::Pass => metrics.stackups_pass += 1,
+                        AnalysisResult::Marginal => metrics.stackups_marginal += 1,
+                        AnalysisResult::Fail => metrics.stackups_fail += 1,
+                    }
+                }
+            }
         }
     }
 
@@ -478,6 +585,61 @@ fn format_bom_metrics(m: &BomMetrics) -> Vec<String> {
     lines
 }
 
+fn format_tolerance_metrics(m: &ToleranceMetrics) -> Vec<String> {
+    let mut lines = Vec::new();
+
+    // Features
+    lines.push(format!("Features:   {}", m.features));
+
+    // Mates
+    if m.mates > 0 {
+        let mates_unanalyzed = m.mates - m.mates_with_analysis;
+        if mates_unanalyzed > 0 {
+            lines.push(format!("Mates:      {} ({} unanalyzed)", m.mates, mates_unanalyzed));
+        } else {
+            lines.push(format!("Mates:      {}", m.mates));
+        }
+    } else {
+        lines.push(format!("Mates:      {}", m.mates));
+    }
+
+    // Stackups with pass/fail breakdown
+    if m.stackups > 0 {
+        lines.push(format!("Stackups:   {}", m.stackups));
+
+        if m.stackups_with_analysis > 0 {
+            if m.stackups_fail > 0 {
+                lines.push(format!("  Failing:  {} {}", m.stackups_fail, style("⚠").red()));
+            }
+            if m.stackups_marginal > 0 {
+                lines.push(format!("  Marginal: {} {}", m.stackups_marginal, style("⚠").yellow()));
+            }
+            lines.push(format!("  Passing:  {}", m.stackups_pass));
+        }
+
+        let unanalyzed = m.stackups - m.stackups_with_analysis;
+        if unanalyzed > 0 {
+            lines.push(format!("  Unanalyzed: {}", unanalyzed));
+        }
+    } else {
+        lines.push(format!("Stackups:   {}", m.stackups));
+    }
+
+    // Contributors linkage
+    let total_contributors = m.contributors_linked + m.contributors_unlinked;
+    if total_contributors > 0 {
+        let linked_pct = (m.contributors_linked as f64 / total_contributors as f64) * 100.0;
+        if m.contributors_unlinked > 0 {
+            lines.push(format!(
+                "Contributors: {} linked ({:.0}%)",
+                m.contributors_linked, linked_pct
+            ));
+        }
+    }
+
+    lines
+}
+
 fn print_two_columns(title1: &str, lines1: &[String], title2: &str, lines2: &[String], _width: usize) {
     let col_width = 32;
 
@@ -506,6 +668,7 @@ fn calculate_health(
     risk: &RiskMetrics,
     test: &TestMetrics,
     quality: &QualityMetrics,
+    tol: &ToleranceMetrics,
 ) -> String {
     let mut score = 100i32;
 
@@ -540,6 +703,16 @@ fn calculate_health(
     // Overdue items
     if quality.overdue > 0 {
         score -= 10 * quality.overdue as i32;
+    }
+
+    // Tolerance analysis failures
+    if tol.stackups_fail > 0 {
+        score -= 15 * tol.stackups_fail as i32;
+    }
+
+    // Marginal stackups
+    if tol.stackups_marginal > 0 {
+        score -= 5 * tol.stackups_marginal as i32;
     }
 
     match score {

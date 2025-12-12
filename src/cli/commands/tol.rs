@@ -1036,6 +1036,30 @@ fn run_add(args: AddArgs) -> Result<()> {
             continue;
         }
 
+        // Try to load component to get component_name for cached info
+        let component_name = {
+            let cmp_dir = project.root().join("bom/components");
+            let mut name = None;
+            if cmp_dir.exists() {
+                for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
+                    let entry = entry.into_diagnostic()?;
+                    let path = entry.path();
+                    if path.extension().map_or(false, |e| e == "yaml") {
+                        let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                        if filename.contains(&feature.component) {
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                if let Ok(cmp) = serde_yml::from_str::<crate::entities::component::Component>(&content) {
+                                    name = Some(cmp.title);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            name
+        };
+
         // Create contributor from feature with cached info
         // Distribution comes from the feature's dimension, not CLI args
         let contributor = Contributor {
@@ -1044,7 +1068,7 @@ fn run_add(args: AddArgs) -> Result<()> {
                 feature.id.clone(),
                 Some(feature.title.clone()),
                 Some(feature.component.clone()),
-                None, // component_name - would need to load component to get this
+                component_name,
             )),
             direction,
             nominal: dimension.nominal,

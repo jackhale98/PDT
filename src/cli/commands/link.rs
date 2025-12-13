@@ -30,15 +30,20 @@ pub struct AddLinkArgs {
     /// Source entity ID (or partial ID)
     pub source: String,
 
-    /// Link type (satisfied_by, verified_by, etc.)
-    #[arg(long, short = 't')]
-    pub link_type: String,
-
     /// Target entity ID (or partial ID)
     pub target: String,
 
+    /// Link type (positional or use -t flag): verified_by, mitigates, etc.
+    /// Example: tdt link add REQ@1 TEST@1 verified_by
+    #[arg(value_name = "LINK_TYPE")]
+    pub link_type_pos: Option<String>,
+
+    /// Link type (alternative to positional arg)
+    #[arg(long = "link-type", short = 't')]
+    pub link_type_flag: Option<String>,
+
     /// Add reciprocal link (target -> source)
-    #[arg(long)]
+    #[arg(long, short = 'r')]
     pub reciprocal: bool,
 }
 
@@ -47,15 +52,19 @@ pub struct RemoveLinkArgs {
     /// Source entity ID (or partial ID)
     pub source: String,
 
-    /// Link type (satisfied_by, verified_by, etc.)
-    #[arg(long, short = 't')]
-    pub link_type: String,
-
     /// Target entity ID (or partial ID)
     pub target: String,
 
+    /// Link type (positional or use -t flag): verified_by, mitigates, etc.
+    #[arg(value_name = "LINK_TYPE")]
+    pub link_type_pos: Option<String>,
+
+    /// Link type (alternative to positional arg)
+    #[arg(long = "link-type", short = 't')]
+    pub link_type_flag: Option<String>,
+
     /// Remove reciprocal link too
-    #[arg(long)]
+    #[arg(long, short = 'r')]
     pub reciprocal: bool,
 }
 
@@ -92,6 +101,13 @@ pub fn run(cmd: LinkCommands) -> Result<()> {
 fn run_add(args: AddLinkArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
+    // Determine link type from positional arg or -t flag
+    let link_type_input = args.link_type_pos
+        .or(args.link_type_flag)
+        .ok_or_else(|| miette::miette!(
+            "Link type required. Usage:\n  tdt link add REQ@1 TEST@1 verified_by\n  tdt link add REQ@1 TEST@1 -t verified_by"
+        ))?;
+
     // Find source entity
     let (source_req, source_path) = find_requirement(&project, &args.source)?;
 
@@ -99,7 +115,7 @@ fn run_add(args: AddLinkArgs) -> Result<()> {
     let target_id = resolve_entity_id(&project, &args.target)?;
 
     // Parse link type
-    let link_type = args.link_type.to_lowercase();
+    let link_type = link_type_input.to_lowercase();
 
     // Read the current file content
     let content = fs::read_to_string(&source_path).into_diagnostic()?;
@@ -153,6 +169,13 @@ fn run_add(args: AddLinkArgs) -> Result<()> {
 fn run_remove(args: RemoveLinkArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
+    // Determine link type from positional arg or -t flag
+    let link_type_input = args.link_type_pos
+        .or(args.link_type_flag)
+        .ok_or_else(|| miette::miette!(
+            "Link type required. Usage:\n  tdt link rm REQ@1 TEST@1 verified_by\n  tdt link rm REQ@1 TEST@1 -t verified_by"
+        ))?;
+
     // Find source entity
     let (source_req, source_path) = find_requirement(&project, &args.source)?;
 
@@ -160,7 +183,7 @@ fn run_remove(args: RemoveLinkArgs) -> Result<()> {
     let target_id = resolve_entity_id(&project, &args.target)?;
 
     // Parse link type
-    let link_type = args.link_type.to_lowercase();
+    let link_type = link_type_input.to_lowercase();
 
     // Read the current file content
     let content = fs::read_to_string(&source_path).into_diagnostic()?;

@@ -2,7 +2,7 @@
 
 use clap::{Subcommand, ValueEnum};
 use console::style;
-use miette::{IntoDiagnostic, Result};
+use miette::{bail, IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::{GlobalOpts, OutputFormat};
@@ -129,20 +129,25 @@ pub struct ListArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
-    /// First feature ID (REQUIRED) - FEAT@N or full ID (typically hole)
-    #[arg(long, short = 'a', required = true)]
-    pub feature_a: String,
+    /// Features to mate: FEAT_A FEAT_B (positional args)
+    /// Example: tdt mate new FEAT@1 FEAT@2 -t interference
+    #[arg(value_name = "FEATURE")]
+    pub features: Vec<String>,
 
-    /// Second feature ID (REQUIRED) - FEAT@N or full ID (typically shaft)
-    #[arg(long, short = 'b', required = true)]
-    pub feature_b: String,
+    /// First feature ID - alternative to positional arg
+    #[arg(long = "feature-a", short = 'a')]
+    pub feature_a: Option<String>,
+
+    /// Second feature ID - alternative to positional arg
+    #[arg(long = "feature-b", short = 'b')]
+    pub feature_b: Option<String>,
 
     /// Mate type
     #[arg(long, short = 't', default_value = "clearance_fit")]
     pub mate_type: String,
 
     /// Title/description
-    #[arg(long)]
+    #[arg(long, short = 'T')]
     pub title: Option<String>,
 
     /// Open in editor after creation
@@ -150,7 +155,7 @@ pub struct NewArgs {
     pub edit: bool,
 
     /// Skip opening in editor
-    #[arg(long)]
+    #[arg(long, short = 'n')]
     pub no_edit: bool,
 
     /// Interactive mode (prompt for fields)
@@ -472,10 +477,21 @@ fn run_new(args: NewArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let config = Config::load();
 
+    // Determine feature IDs from positional args or -a/-b flags
+    let (feat_a_input, feat_b_input) = if args.features.len() >= 2 {
+        // Positional args: tdt mate new FEAT@1 FEAT@2
+        (args.features[0].clone(), args.features[1].clone())
+    } else if let (Some(a), Some(b)) = (&args.feature_a, &args.feature_b) {
+        // Flag args: tdt mate new -a FEAT@1 -b FEAT@2
+        (a.clone(), b.clone())
+    } else {
+        bail!("Two features required. Usage:\n  tdt mate new FEAT@1 FEAT@2 -t interference\n  tdt mate new -a FEAT@1 -b FEAT@2 -t interference");
+    };
+
     // Resolve feature IDs
     let short_ids = ShortIdIndex::load(&project);
-    let feature_a = short_ids.resolve(&args.feature_a).unwrap_or_else(|| args.feature_a.clone());
-    let feature_b = short_ids.resolve(&args.feature_b).unwrap_or_else(|| args.feature_b.clone());
+    let feature_a = short_ids.resolve(&feat_a_input).unwrap_or_else(|| feat_a_input.clone());
+    let feature_b = short_ids.resolve(&feat_b_input).unwrap_or_else(|| feat_b_input.clone());
 
     // Validate features exist and load them for fit calculation
     let feat_dir = project.root().join("tolerances/features");
@@ -507,13 +523,13 @@ fn run_new(args: NewArgs) -> Result<()> {
     if feat_a.is_none() {
         return Err(miette::miette!(
             "Feature A '{}' not found. Create it first with: tdt feat new",
-            args.feature_a
+            feat_a_input
         ));
     }
     if feat_b.is_none() {
         return Err(miette::miette!(
             "Feature B '{}' not found. Create it first with: tdt feat new",
-            args.feature_b
+            feat_b_input
         ));
     }
 

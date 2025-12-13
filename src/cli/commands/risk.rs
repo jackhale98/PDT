@@ -199,7 +199,7 @@ pub struct NewArgs {
     pub r#type: String,
 
     /// Title (if not provided, uses placeholder)
-    #[arg(long)]
+    #[arg(long, short = 'T')]
     pub title: Option<String>,
 
     /// Category
@@ -207,15 +207,15 @@ pub struct NewArgs {
     pub category: Option<String>,
 
     /// Initial severity rating (1-10)
-    #[arg(long)]
+    #[arg(long, short = 'S')]
     pub severity: Option<u8>,
 
     /// Initial occurrence rating (1-10)
-    #[arg(long)]
+    #[arg(long, short = 'O')]
     pub occurrence: Option<u8>,
 
     /// Initial detection rating (1-10)
-    #[arg(long)]
+    #[arg(long, short = 'D')]
     pub detection: Option<u8>,
 
     /// Use interactive wizard to fill in fields
@@ -227,7 +227,7 @@ pub struct NewArgs {
     pub edit: bool,
 
     /// Don't open in editor after creation
-    #[arg(long)]
+    #[arg(long, short = 'n')]
     pub no_edit: bool,
 }
 

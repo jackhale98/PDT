@@ -194,7 +194,7 @@ pub struct NewArgs {
     pub edit: bool,
 
     /// Skip opening in editor
-    #[arg(long)]
+    #[arg(long, short = 'n')]
     pub no_edit: bool,
 
     /// Interactive mode (prompt for fields)

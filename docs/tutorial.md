@@ -56,6 +56,19 @@ You can also set this globally:
 git config --global user.name "Your Name"
 ```
 
+### CLI Tips
+
+TDT commands support both long flags (readable) and short flags (efficient):
+
+| Long Form | Short | Description |
+|-----------|-------|-------------|
+| `--title` | `-T` | Entity title |
+| `--no-edit` | `-n` | Skip editor, create immediately |
+| `--verifies` | `-R` | Requirements a test verifies |
+| `--mitigates` | `-M` | Risks a test mitigates |
+
+Some commands also accept **positional arguments** for common operations. Both forms are shown in this tutorial.
+
 ---
 
 ## 2. Requirements
@@ -146,6 +159,10 @@ tdt req new --title "LED Selection" --type derived --priority high \
 Then link it to the parent requirement:
 
 ```bash
+# Positional syntax (link type as 3rd argument)
+tdt link add REQ@5 REQ@1 derives_from
+
+# Long form - equivalent
 tdt link add REQ@5 REQ@1 --link-type derives_from
 ```
 
@@ -328,16 +345,15 @@ Mates define how features from different components interact.
 ### Create Mates
 
 ```bash
-# LED to Housing fit
-tdt mate new --title "LED-Housing Press Fit" \
-  --feature-a FEAT@1 --feature-b FEAT@3 \
-  --mate-type interference_fit --no-edit
+# LED to Housing fit (positional syntax)
+tdt mate new FEAT@1 FEAT@3 -t interference_fit -T "LED-Housing Press Fit" -n
 
-# End cap thread engagement
-tdt mate new --title "End Cap Thread Engagement" \
-  --feature-a FEAT@2 --feature-b FEAT@4 \
-  --mate-type thread_engagement --no-edit
+# End cap thread engagement (long form - equivalent)
+tdt mate new --feature-a FEAT@2 --feature-b FEAT@4 \
+  --mate-type thread_engagement --title "End Cap Thread Engagement" --no-edit
 ```
+
+> **Tip**: `tdt mate new FEAT@1 FEAT@3 -t interference_fit -n` is a quick shorthand for creating mates. Use `--help` to see all options.
 
 ### Analyze Fit
 
@@ -539,8 +555,8 @@ tdt proc new --title "Final Assembly" --type assembly \
 ### Link Processes to Components and Risks
 
 ```bash
-tdt link add PROC@1 CMP@1 --link-type produces
-tdt link add PROC@1 RISK@2 --link-type risks
+tdt link add PROC@1 CMP@1 produces
+tdt link add PROC@1 RISK@2 risks
 ```
 
 ---
@@ -597,28 +613,25 @@ Define how requirements will be verified.
 ### Create Test Protocols
 
 ```bash
-# Light output test
-tdt test new --title "Light Output Verification" \
-  --type verification --level system --method test \
-  --priority critical --verifies REQ@1 --no-edit
+# Light output test (short flags)
+tdt test new -T "Light Output Verification" -t verification -l system \
+  -m test -p critical -R REQ@1 -n
 
 # Battery life test
-tdt test new --title "Battery Life Test" \
-  --type verification --level system --method test \
-  --priority high --verifies REQ@2 --no-edit
+tdt test new -T "Battery Life Test" -t verification -l system -m test \
+  -p high -R REQ@2 -n
 
-# Water resistance test (IP rating)
+# Water resistance test (long form - equivalent)
 tdt test new --title "Water Resistance Test" \
   --type verification --level system --method test \
   --priority medium --verifies REQ@3 --no-edit
 
-# Drop test
-tdt test new --title "Drop Test" \
-  --type verification --level system --method test \
-  --priority high --verifies REQ@4 --mitigates RISK@1 --no-edit
+# Drop test (with risk mitigation)
+tdt test new -T "Drop Test" -t verification -l system -m test \
+  -p high -R REQ@4 -M RISK@1 -n
 ```
 
-The `--verifies` flag links the test to requirements automatically!
+> **Flags**: `-T` title, `-t` type, `-l` level, `-m` method, `-p` priority, `-R` verifies, `-M` mitigates, `-n` no-edit
 
 ### Add Test Procedure Details
 

@@ -150,7 +150,7 @@ pub struct NewArgs {
     pub feature_type: String,
 
     /// Title/description
-    #[arg(long)]
+    #[arg(long, short = 'T')]
     pub title: Option<String>,
 
     /// Open in editor after creation
@@ -158,7 +158,7 @@ pub struct NewArgs {
     pub edit: bool,
 
     /// Skip opening in editor
-    #[arg(long)]
+    #[arg(long, short = 'n')]
     pub no_edit: bool,
 
     /// Interactive mode (prompt for fields)

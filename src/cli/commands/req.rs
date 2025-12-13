@@ -196,7 +196,7 @@ pub struct NewArgs {
     pub r#type: String,
 
     /// Title (if not provided, uses placeholder)
-    #[arg(long)]
+    #[arg(long, short = 'T')]
     pub title: Option<String>,
 
     /// Category
@@ -220,7 +220,7 @@ pub struct NewArgs {
     pub edit: bool,
 
     /// Don't open in editor after creation
-    #[arg(long)]
+    #[arg(long, short = 'n')]
     pub no_edit: bool,
 }
 

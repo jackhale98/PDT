@@ -201,7 +201,7 @@ pub struct NewArgs {
     pub method: String,
 
     /// Title (if not provided, uses placeholder)
-    #[arg(long)]
+    #[arg(long, short = 'T')]
     pub title: Option<String>,
 
     /// Category
@@ -213,11 +213,11 @@ pub struct NewArgs {
     pub priority: String,
 
     /// Requirements this test verifies (comma-separated IDs, e.g., REQ@1,REQ@2)
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, short = 'R', value_delimiter = ',')]
     pub verifies: Vec<String>,
 
     /// Risks this test mitigates (comma-separated IDs, e.g., RISK@1,RISK@2)
-    #[arg(long, value_delimiter = ',')]
+    #[arg(long, short = 'M', value_delimiter = ',')]
     pub mitigates: Vec<String>,
 
     /// Use interactive wizard to fill in fields
@@ -229,7 +229,7 @@ pub struct NewArgs {
     pub edit: bool,
 
     /// Don't open in editor after creation
-    #[arg(long)]
+    #[arg(long, short = 'n')]
     pub no_edit: bool,
 }
 

@@ -375,7 +375,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
             for col in &args.columns {
                 let (name, width) = match col {
-                    ListColumn::Id => ("ID", 20),
+                    ListColumn::Id => ("SHORT", 20),
                     ListColumn::Title => ("TITLE", 30),
                     ListColumn::ControlType => ("TYPE", 16),
                     ListColumn::Status => ("STATUS", 10),

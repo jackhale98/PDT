@@ -51,6 +51,7 @@ pub enum AsmCommands {
 /// List column types
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ListColumn {
+    Short,
     Id,
     PartNumber,
     Title,
@@ -62,6 +63,7 @@ pub enum ListColumn {
 impl fmt::Display for ListColumn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            ListColumn::Short => write!(f, "short"),
             ListColumn::Id => write!(f, "id"),
             ListColumn::PartNumber => write!(f, "part-number"),
             ListColumn::Title => write!(f, "title"),
@@ -103,7 +105,7 @@ pub struct ListArgs {
     pub recent: bool,
 
     /// Columns to display
-    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::PartNumber, ListColumn::Title, ListColumn::Status])]
+    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Short, ListColumn::PartNumber, ListColumn::Title, ListColumn::Status])]
     pub columns: Vec<ListColumn>,
 
     /// Sort by column
@@ -301,7 +303,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort
     let mut assemblies = assemblies;
     match args.sort {
-        ListColumn::Id => assemblies.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Short | ListColumn::Id => assemblies.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
         ListColumn::PartNumber => assemblies.sort_by(|a, b| a.part_number.cmp(&b.part_number)),
         ListColumn::Title => assemblies.sort_by(|a, b| a.title.cmp(&b.title)),
         ListColumn::Status => {
@@ -381,6 +383,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
             for col in &args.columns {
                 match col {
+                    ListColumn::Short => {
+                        header_parts.push(style("SHORT").bold().to_string());
+                        header_widths.push(8);
+                    }
                     ListColumn::Id => {
                         header_parts.push(style("ID").bold().to_string());
                         header_widths.push(17);
@@ -426,6 +432,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     }
                     let width = header_widths[i];
                     match col {
+                        ListColumn::Short => {
+                            let short_id = short_ids.get_short_id(&asm.id.to_string()).unwrap_or_else(|| "?".to_string());
+                            print!("{:<width$}", short_id, width = width);
+                        }
                         ListColumn::Id => {
                             print!("{:<width$}", format_short_id(&asm.id), width = width);
                         }

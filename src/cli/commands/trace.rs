@@ -52,6 +52,10 @@ pub struct MatrixArgs {
     /// Output format: table, csv, dot (graphviz)
     #[arg(long, short = 'o', default_value = "table")]
     pub output: String,
+
+    /// Show short ID aliases (e.g., REQ@1, TEST@2) instead of truncated full IDs
+    #[arg(long, short = 'a')]
+    pub aliases: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -112,6 +116,18 @@ pub fn run(cmd: TraceCommands, global: &GlobalOpts) -> Result<()> {
 
 fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+
+    // Load short ID index if aliases requested
+    let short_ids = if args.aliases {
+        let mut idx = ShortIdIndex::load(&project);
+        // Ensure all entities are indexed
+        let entities = load_all_entities(&project)?;
+        idx.ensure_all(entities.iter().map(|e| e.id.clone()));
+        let _ = idx.save(&project);
+        Some(idx)
+    } else {
+        None
+    };
 
     // Load all entities generically
     let entities = load_all_entities(&project)?;
@@ -258,7 +274,12 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                 }
             }
 
-            let short_id = format_id_short(&entity.id);
+            // Use alias (REQ@1) if --aliases flag set, otherwise truncated full ID
+            let source_display = if let Some(ref idx) = short_ids {
+                idx.get_short_id(&entity.id).unwrap_or_else(|| format_id_short(&entity.id))
+            } else {
+                format_id_short(&entity.id)
+            };
             let title = truncate(&entity.title, 28);
 
             for (link_type, target) in &entity.outgoing_links {
@@ -272,13 +293,18 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                 }
 
                 has_links = true;
-                let target_short = format_id_short(target);
+                // Use alias for target too
+                let target_display = if let Some(ref idx) = short_ids {
+                    idx.get_short_id(target).unwrap_or_else(|| format_id_short(target))
+                } else {
+                    format_id_short(target)
+                };
                 println!(
                     "{:<16} {:<30} {:<14} {:<16}",
-                    short_id,
+                    source_display,
                     title,
                     style(link_type).cyan(),
-                    target_short
+                    target_display
                 );
             }
         }

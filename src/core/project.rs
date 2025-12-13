@@ -51,6 +51,31 @@ impl Project {
             return Err(ProjectError::AlreadyExists(root.clone()));
         }
 
+        // Initialize git repo if not already a git repo
+        let git_dir = root.join(".git");
+        if !git_dir.exists() {
+            std::process::Command::new("git")
+                .arg("init")
+                .current_dir(&root)
+                .output()
+                .ok(); // Ignore errors - git might not be installed
+        }
+
+        // Create .gitignore with TDT-specific entries
+        let gitignore_path = root.join(".gitignore");
+        if !gitignore_path.exists() {
+            std::fs::write(&gitignore_path, Self::default_gitignore())
+                .map_err(|e| ProjectError::IoError(e.to_string()))?;
+        } else {
+            // Append TDT entries if .gitignore exists but doesn't have them
+            let existing = std::fs::read_to_string(&gitignore_path).unwrap_or_default();
+            if !existing.contains(".tdt/shortids.json") {
+                let updated = format!("{}\n{}", existing.trim_end(), Self::default_gitignore());
+                std::fs::write(&gitignore_path, updated)
+                    .map_err(|e| ProjectError::IoError(e.to_string()))?;
+            }
+        }
+
         // Create .tdt directory structure
         std::fs::create_dir_all(tdt_dir.join("schema"))
             .map_err(|e| ProjectError::IoError(e.to_string()))?;
@@ -105,6 +130,14 @@ impl Project {
 
 # Default output format (auto, yaml, tsv, json, csv, md, id)
 # default_format: auto
+"#
+    }
+
+    fn default_gitignore() -> &'static str {
+        r#"
+# TDT - Tessera Development Toolkit
+# Local short ID mappings (user-specific, regenerated automatically)
+.tdt/shortids.json
 "#
     }
 

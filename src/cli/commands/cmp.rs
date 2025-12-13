@@ -36,7 +36,7 @@ pub enum CmpCommands {
     ClearQuote(ClearQuoteArgs),
 }
 
-/// Make/buy filter
+/// Make/buy filter for list command
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum MakeBuyFilter {
     Make,
@@ -44,7 +44,23 @@ pub enum MakeBuyFilter {
     All,
 }
 
-/// Category filter
+/// Make/buy choice for new command
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliMakeBuy {
+    Make,
+    Buy,
+}
+
+impl std::fmt::Display for CliMakeBuy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliMakeBuy::Make => write!(f, "make"),
+            CliMakeBuy::Buy => write!(f, "buy"),
+        }
+    }
+}
+
+/// Category filter for list command
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CategoryFilter {
     Mechanical,
@@ -53,6 +69,28 @@ pub enum CategoryFilter {
     Fastener,
     Consumable,
     All,
+}
+
+/// Category choice for new command
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliComponentCategory {
+    Mechanical,
+    Electrical,
+    Software,
+    Fastener,
+    Consumable,
+}
+
+impl std::fmt::Display for CliComponentCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliComponentCategory::Mechanical => write!(f, "mechanical"),
+            CliComponentCategory::Electrical => write!(f, "electrical"),
+            CliComponentCategory::Software => write!(f, "software"),
+            CliComponentCategory::Fastener => write!(f, "fastener"),
+            CliComponentCategory::Consumable => write!(f, "consumable"),
+        }
+    }
 }
 
 /// Status filter
@@ -182,11 +220,11 @@ pub struct NewArgs {
 
     /// Make or buy decision
     #[arg(long, short = 'm', default_value = "buy")]
-    pub make_buy: String,
+    pub make_buy: CliMakeBuy,
 
     /// Component category
     #[arg(long, short = 'c', default_value = "mechanical")]
-    pub category: String,
+    pub category: CliComponentCategory,
 
     /// Part revision
     #[arg(long)]
@@ -562,8 +600,8 @@ fn run_new(args: NewArgs) -> Result<()> {
         title = args
             .title
             .ok_or_else(|| miette::miette!("Title is required (use --title or -t)"))?;
-        make_buy = args.make_buy;
-        category = args.category;
+        make_buy = args.make_buy.to_string();
+        category = args.category.to_string();
     }
 
     // Generate ID

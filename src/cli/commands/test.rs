@@ -7,6 +7,7 @@ use std::fs;
 
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
+use crate::core::entity::Priority;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
@@ -14,6 +15,124 @@ use crate::core::Config;
 use crate::entities::test::{Test, TestLevel, TestMethod, TestType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
+
+/// CLI-friendly test type enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliTestType {
+    Verification,
+    Validation,
+}
+
+impl std::fmt::Display for CliTestType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliTestType::Verification => write!(f, "verification"),
+            CliTestType::Validation => write!(f, "validation"),
+        }
+    }
+}
+
+impl From<CliTestType> for TestType {
+    fn from(cli: CliTestType) -> Self {
+        match cli {
+            CliTestType::Verification => TestType::Verification,
+            CliTestType::Validation => TestType::Validation,
+        }
+    }
+}
+
+/// CLI-friendly test level enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliTestLevel {
+    Unit,
+    Integration,
+    System,
+    Acceptance,
+}
+
+impl std::fmt::Display for CliTestLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliTestLevel::Unit => write!(f, "unit"),
+            CliTestLevel::Integration => write!(f, "integration"),
+            CliTestLevel::System => write!(f, "system"),
+            CliTestLevel::Acceptance => write!(f, "acceptance"),
+        }
+    }
+}
+
+impl From<CliTestLevel> for TestLevel {
+    fn from(cli: CliTestLevel) -> Self {
+        match cli {
+            CliTestLevel::Unit => TestLevel::Unit,
+            CliTestLevel::Integration => TestLevel::Integration,
+            CliTestLevel::System => TestLevel::System,
+            CliTestLevel::Acceptance => TestLevel::Acceptance,
+        }
+    }
+}
+
+/// CLI-friendly test method enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliTestMethod {
+    Inspection,
+    Analysis,
+    Demonstration,
+    Test,
+}
+
+impl std::fmt::Display for CliTestMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliTestMethod::Inspection => write!(f, "inspection"),
+            CliTestMethod::Analysis => write!(f, "analysis"),
+            CliTestMethod::Demonstration => write!(f, "demonstration"),
+            CliTestMethod::Test => write!(f, "test"),
+        }
+    }
+}
+
+impl From<CliTestMethod> for TestMethod {
+    fn from(cli: CliTestMethod) -> Self {
+        match cli {
+            CliTestMethod::Inspection => TestMethod::Inspection,
+            CliTestMethod::Analysis => TestMethod::Analysis,
+            CliTestMethod::Demonstration => TestMethod::Demonstration,
+            CliTestMethod::Test => TestMethod::Test,
+        }
+    }
+}
+
+/// CLI-friendly priority enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliPriority {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl std::fmt::Display for CliPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliPriority::Low => write!(f, "low"),
+            CliPriority::Medium => write!(f, "medium"),
+            CliPriority::High => write!(f, "high"),
+            CliPriority::Critical => write!(f, "critical"),
+        }
+    }
+}
+
+impl From<CliPriority> for Priority {
+    fn from(cli: CliPriority) -> Self {
+        match cli {
+            CliPriority::Low => Priority::Low,
+            CliPriority::Medium => Priority::Medium,
+            CliPriority::High => Priority::High,
+            CliPriority::Critical => Priority::Critical,
+        }
+    }
+}
 
 #[derive(Subcommand, Debug)]
 pub enum TestCommands {
@@ -189,17 +308,17 @@ pub struct ListArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
-    /// Test type (verification/validation)
+    /// Test type
     #[arg(long, short = 't', default_value = "verification")]
-    pub r#type: String,
+    pub r#type: CliTestType,
 
-    /// Test level (unit/integration/system/acceptance)
+    /// Test level
     #[arg(long, short = 'l', default_value = "system")]
-    pub level: String,
+    pub level: CliTestLevel,
 
-    /// Test method (inspection/analysis/demonstration/test)
+    /// Test method
     #[arg(long, short = 'm', default_value = "test")]
-    pub method: String,
+    pub method: CliTestMethod,
 
     /// Title (if not provided, uses placeholder)
     #[arg(long, short = 'T')]
@@ -209,9 +328,9 @@ pub struct NewArgs {
     #[arg(long, short = 'c')]
     pub category: Option<String>,
 
-    /// Priority (low/medium/high/critical)
+    /// Priority
     #[arg(long, short = 'p', default_value = "medium")]
-    pub priority: String,
+    pub priority: CliPriority,
 
     /// Requirements this test verifies (comma-separated IDs, e.g., REQ@1,REQ@2)
     #[arg(long, short = 'R', value_delimiter = ',')]
@@ -673,46 +792,12 @@ fn run_new(args: NewArgs) -> Result<()> {
         (test_type, test_level, test_method, title, category, priority)
     } else {
         // Default mode - use args with defaults
-        let test_type = match args.r#type.to_lowercase().as_str() {
-            "verification" => TestType::Verification,
-            "validation" => TestType::Validation,
-            t => {
-                return Err(miette::miette!(
-                    "Invalid test type: '{}'. Use 'verification' or 'validation'",
-                    t
-                ))
-            }
-        };
-
-        let test_level = match args.level.to_lowercase().as_str() {
-            "unit" => TestLevel::Unit,
-            "integration" => TestLevel::Integration,
-            "system" => TestLevel::System,
-            "acceptance" => TestLevel::Acceptance,
-            l => {
-                return Err(miette::miette!(
-                    "Invalid test level: '{}'. Use 'unit', 'integration', 'system', or 'acceptance'",
-                    l
-                ))
-            }
-        };
-
-        let test_method = match args.method.to_lowercase().as_str() {
-            "inspection" => TestMethod::Inspection,
-            "analysis" => TestMethod::Analysis,
-            "demonstration" => TestMethod::Demonstration,
-            "test" => TestMethod::Test,
-            m => {
-                return Err(miette::miette!(
-                    "Invalid test method: '{}'. Use 'inspection', 'analysis', 'demonstration', or 'test'",
-                    m
-                ))
-            }
-        };
-
+        let test_type: TestType = args.r#type.into();
+        let test_level: TestLevel = args.level.into();
+        let test_method: TestMethod = args.method.into();
         let title = args.title.unwrap_or_else(|| "New Test Protocol".to_string());
         let category = args.category.unwrap_or_default();
-        let priority = args.priority;
+        let priority = args.priority.to_string();
 
         (test_type, test_level, test_method, title, category, priority)
     };

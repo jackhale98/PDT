@@ -15,6 +15,31 @@ use crate::entities::risk::{Risk, RiskLevel, RiskType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
+/// CLI-friendly risk type enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliRiskType {
+    Design,
+    Process,
+}
+
+impl std::fmt::Display for CliRiskType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliRiskType::Design => write!(f, "design"),
+            CliRiskType::Process => write!(f, "process"),
+        }
+    }
+}
+
+impl From<CliRiskType> for RiskType {
+    fn from(cli: CliRiskType) -> Self {
+        match cli {
+            CliRiskType::Design => RiskType::Design,
+            CliRiskType::Process => RiskType::Process,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum RiskCommands {
     /// List risks with filtering
@@ -195,9 +220,9 @@ pub struct ListArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
-    /// Risk type (design/process)
+    /// Risk type
     #[arg(long, short = 't', default_value = "design")]
-    pub r#type: String,
+    pub r#type: CliRiskType,
 
     /// Title (if not provided, uses placeholder)
     #[arg(long, short = 'T')]
@@ -642,17 +667,7 @@ fn run_new(args: NewArgs) -> Result<()> {
         (risk_type, title, category, severity, occurrence, detection)
     } else {
         // Default mode - use args with defaults
-        let risk_type = match args.r#type.to_lowercase().as_str() {
-            "design" => RiskType::Design,
-            "process" => RiskType::Process,
-            t => {
-                return Err(miette::miette!(
-                    "Invalid risk type: '{}'. Use 'design' or 'process'",
-                    t
-                ))
-            }
-        };
-
+        let risk_type: RiskType = args.r#type.into();
         let title = args.title.unwrap_or_else(|| "New Risk".to_string());
         let category = args.category.unwrap_or_default();
         let severity = args.severity.unwrap_or(5);

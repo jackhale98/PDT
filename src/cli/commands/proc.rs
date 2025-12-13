@@ -15,6 +15,56 @@ use crate::entities::process::{Process, ProcessType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
+/// CLI-friendly process type enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliProcessType {
+    Machining,
+    Assembly,
+    Inspection,
+    Test,
+    Finishing,
+    Packaging,
+    Handling,
+    #[value(name = "heat_treat")]
+    HeatTreat,
+    Welding,
+    Coating,
+}
+
+impl std::fmt::Display for CliProcessType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliProcessType::Machining => write!(f, "machining"),
+            CliProcessType::Assembly => write!(f, "assembly"),
+            CliProcessType::Inspection => write!(f, "inspection"),
+            CliProcessType::Test => write!(f, "test"),
+            CliProcessType::Finishing => write!(f, "finishing"),
+            CliProcessType::Packaging => write!(f, "packaging"),
+            CliProcessType::Handling => write!(f, "handling"),
+            CliProcessType::HeatTreat => write!(f, "heat_treat"),
+            CliProcessType::Welding => write!(f, "welding"),
+            CliProcessType::Coating => write!(f, "coating"),
+        }
+    }
+}
+
+impl From<CliProcessType> for ProcessType {
+    fn from(cli: CliProcessType) -> Self {
+        match cli {
+            CliProcessType::Machining => ProcessType::Machining,
+            CliProcessType::Assembly => ProcessType::Assembly,
+            CliProcessType::Inspection => ProcessType::Inspection,
+            CliProcessType::Test => ProcessType::Test,
+            CliProcessType::Finishing => ProcessType::Finishing,
+            CliProcessType::Packaging => ProcessType::Packaging,
+            CliProcessType::Handling => ProcessType::Handling,
+            CliProcessType::HeatTreat => ProcessType::HeatTreat,
+            CliProcessType::Welding => ProcessType::Welding,
+            CliProcessType::Coating => ProcessType::Coating,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum ProcCommands {
     /// List manufacturing processes with filtering
@@ -148,7 +198,7 @@ pub struct NewArgs {
 
     /// Process type
     #[arg(long, short = 'T', default_value = "machining")]
-    pub r#type: String,
+    pub r#type: CliProcessType,
 
     /// Operation number (e.g., "OP-010")
     #[arg(long, short = 'n')]
@@ -479,13 +529,8 @@ fn run_new(args: NewArgs) -> Result<()> {
             .unwrap_or_else(|| "machining".to_string());
     } else {
         title = args.title.unwrap_or_else(|| "New Process".to_string());
-        process_type = args.r#type;
+        process_type = args.r#type.to_string();
     }
-
-    // Validate process type
-    process_type
-        .parse::<ProcessType>()
-        .map_err(|e| miette::miette!("{}", e))?;
 
     // Generate ID
     let id = EntityId::new(EntityPrefix::Proc);

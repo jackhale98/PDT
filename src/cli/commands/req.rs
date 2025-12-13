@@ -16,6 +16,62 @@ use crate::entities::requirement::{Requirement, RequirementType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
+/// CLI-friendly requirement type enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliReqType {
+    Input,
+    Output,
+}
+
+impl std::fmt::Display for CliReqType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliReqType::Input => write!(f, "input"),
+            CliReqType::Output => write!(f, "output"),
+        }
+    }
+}
+
+impl From<CliReqType> for RequirementType {
+    fn from(cli: CliReqType) -> Self {
+        match cli {
+            CliReqType::Input => RequirementType::Input,
+            CliReqType::Output => RequirementType::Output,
+        }
+    }
+}
+
+/// CLI-friendly priority enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliPriority {
+    Low,
+    Medium,
+    High,
+    Critical,
+}
+
+impl std::fmt::Display for CliPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliPriority::Low => write!(f, "low"),
+            CliPriority::Medium => write!(f, "medium"),
+            CliPriority::High => write!(f, "high"),
+            CliPriority::Critical => write!(f, "critical"),
+        }
+    }
+}
+
+impl From<CliPriority> for Priority {
+    fn from(cli: CliPriority) -> Self {
+        match cli {
+            CliPriority::Low => Priority::Low,
+            CliPriority::Medium => Priority::Medium,
+            CliPriority::High => Priority::High,
+            CliPriority::Critical => Priority::Critical,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum ReqCommands {
     /// List requirements with filtering
@@ -192,9 +248,9 @@ pub struct ListArgs {
 
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
-    /// Requirement type (input/output)
+    /// Requirement type
     #[arg(long, short = 't', default_value = "input")]
-    pub r#type: String,
+    pub r#type: CliReqType,
 
     /// Title (if not provided, uses placeholder)
     #[arg(long, short = 'T')]
@@ -204,9 +260,9 @@ pub struct NewArgs {
     #[arg(long, short = 'c')]
     pub category: Option<String>,
 
-    /// Priority (low/medium/high/critical)
+    /// Priority
     #[arg(long, short = 'p', default_value = "medium")]
-    pub priority: String,
+    pub priority: CliPriority,
 
     /// Tags (comma-separated)
     #[arg(long, value_delimiter = ',')]
@@ -648,32 +704,9 @@ fn run_new(args: NewArgs) -> Result<()> {
         (req_type, title, priority, category, tags)
     } else {
         // Default mode - use args with defaults
-        let req_type = match args.r#type.to_lowercase().as_str() {
-            "input" => RequirementType::Input,
-            "output" => RequirementType::Output,
-            t => {
-                return Err(miette::miette!(
-                    "Invalid requirement type: '{}'. Use 'input' or 'output'",
-                    t
-                ))
-            }
-        };
-
+        let req_type: RequirementType = args.r#type.into();
         let title = args.title.unwrap_or_else(|| "New Requirement".to_string());
-
-        let priority = match args.priority.to_lowercase().as_str() {
-            "low" => Priority::Low,
-            "medium" => Priority::Medium,
-            "high" => Priority::High,
-            "critical" => Priority::Critical,
-            p => {
-                return Err(miette::miette!(
-                    "Invalid priority: '{}'. Use low/medium/high/critical",
-                    p
-                ))
-            }
-        };
-
+        let priority: Priority = args.priority.into();
         let category = args.category.unwrap_or_default();
         let tags = args.tags;
 

@@ -15,6 +15,102 @@ use crate::entities::ncr::{Ncr, NcrCategory, NcrSeverity, NcrStatus, NcrType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
+/// CLI-friendly NCR type enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliNcrType {
+    Internal,
+    Supplier,
+    Customer,
+}
+
+impl std::fmt::Display for CliNcrType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliNcrType::Internal => write!(f, "internal"),
+            CliNcrType::Supplier => write!(f, "supplier"),
+            CliNcrType::Customer => write!(f, "customer"),
+        }
+    }
+}
+
+impl From<CliNcrType> for NcrType {
+    fn from(cli: CliNcrType) -> Self {
+        match cli {
+            CliNcrType::Internal => NcrType::Internal,
+            CliNcrType::Supplier => NcrType::Supplier,
+            CliNcrType::Customer => NcrType::Customer,
+        }
+    }
+}
+
+/// CLI-friendly NCR severity enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliNcrSeverity {
+    Minor,
+    Major,
+    Critical,
+}
+
+impl std::fmt::Display for CliNcrSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliNcrSeverity::Minor => write!(f, "minor"),
+            CliNcrSeverity::Major => write!(f, "major"),
+            CliNcrSeverity::Critical => write!(f, "critical"),
+        }
+    }
+}
+
+impl From<CliNcrSeverity> for NcrSeverity {
+    fn from(cli: CliNcrSeverity) -> Self {
+        match cli {
+            CliNcrSeverity::Minor => NcrSeverity::Minor,
+            CliNcrSeverity::Major => NcrSeverity::Major,
+            CliNcrSeverity::Critical => NcrSeverity::Critical,
+        }
+    }
+}
+
+/// CLI-friendly NCR category enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliNcrCategory {
+    Dimensional,
+    Cosmetic,
+    Material,
+    Functional,
+    Documentation,
+    Process,
+    Packaging,
+}
+
+impl std::fmt::Display for CliNcrCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliNcrCategory::Dimensional => write!(f, "dimensional"),
+            CliNcrCategory::Cosmetic => write!(f, "cosmetic"),
+            CliNcrCategory::Material => write!(f, "material"),
+            CliNcrCategory::Functional => write!(f, "functional"),
+            CliNcrCategory::Documentation => write!(f, "documentation"),
+            CliNcrCategory::Process => write!(f, "process"),
+            CliNcrCategory::Packaging => write!(f, "packaging"),
+        }
+    }
+}
+
+impl From<CliNcrCategory> for NcrCategory {
+    fn from(cli: CliNcrCategory) -> Self {
+        match cli {
+            CliNcrCategory::Dimensional => NcrCategory::Dimensional,
+            CliNcrCategory::Cosmetic => NcrCategory::Cosmetic,
+            CliNcrCategory::Material => NcrCategory::Material,
+            CliNcrCategory::Functional => NcrCategory::Functional,
+            CliNcrCategory::Documentation => NcrCategory::Documentation,
+            CliNcrCategory::Process => NcrCategory::Process,
+            CliNcrCategory::Packaging => NcrCategory::Packaging,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum NcrCommands {
     /// List NCRs with filtering
@@ -150,15 +246,15 @@ pub struct NewArgs {
 
     /// NCR type
     #[arg(long, short = 'T', default_value = "internal")]
-    pub r#type: String,
+    pub r#type: CliNcrType,
 
     /// Severity level
     #[arg(long, short = 'S', default_value = "minor")]
-    pub severity: String,
+    pub severity: CliNcrSeverity,
 
     /// Category
     #[arg(long, short = 'c', default_value = "dimensional")]
-    pub category: String,
+    pub category: CliNcrCategory,
 
     /// Open in editor after creation
     #[arg(long, short = 'e')]
@@ -481,21 +577,10 @@ fn run_new(args: NewArgs) -> Result<()> {
             .unwrap_or_else(|| "dimensional".to_string());
     } else {
         title = args.title.unwrap_or_else(|| "New NCR".to_string());
-        ncr_type = args.r#type;
-        severity = args.severity;
-        category = args.category;
+        ncr_type = args.r#type.to_string();
+        severity = args.severity.to_string();
+        category = args.category.to_string();
     }
-
-    // Validate enums
-    ncr_type
-        .parse::<NcrType>()
-        .map_err(|e| miette::miette!("{}", e))?;
-    severity
-        .parse::<NcrSeverity>()
-        .map_err(|e| miette::miette!("{}", e))?;
-    category
-        .parse::<NcrCategory>()
-        .map_err(|e| miette::miette!("{}", e))?;
 
     // Generate ID
     let id = EntityId::new(EntityPrefix::Ncr);

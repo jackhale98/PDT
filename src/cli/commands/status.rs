@@ -682,14 +682,6 @@ fn print_two_columns(title1: &str, lines1: &[String], title2: &str, lines2: &[St
     }
 }
 
-fn print_section(title: &str, lines: &[String], _width: usize) {
-    println!("{}", style(title).bold());
-    println!("{:-<64}", "");
-    for line in lines {
-        println!("  {}", line);
-    }
-}
-
 fn calculate_health(
     req: &RequirementMetrics,
     risk: &RiskMetrics,

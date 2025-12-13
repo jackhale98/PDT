@@ -7,6 +7,7 @@ use std::fs;
 
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
+use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
@@ -215,7 +216,130 @@ pub fn run(cmd: RsltCommands, global: &GlobalOpts) -> Result<()> {
 
 fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let mut short_ids = ShortIdIndex::load(&project);
 
+    // Determine output format
+    let format = match global.format {
+        OutputFormat::Auto => OutputFormat::Tsv,
+        f => f,
+    };
+
+    // Check if we can use the fast cache path:
+    // - No category filter (not in cache)
+    // - No tag filter (not in cache)
+    // - No with_failures filter (requires step_results)
+    // - No with_deviations filter (requires deviations)
+    // - Not JSON/YAML output (need full entity for serialization)
+    let can_use_cache = args.category.is_none()
+        && args.tag.is_none()
+        && !args.with_failures
+        && !args.with_deviations
+        && !matches!(format, OutputFormat::Json | OutputFormat::Yaml);
+
+    if can_use_cache {
+        if let Ok(cache) = EntityCache::open(&project) {
+            let status_filter = match args.status {
+                StatusFilter::Draft => Some("draft"),
+                StatusFilter::Review => Some("review"),
+                StatusFilter::Approved => Some("approved"),
+                StatusFilter::Released => Some("released"),
+                StatusFilter::Obsolete => Some("obsolete"),
+                StatusFilter::Active | StatusFilter::All => None,
+            };
+
+            let verdict_filter = match args.verdict {
+                VerdictFilter::Pass => Some("pass"),
+                VerdictFilter::Fail => Some("fail"),
+                VerdictFilter::Conditional => Some("conditional"),
+                VerdictFilter::Incomplete => Some("incomplete"),
+                VerdictFilter::NotApplicable => Some("not_applicable"),
+                VerdictFilter::Issues | VerdictFilter::All => None,
+            };
+
+            // Resolve test ID filter if provided
+            let test_filter = args.test.as_ref().map(|t| {
+                short_ids.resolve(t).unwrap_or_else(|| t.clone())
+            });
+
+            let mut cached_results = cache.list_results(
+                status_filter,
+                test_filter.as_deref(),
+                verdict_filter,
+                args.author.as_deref(),
+                args.search.as_deref(),
+                None, // Apply limit after additional filtering
+            );
+
+            // Apply filters that need post-processing
+            // Status: Active filter (all non-obsolete)
+            if matches!(args.status, StatusFilter::Active) {
+                cached_results.retain(|r| r.status != "obsolete");
+            }
+
+            // Verdict: Issues filter (fail, conditional, incomplete)
+            if matches!(args.verdict, VerdictFilter::Issues) {
+                cached_results.retain(|r| {
+                    r.verdict.as_deref().map_or(false, |v| {
+                        v == "fail" || v == "conditional" || v == "incomplete"
+                    })
+                });
+            }
+
+            // Executed by filter (substring match)
+            if let Some(ref exec_filter) = args.executed_by {
+                let exec_lower = exec_filter.to_lowercase();
+                cached_results.retain(|r| {
+                    r.executed_by.as_ref().map_or(false, |e| e.to_lowercase().contains(&exec_lower))
+                });
+            }
+
+            // Recent filter (executed in last N days)
+            if let Some(days) = args.recent {
+                let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
+                cached_results.retain(|r| {
+                    r.executed_date.as_ref().map_or(false, |d| {
+                        chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                            .map(|nd| nd >= cutoff.date_naive())
+                            .unwrap_or(false)
+                    })
+                });
+            }
+
+            // Sort
+            match args.sort {
+                ListColumn::Short | ListColumn::Id => cached_results.sort_by(|a, b| a.id.cmp(&b.id)),
+                ListColumn::Title => cached_results.sort_by(|a, b| a.title.cmp(&b.title)),
+                ListColumn::Test => cached_results.sort_by(|a, b| {
+                    a.test_id.as_deref().unwrap_or("").cmp(b.test_id.as_deref().unwrap_or(""))
+                }),
+                ListColumn::Verdict => cached_results.sort_by(|a, b| {
+                    let verdict_order = |v: Option<&str>| match v {
+                        Some("fail") => 0,
+                        Some("conditional") => 1,
+                        Some("incomplete") => 2,
+                        Some("pass") => 3,
+                        _ => 4,
+                    };
+                    verdict_order(a.verdict.as_deref()).cmp(&verdict_order(b.verdict.as_deref()))
+                }),
+                ListColumn::Status => cached_results.sort_by(|a, b| a.status.cmp(&b.status)),
+                ListColumn::Author => cached_results.sort_by(|a, b| a.author.cmp(&b.author)),
+                ListColumn::Created => cached_results.sort_by(|a, b| a.created.cmp(&b.created)),
+            }
+
+            if args.reverse {
+                cached_results.reverse();
+            }
+
+            if let Some(limit) = args.limit {
+                cached_results.truncate(limit);
+            }
+
+            return output_cached_results(&cached_results, &short_ids, &args, format);
+        }
+    }
+
+    // Fall back to full YAML loading
     // Collect all result files from both verification and validation directories
     let mut results: Vec<TestResult> = Vec::new();
 
@@ -391,15 +515,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Update short ID index with current results (preserves other entity types)
-    let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(results.iter().map(|r| r.id.to_string()));
     let _ = short_ids.save(&project);
-
-    // Output based on format
-    let format = match global.format {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
 
     match format {
         OutputFormat::Json => {
@@ -522,6 +639,150 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Auto => unreachable!(),
+    }
+
+    Ok(())
+}
+
+/// Output cached results (fast path - no YAML parsing needed)
+fn output_cached_results(
+    results: &[crate::core::cache::CachedResult],
+    short_ids: &ShortIdIndex,
+    args: &ListArgs,
+    format: OutputFormat,
+) -> Result<()> {
+    if results.is_empty() {
+        println!("No results found.");
+        println!();
+        println!("Create one with: {}", style("tdt rslt new").yellow());
+        return Ok(());
+    }
+
+    if args.count {
+        println!("{}", results.len());
+        return Ok(());
+    }
+
+    match format {
+        OutputFormat::Csv => {
+            println!("short_id,id,test_id,verdict,status,executed_by,executed_date");
+            for result in results {
+                let short_id = short_ids.get_short_id(&result.id).unwrap_or_default();
+                println!(
+                    "{},{},{},{},{},{},{}",
+                    short_id,
+                    result.id,
+                    result.test_id.as_deref().unwrap_or(""),
+                    result.verdict.as_deref().unwrap_or(""),
+                    result.status,
+                    escape_csv(result.executed_by.as_deref().unwrap_or("")),
+                    result.executed_date.as_deref().unwrap_or("")
+                );
+            }
+        }
+        OutputFormat::Tsv => {
+            // Build header parts based on columns
+            let mut header_parts = Vec::new();
+            let mut widths = Vec::new();
+
+            for col in &args.columns {
+                let (header, width) = match col {
+                    ListColumn::Short => ("SHORT", 8),
+                    ListColumn::Id => ("ID", 17),
+                    ListColumn::Title => ("TITLE", 25),
+                    ListColumn::Test => ("TEST", 8),
+                    ListColumn::Verdict => ("VERDICT", 12),
+                    ListColumn::Status => ("STATUS", 10),
+                    ListColumn::Author => ("AUTHOR", 15),
+                    ListColumn::Created => ("CREATED", 12),
+                };
+                header_parts.push(style(header).bold().to_string());
+                widths.push(width);
+            }
+
+            // Print header
+            let header_line = header_parts.iter().zip(&widths)
+                .map(|(h, w)| format!("{:<width$}", h, width = w))
+                .collect::<Vec<_>>()
+                .join(" ");
+            println!("{}", header_line);
+
+            let total_width: usize = widths.iter().sum::<usize>() + (widths.len() - 1);
+            println!("{}", "-".repeat(total_width));
+
+            for result in results {
+                let mut row_parts = Vec::new();
+
+                for col in &args.columns {
+                    let part = match col {
+                        ListColumn::Short => short_ids.get_short_id(&result.id).unwrap_or_else(|| "?".to_string()),
+                        ListColumn::Id => truncate_str(&result.id, 15),
+                        ListColumn::Title => truncate_str(&result.title, 23),
+                        ListColumn::Test => {
+                            result.test_id.as_ref()
+                                .and_then(|t| short_ids.get_short_id(t))
+                                .unwrap_or_else(|| {
+                                    result.test_id.as_ref()
+                                        .map(|t| truncate_str(t, 6))
+                                        .unwrap_or_else(|| "-".to_string())
+                                })
+                        },
+                        ListColumn::Verdict => {
+                            let v = result.verdict.as_deref().unwrap_or("");
+                            match v {
+                                "pass" => style(v).green().to_string(),
+                                "fail" => style(v).red().bold().to_string(),
+                                "conditional" | "incomplete" => style(v).yellow().to_string(),
+                                "not_applicable" => style("n/a").dim().to_string(),
+                                _ => v.to_string(),
+                            }
+                        },
+                        ListColumn::Status => result.status.clone(),
+                        ListColumn::Author => truncate_str(&result.author, 13),
+                        ListColumn::Created => result.created.format("%Y-%m-%d").to_string(),
+                    };
+                    row_parts.push(part);
+                }
+
+                // Print row
+                let row_line = row_parts.iter().zip(&widths)
+                    .map(|(p, w)| format!("{:<width$}", p, width = w))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                println!("{}", row_line);
+            }
+
+            println!();
+            println!(
+                "{} result(s) found.",
+                style(results.len()).cyan()
+            );
+        }
+        OutputFormat::Id => {
+            for result in results {
+                println!("{}", result.id);
+            }
+        }
+        OutputFormat::Md => {
+            println!("| Short | ID | Test | Verdict | Status | Executed By | Date |");
+            println!("|---|---|---|---|---|---|---|");
+            for result in results {
+                let short_id = short_ids.get_short_id(&result.id).unwrap_or_default();
+                println!(
+                    "| {} | {} | {} | {} | {} | {} | {} |",
+                    short_id,
+                    truncate_str(&result.id, 15),
+                    result.test_id.as_deref().unwrap_or("-"),
+                    result.verdict.as_deref().unwrap_or("-"),
+                    result.status,
+                    result.executed_by.as_deref().unwrap_or("-"),
+                    result.executed_date.as_deref().unwrap_or("-")
+                );
+            }
+        }
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
+            unreachable!()
+        }
     }
 
     Ok(())

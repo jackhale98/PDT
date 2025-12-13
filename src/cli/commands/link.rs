@@ -27,6 +27,43 @@ pub enum LinkCommands {
 }
 
 #[derive(clap::Args, Debug)]
+#[command(after_help = "\
+LINK TYPES:
+  Requirements (REQ):
+    satisfied_by    REQ that satisfies this requirement
+    verified_by     TEST or CTRL that verifies this requirement
+    derives_from    Parent REQ this derives from (→ derived_by)
+    allocated_to    FEAT this requirement is allocated to (→ allocated_from)
+
+  Tests (TEST) / Controls (CTRL):
+    verifies        REQ that this test/control verifies (→ verified_by)
+
+  Risks (RISK):
+    affects_features     FEAT affected by this risk
+    affects_components   CMP affected by this risk
+    affects_assemblies   ASM affected by this risk
+    affects_processes    PROC affected by this risk
+    related_to           Any related entity
+
+  Results (RSLT):
+    created_ncr     NCR created from this result (→ from_result)
+
+  CAPAs (CAPA):
+    processes_modified   PROC modified by this CAPA
+    controls_added       CTRL added by this CAPA
+
+  Components (CMP):
+    replaces             CMP this replaces (→ replaced_by)
+    interchangeable_with CMP that is interchangeable
+
+  General:
+    related_to           Symmetric link to any related entity
+
+EXAMPLES:
+  tdt link add REQ@1 TEST@1 verified_by -r    # Link requirement to test
+  tdt link add REQ@1 REQ@2 derives_from       # Requirement decomposition
+  tdt link add RISK@1 CMP@1 affects_components
+")]
 pub struct AddLinkArgs {
     /// Source entity ID (or partial ID)
     pub source: String,
@@ -34,7 +71,8 @@ pub struct AddLinkArgs {
     /// Target entity ID (or partial ID)
     pub target: String,
 
-    /// Link type (positional or use -t flag): verified_by, mitigates, etc.
+    /// Link type (see LINK TYPES below for valid options)
+    ///
     /// Example: tdt link add REQ@1 TEST@1 verified_by
     #[arg(value_name = "LINK_TYPE")]
     pub link_type_pos: Option<String>,

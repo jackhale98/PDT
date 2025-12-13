@@ -5,6 +5,7 @@ use console::style;
 use miette::Result;
 use std::path::PathBuf;
 
+use crate::cli::helpers::read_ids_from_stdin;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 
@@ -28,8 +29,7 @@ pub struct SetStatusArgs {
     /// New status value (draft, review, approved, obsolete)
     pub status: String,
 
-    /// Entity IDs or short IDs to update
-    #[arg(required_unless_present_any = ["entity_type", "tag"])]
+    /// Entity IDs or short IDs to update (also reads from stdin if piped)
     pub entities: Vec<String>,
 
     /// Select all entities of this type (req, risk, cmp, etc.)
@@ -50,8 +50,7 @@ pub struct AddTagArgs {
     /// Tag to add
     pub tag: String,
 
-    /// Entity IDs or short IDs to update
-    #[arg(required_unless_present_any = ["entity_type", "status"])]
+    /// Entity IDs or short IDs to update (also reads from stdin if piped)
     pub entities: Vec<String>,
 
     /// Select all entities of this type (req, risk, cmp, etc.)
@@ -72,8 +71,7 @@ pub struct RemoveTagArgs {
     /// Tag to remove
     pub tag: String,
 
-    /// Entity IDs or short IDs to update
-    #[arg(required_unless_present_any = ["entity_type", "all"])]
+    /// Entity IDs or short IDs to update (also reads from stdin if piped)
     pub entities: Vec<String>,
 
     /// Select all entities of this type (req, risk, cmp, etc.)
@@ -94,8 +92,7 @@ pub struct SetAuthorArgs {
     /// New author value
     pub author: String,
 
-    /// Entity IDs or short IDs to update
-    #[arg(required_unless_present_any = ["entity_type", "current_author"])]
+    /// Entity IDs or short IDs to update (also reads from stdin if piped)
     pub entities: Vec<String>,
 
     /// Select all entities of this type (req, risk, cmp, etc.)
@@ -120,9 +117,21 @@ pub fn run(cmd: BulkCommands) -> Result<()> {
     }
 }
 
-fn run_set_status(args: SetStatusArgs) -> Result<()> {
+fn run_set_status(mut args: SetStatusArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let short_ids = ShortIdIndex::load(&project);
+
+    // Read from stdin if available (Unix pipeline support)
+    if let Some(stdin_ids) = read_ids_from_stdin() {
+        args.entities.extend(stdin_ids);
+    }
+
+    // Validate we have some way to select entities
+    if args.entities.is_empty() && args.entity_type.is_none() && args.tag.is_none() {
+        return Err(miette::miette!(
+            "No entities specified. Provide IDs as arguments, pipe them via stdin, or use --entity-type/--tag filters."
+        ));
+    }
 
     // Validate status value
     let valid_statuses = ["draft", "review", "approved", "obsolete"];
@@ -181,9 +190,21 @@ fn run_set_status(args: SetStatusArgs) -> Result<()> {
     Ok(())
 }
 
-fn run_add_tag(args: AddTagArgs) -> Result<()> {
+fn run_add_tag(mut args: AddTagArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let short_ids = ShortIdIndex::load(&project);
+
+    // Read from stdin if available (Unix pipeline support)
+    if let Some(stdin_ids) = read_ids_from_stdin() {
+        args.entities.extend(stdin_ids);
+    }
+
+    // Validate we have some way to select entities
+    if args.entities.is_empty() && args.entity_type.is_none() && args.status.is_none() {
+        return Err(miette::miette!(
+            "No entities specified. Provide IDs as arguments, pipe them via stdin, or use --entity-type/--status filters."
+        ));
+    }
 
     // Collect entity files to update
     let entity_files = collect_entity_files(&project, &short_ids, &args.entities, args.entity_type.as_deref(), None, args.status.as_deref())?;
@@ -240,9 +261,21 @@ fn run_add_tag(args: AddTagArgs) -> Result<()> {
     Ok(())
 }
 
-fn run_remove_tag(args: RemoveTagArgs) -> Result<()> {
+fn run_remove_tag(mut args: RemoveTagArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let short_ids = ShortIdIndex::load(&project);
+
+    // Read from stdin if available (Unix pipeline support)
+    if let Some(stdin_ids) = read_ids_from_stdin() {
+        args.entities.extend(stdin_ids);
+    }
+
+    // Validate we have some way to select entities
+    if args.entities.is_empty() && args.entity_type.is_none() && !args.all {
+        return Err(miette::miette!(
+            "No entities specified. Provide IDs as arguments, pipe them via stdin, or use --entity-type/--all filters."
+        ));
+    }
 
     // Collect entity files
     let entity_files = if args.all {
@@ -304,9 +337,21 @@ fn run_remove_tag(args: RemoveTagArgs) -> Result<()> {
     Ok(())
 }
 
-fn run_set_author(args: SetAuthorArgs) -> Result<()> {
+fn run_set_author(mut args: SetAuthorArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let short_ids = ShortIdIndex::load(&project);
+
+    // Read from stdin if available (Unix pipeline support)
+    if let Some(stdin_ids) = read_ids_from_stdin() {
+        args.entities.extend(stdin_ids);
+    }
+
+    // Validate we have some way to select entities
+    if args.entities.is_empty() && args.entity_type.is_none() && args.current_author.is_none() {
+        return Err(miette::miette!(
+            "No entities specified. Provide IDs as arguments, pipe them via stdin, or use --entity-type/--current-author filters."
+        ));
+    }
 
     // Collect entity files
     let entity_files = if let Some(ref current) = args.current_author {

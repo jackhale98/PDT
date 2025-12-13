@@ -20,6 +20,7 @@ This tutorial walks you through creating a complete TDT project from scratch. We
 14. [Handling Issues (NCRs & CAPAs)](#14-handling-issues-ncrs--capas)
 15. [Project Status & Validation](#15-project-status--validation)
 16. [Traceability](#16-traceability)
+17. [Bulk Operations & Unix Pipelines](#17-bulk-operations--unix-pipelines)
 
 ---
 
@@ -1031,6 +1032,68 @@ Entities with no links (potential gaps):
 ```bash
 tdt trace orphans
 ```
+
+---
+
+## 17. Bulk Operations & Unix Pipelines
+
+TDT follows Unix philosophy: commands can be chained together using pipes.
+
+### Bulk Status Changes
+
+Update multiple entities at once:
+
+```bash
+# Set status by listing IDs
+tdt bulk set-status approved REQ@1 REQ@2 REQ@3
+
+# Set status for all entities of a type (with dry-run preview)
+tdt bulk set-status review -t req --dry-run
+```
+
+### Unix Pipeline Integration
+
+The real power comes from piping list output into bulk commands:
+
+```bash
+# Approve all draft requirements
+tdt req list --status draft --format id | tdt bulk set-status approved
+
+# Tag all high-priority risks
+tdt risk list --level high --format id | tdt bulk add-tag urgent
+
+# Set author on unverified requirements
+tdt req list --unverified --format id | tdt bulk set-author "Jane Doe"
+
+# Combine with standard Unix tools
+tdt req list --format id | grep "input" | head -10 | tdt bulk add-tag "phase-1"
+```
+
+### Batch Tagging
+
+Manage tags across multiple entities:
+
+```bash
+# Add release tag to approved components
+tdt cmp list --status approved --format id | tdt bulk add-tag "v1.0"
+
+# Remove obsolete tag
+tdt bulk remove-tag "deprecated" -t cmp --all
+
+# Tag failed test results for review
+tdt rslt list --verdict fail --format id | tdt bulk add-tag needs-investigation
+```
+
+### Dry Run Mode
+
+Always preview changes before applying:
+
+```bash
+# See what would change without modifying files
+tdt req list --format id | tdt bulk set-status review --dry-run
+```
+
+This outputs which entities would be affected, letting you verify before committing.
 
 ---
 

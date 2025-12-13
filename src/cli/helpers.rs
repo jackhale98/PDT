@@ -4,6 +4,7 @@
 //! command modules to avoid code duplication.
 
 use crate::core::identity::EntityId;
+use std::io::{self, BufRead, IsTerminal};
 
 /// Format an EntityId for display, truncating if too long
 ///
@@ -49,6 +50,47 @@ pub fn escape_csv(s: &str) -> String {
     } else {
         s.to_string()
     }
+}
+
+/// Read entity IDs from stdin if available (Unix philosophy support)
+///
+/// Returns `Some(Vec<String>)` with IDs if stdin is piped (not a terminal),
+/// or `None` if stdin is a terminal (interactive mode).
+///
+/// This enables Unix-style pipelines like:
+/// ```bash
+/// tdt req list --format id | tdt bulk set-status approved
+/// ```
+///
+/// IDs are read one per line, with empty lines and whitespace-only lines ignored.
+pub fn read_ids_from_stdin() -> Option<Vec<String>> {
+    let stdin = io::stdin();
+
+    // Only read from stdin if it's piped (not a terminal)
+    if stdin.is_terminal() {
+        return None;
+    }
+
+    let ids: Vec<String> = stdin
+        .lock()
+        .lines()
+        .filter_map(|line| line.ok())
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .collect();
+
+    if ids.is_empty() {
+        None
+    } else {
+        Some(ids)
+    }
+}
+
+/// Check if stdin has piped input available
+///
+/// Returns `true` if stdin is not a terminal (i.e., data is being piped in).
+pub fn stdin_has_data() -> bool {
+    !io::stdin().is_terminal()
 }
 
 #[cfg(test)]

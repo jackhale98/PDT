@@ -495,18 +495,38 @@ tdt baseline changed --since v1.0 # List entities changed since baseline
 ```bash
 # Set status on multiple entities
 tdt bulk set-status approved REQ@1 REQ@2 REQ@3
-tdt bulk set-status review --type req --all --dry-run
+tdt bulk set-status review -t req --dry-run
 
 # Add/remove tags
 tdt bulk add-tag "v2.0" CMP@1 CMP@2 CMP@3
-tdt bulk remove-tag "deprecated" --type cmp --all
+tdt bulk remove-tag "deprecated" -t cmp --all
 
 # Set author
 tdt bulk set-author "Jane Doe" REQ@1 REQ@2
 
 # Dry run (preview changes without modifying)
-tdt bulk set-status approved --type req --all --dry-run
+tdt bulk set-status approved -t req --dry-run
 ```
+
+#### Unix Pipeline Support
+
+Bulk commands read entity IDs from stdin, enabling Unix-style pipelines:
+
+```bash
+# Pipe from list commands
+tdt req list --format id | tdt bulk set-status approved
+tdt req list --unverified --format id | tdt bulk add-tag needs-review
+tdt risk list --level high --format id | tdt bulk add-tag urgent
+
+# Combine with standard Unix tools
+tdt req list --format id | grep "input" | tdt bulk set-status review
+tdt cmp list --format id | head -5 | tdt bulk add-tag "prototype"
+
+# Chain multiple operations
+tdt req list --status draft --format id | tdt bulk set-status review
+```
+
+This works with all entity types and all bulk commands (`set-status`, `add-tag`, `remove-tag`, `set-author`).
 
 ## Example Workflows
 
@@ -887,4 +907,41 @@ tdt tol analyze TOL@1 --iterations 100000
 
 ## License
 
-MIT License - See LICENSE file for details.
+MIT License
+
+Copyright (c) 2024 TDT Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Disclaimer
+
+This software is provided for informational and educational purposes. While TDT
+can help organize engineering documentation, **it is not a substitute for
+professional engineering judgment, certified quality management systems, or
+regulatory compliance tools**.
+
+Users are responsible for:
+- Validating that outputs meet their specific requirements
+- Ensuring compliance with applicable regulations and standards
+- Maintaining appropriate backup and version control practices
+- Performing independent verification of safety-critical calculations
+
+**TDT is not certified for use in regulated industries** (medical devices,
+aerospace, automotive safety systems, etc.) without independent validation
+by qualified professionals.

@@ -7,23 +7,20 @@ use crate::core::entity::{Entity, Status};
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::entities::stackup::Distribution;
 
-/// Feature type classification
+/// Feature type classification - determines MMC/LMC behavior for tolerance analysis
+///
+/// This is the key distinction for tolerance stackups and fit calculations:
+/// - **Internal**: Material is removed (holes, bores, pockets, slots). MMC = smallest size.
+/// - **External**: Material remains (shafts, bosses, pins). MMC = largest size.
+///
+/// Specific geometry (counterbore, thread, etc.) can be described in the title/description.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FeatureType {
-    /// Internal feature (hole, bore, pocket) - material is removed
+    /// Internal feature (hole, bore, pocket, slot) - material is removed, MMC = smallest
     Internal,
-    /// External feature (shaft, boss) - material remains
+    /// External feature (shaft, boss, pin) - material remains, MMC = largest
     External,
-    PlanarSurface,
-    Slot,
-    Thread,
-    Counterbore,
-    Countersink,
-    Boss,
-    Pocket,
-    Edge,
-    Other,
 }
 
 impl Default for FeatureType {
@@ -37,15 +34,25 @@ impl std::fmt::Display for FeatureType {
         match self {
             FeatureType::Internal => write!(f, "internal"),
             FeatureType::External => write!(f, "external"),
-            FeatureType::PlanarSurface => write!(f, "planar_surface"),
-            FeatureType::Slot => write!(f, "slot"),
-            FeatureType::Thread => write!(f, "thread"),
-            FeatureType::Counterbore => write!(f, "counterbore"),
-            FeatureType::Countersink => write!(f, "countersink"),
-            FeatureType::Boss => write!(f, "boss"),
-            FeatureType::Pocket => write!(f, "pocket"),
-            FeatureType::Edge => write!(f, "edge"),
-            FeatureType::Other => write!(f, "other"),
+        }
+    }
+}
+
+impl std::str::FromStr for FeatureType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "internal" => Ok(FeatureType::Internal),
+            "external" => Ok(FeatureType::External),
+            // Legacy mappings for backward compatibility
+            "slot" | "pocket" | "counterbore" | "countersink" | "thread" => Ok(FeatureType::Internal),
+            "boss" => Ok(FeatureType::External),
+            "planar_surface" | "edge" | "other" => Ok(FeatureType::Internal),
+            _ => Err(format!(
+                "Invalid feature type: '{}'. Use 'internal' or 'external'",
+                s
+            )),
         }
     }
 }
@@ -469,12 +476,12 @@ mod tests {
 
     #[test]
     fn test_feature_type_serialization() {
-        let feat = Feature::new("CMP-123", FeatureType::PlanarSurface, "Mating Surface", "Author");
+        let feat = Feature::new("CMP-123", FeatureType::External, "Mating Surface", "Author");
         let yaml = serde_yml::to_string(&feat).unwrap();
-        assert!(yaml.contains("planar_surface"));
+        assert!(yaml.contains("external"));
 
         let parsed: Feature = serde_yml::from_str(&yaml).unwrap();
-        assert_eq!(parsed.feature_type, FeatureType::PlanarSurface);
+        assert_eq!(parsed.feature_type, FeatureType::External);
     }
 
     #[test]

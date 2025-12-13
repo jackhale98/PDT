@@ -1093,7 +1093,7 @@ fn test_feat_list_shows_features() {
     tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
 
     create_test_feature(&tmp, "CMP@1", "internal", "Hole Feature");
-    create_test_feature(&tmp, "CMP@1", "boss", "Boss Feature");
+    create_test_feature(&tmp, "CMP@1", "external", "Pin Feature");
 
     tdt()
         .current_dir(tmp.path())
@@ -1101,7 +1101,7 @@ fn test_feat_list_shows_features() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Hole Feature"))
-        .stdout(predicate::str::contains("Boss Feature"))
+        .stdout(predicate::str::contains("Pin Feature"))
         .stdout(predicate::str::contains("2 feature(s) found"));
 }
 
@@ -1111,7 +1111,7 @@ fn test_feat_show_by_short_id() {
 
     create_test_component(&tmp, "PN-FS", "Feature Show Component");
     tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
-    create_test_feature(&tmp, "CMP@1", "slot", "Test Slot");
+    create_test_feature(&tmp, "CMP@1", "internal", "Test Slot");
     tdt().current_dir(tmp.path()).args(["feat", "list"]).output().unwrap();
 
     tdt()
@@ -1136,7 +1136,7 @@ fn test_mate_new_creates_file() {
     tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
 
     create_test_feature(&tmp, "CMP@1", "internal", "Mounting Hole");
-    create_test_feature(&tmp, "CMP@2", "boss", "Mounting Pin");
+    create_test_feature(&tmp, "CMP@2", "external", "Mounting Pin");
     tdt().current_dir(tmp.path()).args(["feat", "list"]).output().unwrap();
 
     tdt()
@@ -1181,7 +1181,7 @@ fn test_mate_list_shows_mates() {
     tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
 
     create_test_feature(&tmp, "CMP@1", "internal", "Hole A");
-    create_test_feature(&tmp, "CMP@2", "boss", "Pin A");
+    create_test_feature(&tmp, "CMP@2", "external", "Pin A");
     tdt().current_dir(tmp.path()).args(["feat", "list"]).output().unwrap();
 
     tdt()

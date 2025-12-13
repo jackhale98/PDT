@@ -29,7 +29,7 @@ Features represent dimensional characteristics on components that have tolerance
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `feature_type` | enum | `hole`, `shaft`, `planar_surface`, `slot`, `thread`, `counterbore`, `countersink` |
+| `feature_type` | enum | `internal`, `external` |
 | `description` | string | Detailed description |
 | `dimensions` | array[Dimension] | Dimensional characteristics |
 | `gdt` | array[GdtControl] | GD&T controls |
@@ -113,7 +113,7 @@ The `distribution` field specifies the statistical distribution used when this f
 
 id: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTE
 component: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD
-feature_type: hole
+feature_type: internal
 title: "Mounting Hole A"
 
 description: |
@@ -173,11 +173,11 @@ entity_revision: 1
 ### Create a new feature
 
 ```bash
-# Create feature (--component is REQUIRED)
-tdt feat new --component CMP@1 --type hole --title "Mounting Hole A"
+# Create internal feature (hole, pocket, slot) - component is REQUIRED
+tdt feat new --component CMP@1 --feature-type internal --title "Mounting Hole A"
 
-# Create shaft feature
-tdt feat new --component CMP@1 --type shaft --title "Locating Pin"
+# Create external feature (shaft, boss, pin)
+tdt feat new --component CMP@1 --feature-type external --title "Locating Pin"
 
 # Create with interactive wizard
 tdt feat new --component CMP@1 -i
@@ -198,8 +198,8 @@ tdt feat list
 tdt feat list --component CMP@1
 
 # Filter by type
-tdt feat list --type hole
-tdt feat list --type shaft
+tdt feat list --feature-type internal
+tdt feat list --feature-type external
 
 # Filter by status
 tdt feat list --status approved
@@ -244,20 +244,20 @@ tdt feat edit FEAT@1
 
 ## Feature Types
 
-| Type | Description | Internal/External | Typical Dimensions |
-|------|-------------|-------------------|-------------------|
-| **hole** | Cylindrical hole | Internal | diameter, depth |
-| **shaft** | Cylindrical shaft | External | diameter, length |
-| **planar_surface** | Flat surface | External | flatness, parallelism |
-| **slot** | Linear slot | Internal | width, length, depth |
-| **thread** | Threaded feature | Varies | major diameter, pitch |
-| **counterbore** | Counterbored hole | Internal | bore diameter, depth |
-| **countersink** | Countersunk hole | Internal | cone angle, depth |
-| **boss** | Cylindrical protrusion | External | diameter, height |
-| **pocket** | Recessed area | Internal | width, length, depth |
-| **edge** | Edge feature | External | length, radius |
+Features are classified by their material behavior for tolerance analysis:
 
-**Note**: When creating a feature, TDT automatically sets `internal: true` for holes, slots, pockets, counterbores, and countersinks. For shafts, bosses, and edges, it defaults to `internal: false`.
+| Type | Description | MMC | LMC | Examples |
+|------|-------------|-----|-----|----------|
+| **internal** | Material is removed | Smallest size | Largest size | Holes, bores, pockets, slots, counterbores |
+| **external** | Material remains | Largest size | Smallest size | Shafts, pins, bosses |
+
+This classification determines how Maximum Material Condition (MMC) and Least Material Condition (LMC) are calculated, which is critical for:
+
+- **Fit calculations** (clearance, interference, transition fits)
+- **Tolerance stackups** (worst-case and statistical analysis)
+- **Bonus tolerance** calculations with GD&T
+
+Specific geometry (counterbore, thread, etc.) can be documented in the feature title or description.
 
 ## GD&T Symbols
 

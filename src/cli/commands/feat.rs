@@ -31,21 +31,37 @@ pub enum FeatCommands {
     Edit(EditArgs),
 }
 
-/// Feature type filter
+/// Feature type filter for list command
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum TypeFilter {
     Internal,
     External,
-    PlanarSurface,
-    Slot,
-    Thread,
-    Counterbore,
-    Countersink,
-    Boss,
-    Pocket,
-    Edge,
-    Other,
     All,
+}
+
+/// CLI-friendly feature type enum
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliFeatureType {
+    Internal,
+    External,
+}
+
+impl std::fmt::Display for CliFeatureType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliFeatureType::Internal => write!(f, "internal"),
+            CliFeatureType::External => write!(f, "external"),
+        }
+    }
+}
+
+impl From<CliFeatureType> for FeatureType {
+    fn from(cli: CliFeatureType) -> Self {
+        match cli {
+            CliFeatureType::Internal => FeatureType::Internal,
+            CliFeatureType::External => FeatureType::External,
+        }
+    }
 }
 
 /// Status filter
@@ -146,9 +162,9 @@ pub struct NewArgs {
     #[arg(long, short = 'c', required = true)]
     pub component: String,
 
-    /// Feature type
+    /// Feature type (internal = hole/pocket, external = shaft/boss)
     #[arg(long, short = 't', default_value = "internal")]
-    pub feature_type: String,
+    pub feature_type: CliFeatureType,
 
     /// Title/description
     #[arg(long, short = 'T')]
@@ -236,15 +252,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         .filter(|f| match args.feature_type {
             TypeFilter::Internal => f.feature_type == FeatureType::Internal,
             TypeFilter::External => f.feature_type == FeatureType::External,
-            TypeFilter::PlanarSurface => f.feature_type == FeatureType::PlanarSurface,
-            TypeFilter::Slot => f.feature_type == FeatureType::Slot,
-            TypeFilter::Thread => f.feature_type == FeatureType::Thread,
-            TypeFilter::Counterbore => f.feature_type == FeatureType::Counterbore,
-            TypeFilter::Countersink => f.feature_type == FeatureType::Countersink,
-            TypeFilter::Boss => f.feature_type == FeatureType::Boss,
-            TypeFilter::Pocket => f.feature_type == FeatureType::Pocket,
-            TypeFilter::Edge => f.feature_type == FeatureType::Edge,
-            TypeFilter::Other => f.feature_type == FeatureType::Other,
             TypeFilter::All => true,
         })
         .filter(|f| match args.status {
@@ -490,7 +497,7 @@ fn run_new(args: NewArgs) -> Result<()> {
             .unwrap_or_else(|| "internal".to_string());
     } else {
         title = args.title.ok_or_else(|| miette::miette!("Title is required (use --title or -i for interactive)"))?;
-        feature_type = args.feature_type;
+        feature_type = args.feature_type.to_string();
     }
 
     // Generate ID

@@ -99,6 +99,27 @@
             "type": "string"
           },
           "description": "IDs of tests that verify this requirement"
+        },
+        "derives_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Parent requirement IDs this derives from"
+        },
+        "derived_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Child requirement IDs derived from this"
+        },
+        "allocated_to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Feature IDs this requirement is allocated to"
         }
       }
     },

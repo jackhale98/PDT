@@ -167,6 +167,13 @@
             "type": "string"
           },
           "description": "IDs of tests that verify risk mitigation"
+        },
+        "affects": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of components or features affected by this risk"
         }
       }
     },

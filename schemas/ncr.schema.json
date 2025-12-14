@@ -141,7 +141,8 @@
         "component": { "type": ["string", "null"] },
         "process": { "type": ["string", "null"] },
         "control": { "type": ["string", "null"] },
-        "capa": { "type": ["string", "null"] }
+        "capa": { "type": ["string", "null"] },
+        "from_result": { "type": ["string", "null"], "description": "Test result ID that created this NCR" }
       }
     },
     "created": {

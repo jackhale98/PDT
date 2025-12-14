@@ -18,8 +18,8 @@
     },
     "feature_type": {
       "type": "string",
-      "enum": ["internal", "external", "planar_surface", "slot", "thread", "counterbore", "countersink", "boss", "pocket", "edge", "other"],
-      "description": "Feature type classification"
+      "enum": ["internal", "external"],
+      "description": "Feature type classification - internal (hole, bore, pocket) or external (shaft, boss)"
     },
     "title": {
       "type": "string",
@@ -59,6 +59,17 @@
             "type": "string",
             "default": "mm",
             "description": "Units (mm, in, etc.)"
+          },
+          "internal": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this is an internal feature (hole/slot/pocket) vs external (shaft/boss)"
+          },
+          "distribution": {
+            "type": "string",
+            "enum": ["normal", "uniform", "triangular"],
+            "default": "normal",
+            "description": "Statistical distribution for tolerance analysis"
           }
         }
       },
@@ -141,6 +152,16 @@
           "type": "array",
           "items": {"type": "string"},
           "description": "Stackup IDs using this feature"
+        },
+        "allocated_from": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Requirement IDs allocated to this feature"
+        },
+        "risks": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Risk IDs affecting this feature"
         }
       }
     },

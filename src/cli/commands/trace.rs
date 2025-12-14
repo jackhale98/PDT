@@ -55,9 +55,9 @@ pub struct MatrixArgs {
     #[arg(long, short = 'o', default_value = "table")]
     pub output: String,
 
-    /// Show short ID aliases (e.g., REQ@1, TEST@2) instead of truncated full IDs
-    #[arg(long, short = 'a')]
-    pub aliases: bool,
+    /// Show full IDs instead of short aliases (e.g., REQ@1, TEST@2)
+    #[arg(long)]
+    pub ids: bool,
 
     /// Show Requirements Verification Matrix (requirements as source, what verifies them)
     #[arg(long)]
@@ -73,9 +73,9 @@ pub struct FromArgs {
     #[arg(long, short = 'd')]
     pub depth: Option<usize>,
 
-    /// Show short ID aliases for each entity
-    #[arg(long, short = 'a')]
-    pub aliases: bool,
+    /// Show full IDs instead of short aliases
+    #[arg(long)]
+    pub ids: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -87,9 +87,9 @@ pub struct ToArgs {
     #[arg(long, short = 'd')]
     pub depth: Option<usize>,
 
-    /// Show short ID aliases for each entity
-    #[arg(long, short = 'a')]
-    pub aliases: bool,
+    /// Show full IDs instead of short aliases
+    #[arg(long)]
+    pub ids: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -134,8 +134,8 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     // Load all entities generically
     let entities = load_all_entities(&project)?;
 
-    // Load short ID index if aliases requested or for RVM
-    let short_ids = if args.aliases || args.rvm {
+    // Load short ID index (default behavior is to show aliases, unless --ids is set)
+    let short_ids = if !args.ids || args.rvm {
         let mut idx = ShortIdIndex::load(&project);
         idx.ensure_all(entities.iter().map(|e| e.id.clone()));
         let _ = idx.save(&project);
@@ -437,15 +437,12 @@ fn run_from(args: FromArgs) -> Result<()> {
     // Load all entities first
     let entities = load_all_entities(&project)?;
 
-    // Load short ID index and ensure all entities are indexed if aliases requested
-    let short_ids = if args.aliases {
-        let mut idx = ShortIdIndex::load(&project);
-        idx.ensure_all(entities.iter().map(|e| e.id.clone()));
-        let _ = idx.save(&project);
-        idx
-    } else {
-        ShortIdIndex::load(&project)
-    };
+    // Load short ID index (default behavior is to show aliases, unless --ids is set)
+    let mut short_ids = ShortIdIndex::load(&project);
+    if !args.ids {
+        short_ids.ensure_all(entities.iter().map(|e| e.id.clone()));
+        let _ = short_ids.save(&project);
+    }
 
     let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
 
@@ -454,8 +451,8 @@ fn run_from(args: FromArgs) -> Result<()> {
         .find(|e| e.id.starts_with(&resolved_id) || e.title.to_lowercase().contains(&resolved_id.to_lowercase()))
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
-    // Display source with alias if requested
-    let source_display = if args.aliases {
+    // Display source with alias unless --ids is set
+    let source_display = if !args.ids {
         short_ids.get_short_id(&source.id).unwrap_or_else(|| source.id.clone())
     } else {
         source.id.clone()
@@ -503,10 +500,10 @@ fn run_from(args: FromArgs) -> Result<()> {
 
         if depth > 0 {
             let indent = "  ".repeat(depth);
-            let id_display = if args.aliases {
+            let id_display = if !args.ids {
                 short_ids.get_short_id(&id).unwrap_or_else(|| format_short_id_str(&id))
             } else {
-                format_short_id_str(&id)
+                id.clone()
             };
             let title = id_to_title.get(&id).map(|t| truncate_str(t, 40)).unwrap_or_default();
             println!("{}← {} - {}", indent, style(&id_display).cyan(), title);
@@ -534,15 +531,12 @@ fn run_to(args: ToArgs) -> Result<()> {
     // Load all entities first
     let entities = load_all_entities(&project)?;
 
-    // Load short ID index and ensure all entities are indexed if aliases requested
-    let short_ids = if args.aliases {
-        let mut idx = ShortIdIndex::load(&project);
-        idx.ensure_all(entities.iter().map(|e| e.id.clone()));
-        let _ = idx.save(&project);
-        idx
-    } else {
-        ShortIdIndex::load(&project)
-    };
+    // Load short ID index (default behavior is to show aliases, unless --ids is set)
+    let mut short_ids = ShortIdIndex::load(&project);
+    if !args.ids {
+        short_ids.ensure_all(entities.iter().map(|e| e.id.clone()));
+        let _ = short_ids.save(&project);
+    }
 
     let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
 
@@ -551,8 +545,8 @@ fn run_to(args: ToArgs) -> Result<()> {
         .find(|e| e.id.starts_with(&resolved_id) || e.title.to_lowercase().contains(&resolved_id.to_lowercase()))
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
-    // Display target with alias if requested
-    let target_display = if args.aliases {
+    // Display target with alias unless --ids is set
+    let target_display = if !args.ids {
         short_ids.get_short_id(&target.id).unwrap_or_else(|| target.id.clone())
     } else {
         target.id.clone()
@@ -597,10 +591,10 @@ fn run_to(args: ToArgs) -> Result<()> {
 
         if depth > 0 {
             let indent = "  ".repeat(depth);
-            let id_display = if args.aliases {
+            let id_display = if !args.ids {
                 short_ids.get_short_id(&id).unwrap_or_else(|| format_short_id_str(&id))
             } else {
-                format_short_id_str(&id)
+                id.clone()
             };
             let title = id_to_title.get(&id).map(|t| truncate_str(t, 40)).unwrap_or_default();
             println!("{}→ {} - {}", indent, style(&id_display).cyan(), title);

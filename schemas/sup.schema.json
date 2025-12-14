@@ -85,7 +85,7 @@
       "type": "array",
       "items": {
         "type": "string",
-        "enum": ["machining", "sheet_metal", "casting", "injection", "extrusion", "pcb", "pcb_assembly", "cable_assembly", "assembly", "testing", "finishing"]
+        "enum": ["machining", "sheet_metal", "casting", "injection", "extrusion", "pcb", "pcb_assembly", "cable_assembly", "assembly", "testing", "finishing", "packaging"]
       },
       "description": "Manufacturing capabilities"
     },

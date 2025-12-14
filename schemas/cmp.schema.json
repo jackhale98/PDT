@@ -58,6 +58,10 @@
       "minimum": 0,
       "description": "Unit cost"
     },
+    "selected_quote": {
+      "type": ["string", "null"],
+      "description": "ID of the selected quote for this component"
+    },
     "suppliers": {
       "type": "array",
       "items": {
@@ -142,6 +146,34 @@
             "type": "string"
           },
           "description": "IDs of assemblies using this component"
+        },
+        "replaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of components this replaces"
+        },
+        "replaced_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of components that replace this"
+        },
+        "interchangeable_with": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of interchangeable components"
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of risks affecting this component"
         }
       }
     },

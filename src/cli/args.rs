@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use crate::cli::commands::{
     asm::AsmCommands, baseline::BaselineCommands, blame::BlameArgs, bulk::BulkCommands,
     cache::CacheCommands, capa::CapaCommands, cmp::CmpCommands, ctrl::CtrlCommands, diff::DiffArgs,
-    feat::FeatCommands, history::HistoryArgs, import::ImportArgs, init::InitArgs,
-    link::LinkCommands, mate::MateCommands, ncr::NcrCommands, proc::ProcCommands,
+    dmm::DmmArgs, dsm::DsmArgs, feat::FeatCommands, history::HistoryArgs, import::ImportArgs,
+    init::InitArgs, link::LinkCommands, mate::MateCommands, ncr::NcrCommands, proc::ProcCommands,
     quote::QuoteCommands, report::ReportCommands, req::ReqCommands, risk::RiskCommands,
     rslt::RsltCommands, status::StatusArgs, sup::SupCommands, test::TestCommands, tol::TolCommands,
     trace::TraceCommands, validate::ValidateArgs, where_used::WhereUsedArgs, work::WorkCommands,
@@ -57,6 +57,7 @@ TOLERANCE ANALYSIS:
 TRACEABILITY & REPORTS:
   link        Manage links between entities (add, remove, show)
   trace       Traceability queries (from, to, coverage)
+  dsm         Design Structure Matrix for component interactions
   where-used  Find where an entity is used/referenced
   report      Generate engineering reports (rvm, fmea, bom, etc.)
 
@@ -223,6 +224,12 @@ pub enum Commands {
     /// Traceability queries (from, to, coverage)
     #[command(subcommand)]
     Trace(TraceCommands),
+
+    /// Design Structure Matrix for component interactions
+    Dsm(DsmArgs),
+
+    /// Domain Mapping Matrix for cross-entity analysis
+    Dmm(DmmArgs),
 
     /// Find where an entity is used/referenced
     WhereUsed(WhereUsedArgs),

@@ -360,3 +360,42 @@ tdt validate manufacturing/processes/PROC-01KC5B2GDDQ0JAXFVXYYZ9DWDZ.tdt.yaml
 2. **Title**: Required, 1-200 characters
 3. **Process Type**: If specified, must be valid enum value
 4. **Status**: Must be one of: `draft`, `review`, `approved`, `released`, `obsolete`
+
+## Process Analysis
+
+### Process Flow Visualization
+
+```bash
+# Show process flow with operation sequence
+tdt proc flow
+
+# Include control plan items
+tdt proc flow --controls
+
+# Include work instructions
+tdt proc flow --work-instructions
+```
+
+### Domain Mapping Matrix
+
+Analyze process-to-component relationships:
+
+```bash
+# Show which processes produce which components
+tdt dmm proc cmp
+
+# Show which controls apply to which processes
+tdt dmm ctrl proc --stats
+```
+
+### Design Structure Matrix
+
+See component relationships including shared processes:
+
+```bash
+# Full DSM showing mate, process, and requirement relationships
+tdt dsm
+
+# Process relationships only
+tdt dsm -t process
+```

@@ -9,6 +9,8 @@ pub mod capa;
 pub mod cmp;
 pub mod ctrl;
 pub mod diff;
+pub mod dmm;
+pub mod dsm;
 pub mod feat;
 pub mod history;
 pub mod import;

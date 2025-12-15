@@ -325,6 +325,13 @@ impl EntityCache {
             ("risks", "mitigates"),
             ("parent", "contained_in"),
             ("component", "quotes_for"),
+            // Process-specific links
+            ("produces", "references"),
+            ("controls", "references"),
+            ("work_instructions", "references"),
+            // Requirement allocation
+            ("allocated_to", "references"),
+            ("satisfies", "references"),
         ];
 
         // Helper to extract links from a value

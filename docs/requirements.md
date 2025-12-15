@@ -240,7 +240,15 @@ tdt trace coverage
 
 # Show uncovered requirements
 tdt trace coverage --uncovered
+
+# Domain Mapping Matrix: requirements vs components
+tdt dmm req cmp --stats
+
+# Domain Mapping Matrix: requirements vs tests
+tdt dmm req test --stats
 ```
+
+> **Tip:** Use `tdt dmm req cmp --stats` to quickly see requirement-to-component allocation coverage, or `tdt dmm req test --stats` for verification coverage analysis.
 
 ## Best Practices
 

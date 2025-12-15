@@ -717,7 +717,7 @@ fn print_two_columns(
     lines2: &[String],
     _width: usize,
 ) {
-    let col_width = 32;
+    let col_width = 34;
 
     println!(
         "{:<col_width$} {}",
@@ -731,7 +731,7 @@ fn print_two_columns(
     for i in 0..max_lines {
         let l1 = lines1.get(i).map(|s| s.as_str()).unwrap_or("");
         let l2 = lines2.get(i).map(|s| s.as_str()).unwrap_or("");
-        println!("  {:<30} {}", l1, l2);
+        println!("  {:<32} {}", l1, l2);
     }
 }
 

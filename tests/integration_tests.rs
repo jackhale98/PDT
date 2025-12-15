@@ -2699,3 +2699,450 @@ fn test_cache_query_raw_sql() {
         .success()
         .stdout(predicate::str::contains("Query Test Req"));
 }
+
+// ============================================================================
+// DSM Tests
+// ============================================================================
+
+#[test]
+fn test_dsm_help() {
+    tdt()
+        .args(["dsm", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Design Structure Matrix"));
+}
+
+#[test]
+fn test_dsm_no_components() {
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .arg("dsm")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No components found"));
+}
+
+#[test]
+fn test_dsm_with_components() {
+    let tmp = setup_test_project();
+
+    // Create two components
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-002", "-t", "Bracket", "--no-edit"])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM - should show 2 components
+    tdt()
+        .current_dir(tmp.path())
+        .arg("dsm")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("2 components"));
+}
+
+#[test]
+fn test_dsm_csv_output() {
+    let tmp = setup_test_project();
+
+    // Create a component
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM with CSV output
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dsm", "-o", "csv"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Component,CMP@1"));
+}
+
+#[test]
+fn test_dsm_json_output() {
+    let tmp = setup_test_project();
+
+    // Create a component
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM with JSON output
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dsm", "-o", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"components\""))
+        .stdout(predicate::str::contains("\"relationships\""));
+}
+
+#[test]
+fn test_dsm_clustering() {
+    let tmp = setup_test_project();
+
+    // Create two components
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-002", "-t", "Bracket", "--no-edit"])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM with clustering
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dsm", "-c"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Clustered"))
+        .stdout(predicate::str::contains("Cluster"));
+}
+
+#[test]
+fn test_dsm_rel_type_filter() {
+    let tmp = setup_test_project();
+
+    // Create a component
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM with mate filter only
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dsm", "-t", "mate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Design Structure Matrix"));
+}
+
+#[test]
+fn test_dsm_weighted_flag() {
+    let tmp = setup_test_project();
+
+    // Create two components
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-002", "-t", "Shaft", "--no-edit"])
+        .assert()
+        .success();
+
+    // Create a process that produces both components (creates relationship)
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "proc", "new", "--title", "Assembly Process",
+            "--type", "assembly", "--op-number", "OP-010", "--no-edit"
+        ])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM with weighted flag - should show numeric values
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dsm", "--weighted"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Design Structure Matrix"));
+}
+
+#[test]
+fn test_dsm_metrics_flag() {
+    let tmp = setup_test_project();
+
+    // Create components
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-002", "-t", "Shaft", "--no-edit"])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM with metrics flag - should show coupling statistics
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dsm", "--metrics"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Coupling Metrics"))
+        .stdout(predicate::str::contains("Fan-in"))
+        .stdout(predicate::str::contains("Fan-out"));
+}
+
+#[test]
+fn test_dsm_cycles_flag() {
+    let tmp = setup_test_project();
+
+    // Create components
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-002", "-t", "Shaft", "--no-edit"])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DSM with cycles flag
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dsm", "--cycles"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Design Structure Matrix"));
+}
+
+// ============================================================================
+// DMM (Domain Mapping Matrix) Tests
+// ============================================================================
+
+#[test]
+fn test_dmm_help() {
+    tdt()
+        .args(["dmm", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Domain Mapping Matrix"));
+}
+
+#[test]
+fn test_dmm_cmp_req() {
+    let tmp = setup_test_project();
+
+    // Create a component
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    // Create a requirement
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req", "new", "--type", "input", "-T", "Force Requirement",
+            "--no-edit"
+        ])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DMM for components vs requirements
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dmm", "cmp", "req"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Domain Mapping Matrix"));
+}
+
+#[test]
+fn test_dmm_cmp_proc() {
+    let tmp = setup_test_project();
+
+    // Create a component
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    // Create a process
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "proc", "new", "--title", "Machining",
+            "--type", "machining", "--op-number", "OP-010", "--no-edit"
+        ])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DMM for components vs processes
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dmm", "cmp", "proc"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Domain Mapping Matrix"));
+}
+
+#[test]
+fn test_dmm_csv_output() {
+    let tmp = setup_test_project();
+
+    // Create a component
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    // Create a requirement
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req", "new", "--type", "input", "-T", "Test Req",
+            "--no-edit"
+        ])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DMM with CSV output
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dmm", "cmp", "req", "-o", "csv"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(",REQ@1"));
+}
+
+#[test]
+fn test_dmm_json_output() {
+    let tmp = setup_test_project();
+
+    // Create a component
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "-p", "PN-001", "-t", "Housing", "--no-edit"])
+        .assert()
+        .success();
+
+    // Create a requirement
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req", "new", "--type", "input", "-T", "Test Req",
+            "--no-edit"
+        ])
+        .assert()
+        .success();
+
+    // Rebuild cache
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cache", "rebuild"])
+        .assert()
+        .success();
+
+    // Run DMM with JSON output
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dmm", "cmp", "req", "-o", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"row_entities\""))
+        .stdout(predicate::str::contains("\"col_entities\""));
+}

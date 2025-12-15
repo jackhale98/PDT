@@ -271,6 +271,10 @@ Components:
 - Use `--csv` for large matrices that don't fit in terminal width
 - JSON output includes full component IDs for integration with other tools
 
+> **See Also:** For more comprehensive component analysis, use:
+> - `tdt dsm` - Design Structure Matrix including mates, processes, and requirements with clustering, metrics, and cycle detection
+> - `tdt dmm cmp req` - Domain Mapping Matrix showing component-to-requirement allocation
+
 ## Make vs Buy Classification
 
 | Type | Description | Typical Use |

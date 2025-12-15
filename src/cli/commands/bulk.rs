@@ -144,17 +144,30 @@ fn run_set_status(mut args: SetStatusArgs) -> Result<()> {
     }
 
     // Collect entity files to update
-    let entity_files = collect_entity_files(&project, &short_ids, &args.entities, args.entity_type.as_deref(), args.tag.as_deref(), None)?;
+    let entity_files = collect_entity_files(
+        &project,
+        &short_ids,
+        &args.entities,
+        args.entity_type.as_deref(),
+        args.tag.as_deref(),
+        None,
+    )?;
 
     if entity_files.is_empty() {
         println!("{}", style("No matching entities found.").yellow());
         return Ok(());
     }
 
-    println!("{} {} to status '{}'",
-        if args.dry_run { style("Would update").yellow() } else { style("Updating").green() },
+    println!(
+        "{} {} to status '{}'",
+        if args.dry_run {
+            style("Would update").yellow()
+        } else {
+            style("Updating").green()
+        },
         style(entity_files.len()).cyan(),
-        style(&args.status).cyan());
+        style(&args.status).cyan()
+    );
 
     if args.dry_run {
         println!("\n{}", style("Entities that would be updated:").bold());
@@ -164,7 +177,9 @@ fn run_set_status(mut args: SetStatusArgs) -> Result<()> {
     let mut errors = 0;
 
     for (file_path, entity_id) in &entity_files {
-        let display_id = short_ids.get_short_id(entity_id).unwrap_or_else(|| entity_id.clone());
+        let display_id = short_ids
+            .get_short_id(entity_id)
+            .unwrap_or_else(|| entity_id.clone());
 
         if args.dry_run {
             println!("  {} {}", style("*").dim(), style(&display_id).cyan());
@@ -173,18 +188,31 @@ fn run_set_status(mut args: SetStatusArgs) -> Result<()> {
 
         match update_yaml_field(file_path, "status", &args.status.to_lowercase()) {
             Ok(_) => {
-                println!("  {} {}", style("Updated:").green(), style(&display_id).cyan());
+                println!(
+                    "  {} {}",
+                    style("Updated:").green(),
+                    style(&display_id).cyan()
+                );
                 updated += 1;
             }
             Err(e) => {
-                println!("  {} {} - {}", style("Error:").red(), style(&display_id).cyan(), e);
+                println!(
+                    "  {} {} - {}",
+                    style("Error:").red(),
+                    style(&display_id).cyan(),
+                    e
+                );
                 errors += 1;
             }
         }
     }
 
     if !args.dry_run {
-        println!("\n{} updated, {} errors", style(updated).green(), style(errors).red());
+        println!(
+            "\n{} updated, {} errors",
+            style(updated).green(),
+            style(errors).red()
+        );
     }
 
     Ok(())
@@ -207,17 +235,30 @@ fn run_add_tag(mut args: AddTagArgs) -> Result<()> {
     }
 
     // Collect entity files to update
-    let entity_files = collect_entity_files(&project, &short_ids, &args.entities, args.entity_type.as_deref(), None, args.status.as_deref())?;
+    let entity_files = collect_entity_files(
+        &project,
+        &short_ids,
+        &args.entities,
+        args.entity_type.as_deref(),
+        None,
+        args.status.as_deref(),
+    )?;
 
     if entity_files.is_empty() {
         println!("{}", style("No matching entities found.").yellow());
         return Ok(());
     }
 
-    println!("{} tag '{}' to {} entities",
-        if args.dry_run { style("Would add").yellow() } else { style("Adding").green() },
+    println!(
+        "{} tag '{}' to {} entities",
+        if args.dry_run {
+            style("Would add").yellow()
+        } else {
+            style("Adding").green()
+        },
         style(&args.tag).cyan(),
-        style(entity_files.len()).cyan());
+        style(entity_files.len()).cyan()
+    );
 
     if args.dry_run {
         println!("\n{}", style("Entities that would be updated:").bold());
@@ -228,7 +269,9 @@ fn run_add_tag(mut args: AddTagArgs) -> Result<()> {
     let mut errors = 0;
 
     for (file_path, entity_id) in &entity_files {
-        let display_id = short_ids.get_short_id(entity_id).unwrap_or_else(|| entity_id.clone());
+        let display_id = short_ids
+            .get_short_id(entity_id)
+            .unwrap_or_else(|| entity_id.clone());
 
         if args.dry_run {
             println!("  {} {}", style("*").dim(), style(&display_id).cyan());
@@ -237,25 +280,40 @@ fn run_add_tag(mut args: AddTagArgs) -> Result<()> {
 
         match add_tag_to_file(file_path, &args.tag) {
             Ok(true) => {
-                println!("  {} {}", style("Updated:").green(), style(&display_id).cyan());
+                println!(
+                    "  {} {}",
+                    style("Updated:").green(),
+                    style(&display_id).cyan()
+                );
                 updated += 1;
             }
             Ok(false) => {
-                println!("  {} {} (already has tag)", style("Skipped:").dim(), style(&display_id).cyan());
+                println!(
+                    "  {} {} (already has tag)",
+                    style("Skipped:").dim(),
+                    style(&display_id).cyan()
+                );
                 skipped += 1;
             }
             Err(e) => {
-                println!("  {} {} - {}", style("Error:").red(), style(&display_id).cyan(), e);
+                println!(
+                    "  {} {} - {}",
+                    style("Error:").red(),
+                    style(&display_id).cyan(),
+                    e
+                );
                 errors += 1;
             }
         }
     }
 
     if !args.dry_run {
-        println!("\n{} updated, {} skipped, {} errors",
+        println!(
+            "\n{} updated, {} skipped, {} errors",
             style(updated).green(),
             style(skipped).dim(),
-            style(errors).red());
+            style(errors).red()
+        );
     }
 
     Ok(())
@@ -282,7 +340,14 @@ fn run_remove_tag(mut args: RemoveTagArgs) -> Result<()> {
         // Find all entities with the tag
         collect_entities_with_tag(&project, &args.tag, args.entity_type.as_deref())?
     } else {
-        collect_entity_files(&project, &short_ids, &args.entities, args.entity_type.as_deref(), Some(&args.tag), None)?
+        collect_entity_files(
+            &project,
+            &short_ids,
+            &args.entities,
+            args.entity_type.as_deref(),
+            Some(&args.tag),
+            None,
+        )?
     };
 
     if entity_files.is_empty() {
@@ -290,10 +355,16 @@ fn run_remove_tag(mut args: RemoveTagArgs) -> Result<()> {
         return Ok(());
     }
 
-    println!("{} tag '{}' from {} entities",
-        if args.dry_run { style("Would remove").yellow() } else { style("Removing").green() },
+    println!(
+        "{} tag '{}' from {} entities",
+        if args.dry_run {
+            style("Would remove").yellow()
+        } else {
+            style("Removing").green()
+        },
         style(&args.tag).cyan(),
-        style(entity_files.len()).cyan());
+        style(entity_files.len()).cyan()
+    );
 
     if args.dry_run {
         println!("\n{}", style("Entities that would be updated:").bold());
@@ -304,7 +375,9 @@ fn run_remove_tag(mut args: RemoveTagArgs) -> Result<()> {
     let mut errors = 0;
 
     for (file_path, entity_id) in &entity_files {
-        let display_id = short_ids.get_short_id(&entity_id).unwrap_or_else(|| entity_id.clone());
+        let display_id = short_ids
+            .get_short_id(&entity_id)
+            .unwrap_or_else(|| entity_id.clone());
 
         if args.dry_run {
             println!("  {} {}", style("*").dim(), style(&display_id).cyan());
@@ -313,25 +386,40 @@ fn run_remove_tag(mut args: RemoveTagArgs) -> Result<()> {
 
         match remove_tag_from_file(&file_path, &args.tag) {
             Ok(true) => {
-                println!("  {} {}", style("Updated:").green(), style(&display_id).cyan());
+                println!(
+                    "  {} {}",
+                    style("Updated:").green(),
+                    style(&display_id).cyan()
+                );
                 updated += 1;
             }
             Ok(false) => {
-                println!("  {} {} (tag not present)", style("Skipped:").dim(), style(&display_id).cyan());
+                println!(
+                    "  {} {} (tag not present)",
+                    style("Skipped:").dim(),
+                    style(&display_id).cyan()
+                );
                 skipped += 1;
             }
             Err(e) => {
-                println!("  {} {} - {}", style("Error:").red(), style(&display_id).cyan(), e);
+                println!(
+                    "  {} {} - {}",
+                    style("Error:").red(),
+                    style(&display_id).cyan(),
+                    e
+                );
                 errors += 1;
             }
         }
     }
 
     if !args.dry_run {
-        println!("\n{} updated, {} skipped, {} errors",
+        println!(
+            "\n{} updated, {} skipped, {} errors",
             style(updated).green(),
             style(skipped).dim(),
-            style(errors).red());
+            style(errors).red()
+        );
     }
 
     Ok(())
@@ -357,7 +445,14 @@ fn run_set_author(mut args: SetAuthorArgs) -> Result<()> {
     let entity_files = if let Some(ref current) = args.current_author {
         collect_entities_with_author(&project, current, args.entity_type.as_deref())?
     } else {
-        collect_entity_files(&project, &short_ids, &args.entities, args.entity_type.as_deref(), None, None)?
+        collect_entity_files(
+            &project,
+            &short_ids,
+            &args.entities,
+            args.entity_type.as_deref(),
+            None,
+            None,
+        )?
     };
 
     if entity_files.is_empty() {
@@ -365,10 +460,16 @@ fn run_set_author(mut args: SetAuthorArgs) -> Result<()> {
         return Ok(());
     }
 
-    println!("{} author to '{}' on {} entities",
-        if args.dry_run { style("Would set").yellow() } else { style("Setting").green() },
+    println!(
+        "{} author to '{}' on {} entities",
+        if args.dry_run {
+            style("Would set").yellow()
+        } else {
+            style("Setting").green()
+        },
         style(&args.author).cyan(),
-        style(entity_files.len()).cyan());
+        style(entity_files.len()).cyan()
+    );
 
     if args.dry_run {
         println!("\n{}", style("Entities that would be updated:").bold());
@@ -378,7 +479,9 @@ fn run_set_author(mut args: SetAuthorArgs) -> Result<()> {
     let mut errors = 0;
 
     for (file_path, entity_id) in &entity_files {
-        let display_id = short_ids.get_short_id(&entity_id).unwrap_or_else(|| entity_id.clone());
+        let display_id = short_ids
+            .get_short_id(&entity_id)
+            .unwrap_or_else(|| entity_id.clone());
 
         if args.dry_run {
             println!("  {} {}", style("*").dim(), style(&display_id).cyan());
@@ -387,18 +490,31 @@ fn run_set_author(mut args: SetAuthorArgs) -> Result<()> {
 
         match update_yaml_field(&file_path, "author", &args.author) {
             Ok(_) => {
-                println!("  {} {}", style("Updated:").green(), style(&display_id).cyan());
+                println!(
+                    "  {} {}",
+                    style("Updated:").green(),
+                    style(&display_id).cyan()
+                );
                 updated += 1;
             }
             Err(e) => {
-                println!("  {} {} - {}", style("Error:").red(), style(&display_id).cyan(), e);
+                println!(
+                    "  {} {} - {}",
+                    style("Error:").red(),
+                    style(&display_id).cyan(),
+                    e
+                );
                 errors += 1;
             }
         }
     }
 
     if !args.dry_run {
-        println!("\n{} updated, {} errors", style(updated).green(), style(errors).red());
+        println!(
+            "\n{} updated, {} errors",
+            style(updated).green(),
+            style(errors).red()
+        );
     }
 
     Ok(())
@@ -423,7 +539,11 @@ fn collect_entity_files(
             if let Some(file) = find_entity_file(project, &resolved) {
                 results.push((file, resolved));
             } else {
-                println!("{} Could not find entity: {}", style("Warning:").yellow(), id);
+                println!(
+                    "{} Could not find entity: {}",
+                    style("Warning:").yellow(),
+                    id
+                );
             }
         }
     } else if let Some(etype) = entity_type {
@@ -445,7 +565,9 @@ fn collect_entity_files(
                     if let Some(id) = extract_id_from_content(&content) {
                         // Apply filters
                         if let Some(tag) = filter_tag {
-                            if !content.contains(&format!("- {}", tag)) && !content.contains(&format!("\"{}\"", tag)) {
+                            if !content.contains(&format!("- {}", tag))
+                                && !content.contains(&format!("\"{}\"", tag))
+                            {
                                 continue;
                             }
                         }
@@ -475,8 +597,14 @@ fn collect_entities_with_tag(
         entity_type_dirs(etype)
     } else {
         vec![
-            "requirements", "risks", "verification", "validation",
-            "bom", "procurement", "manufacturing", "tolerances"
+            "requirements",
+            "risks",
+            "verification",
+            "validation",
+            "bom",
+            "procurement",
+            "manufacturing",
+            "tolerances",
         ]
     };
 
@@ -494,7 +622,9 @@ fn collect_entities_with_tag(
         {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
                 // Check if file has the tag
-                if content.contains(&format!("- {}", tag)) || content.contains(&format!("\"{}\"", tag)) {
+                if content.contains(&format!("- {}", tag))
+                    || content.contains(&format!("\"{}\"", tag))
+                {
                     if let Some(id) = extract_id_from_content(&content) {
                         results.push((entry.path().to_path_buf(), id));
                     }
@@ -517,8 +647,14 @@ fn collect_entities_with_author(
         entity_type_dirs(etype)
     } else {
         vec![
-            "requirements", "risks", "verification", "validation",
-            "bom", "procurement", "manufacturing", "tolerances"
+            "requirements",
+            "risks",
+            "verification",
+            "validation",
+            "bom",
+            "procurement",
+            "manufacturing",
+            "tolerances",
         ]
     };
 
@@ -535,8 +671,9 @@ fn collect_entities_with_author(
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                if content.contains(&format!("author: {}", author)) ||
-                   content.contains(&format!("author: \"{}\"", author)) {
+                if content.contains(&format!("author: {}", author))
+                    || content.contains(&format!("author: \"{}\"", author))
+                {
                     if let Some(id) = extract_id_from_content(&content) {
                         results.push((entry.path().to_path_buf(), id));
                     }
@@ -607,7 +744,9 @@ fn find_entity_file(project: &Project, id: &str) -> Option<PathBuf> {
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                if content.contains(&format!("id: {}", id)) || content.contains(&format!("id: \"{}\"", id)) {
+                if content.contains(&format!("id: {}", id))
+                    || content.contains(&format!("id: \"{}\"", id))
+                {
                     return Some(entry.path().to_path_buf());
                 }
             }
@@ -702,7 +841,9 @@ fn add_tag_to_file(file_path: &PathBuf, tag: &str) -> Result<bool> {
 
     // No tags section - add one
     // Find a good place to insert (after title or description)
-    let insert_idx = lines.iter().position(|l| l.starts_with("description:"))
+    let insert_idx = lines
+        .iter()
+        .position(|l| l.starts_with("description:"))
         .or_else(|| lines.iter().position(|l| l.starts_with("title:")))
         .map(|i| i + 1)
         .unwrap_or(lines.len());
@@ -727,9 +868,9 @@ fn remove_tag_from_file(file_path: &PathBuf, tag: &str) -> Result<bool> {
     // Find and remove the tag line
     lines.retain(|line| {
         let trimmed = line.trim();
-        !(trimmed == format!("- {}", tag) ||
-          trimmed == format!("- \"{}\"", tag) ||
-          trimmed == format!("- '{}'", tag))
+        !(trimmed == format!("- {}", tag)
+            || trimmed == format!("- \"{}\"", tag)
+            || trimmed == format!("- '{}'", tag))
     });
 
     if lines.len() == original_len {

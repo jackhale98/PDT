@@ -284,12 +284,7 @@ impl Entity for Risk {
 
 impl Risk {
     /// Create a new risk with the given parameters
-    pub fn new(
-        risk_type: RiskType,
-        title: String,
-        description: String,
-        author: String,
-    ) -> Self {
+    pub fn new(risk_type: RiskType, title: String, description: String, author: String) -> Self {
         Self {
             id: EntityId::new(crate::core::EntityPrefix::Risk),
             risk_type,
@@ -325,14 +320,14 @@ impl Risk {
 
     /// Determine risk level based on RPN
     pub fn determine_risk_level(&self) -> Option<RiskLevel> {
-        self.rpn.or_else(|| self.calculate_rpn()).map(|rpn| {
-            match rpn {
+        self.rpn
+            .or_else(|| self.calculate_rpn())
+            .map(|rpn| match rpn {
                 0..=50 => RiskLevel::Low,
                 51..=150 => RiskLevel::Medium,
                 151..=400 => RiskLevel::High,
                 _ => RiskLevel::Critical,
-            }
-        })
+            })
     }
 }
 
@@ -471,7 +466,10 @@ mod tests {
 
         assert_eq!(parsed.mitigations.len(), 1);
         assert_eq!(parsed.mitigations[0].action, "Add thermal cutoff");
-        assert_eq!(parsed.mitigations[0].mitigation_type, Some(MitigationType::Prevention));
+        assert_eq!(
+            parsed.mitigations[0].mitigation_type,
+            Some(MitigationType::Prevention)
+        );
     }
 
     #[test]

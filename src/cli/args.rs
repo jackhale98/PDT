@@ -4,36 +4,13 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 use crate::cli::commands::{
-    asm::AsmCommands,
-    baseline::BaselineCommands,
-    blame::BlameArgs,
-    bulk::BulkCommands,
-    cache::CacheCommands,
-    capa::CapaCommands,
-    cmp::CmpCommands,
-    ctrl::CtrlCommands,
-    diff::DiffArgs,
-    feat::FeatCommands,
-    history::HistoryArgs,
-    import::ImportArgs,
-    init::InitArgs,
-    link::LinkCommands,
-    mate::MateCommands,
-    ncr::NcrCommands,
-    proc::ProcCommands,
-    quote::QuoteCommands,
-    report::ReportCommands,
-    req::ReqCommands,
-    risk::RiskCommands,
-    rslt::RsltCommands,
-    status::StatusArgs,
-    sup::SupCommands,
-    test::TestCommands,
-    tol::TolCommands,
-    trace::TraceCommands,
-    validate::ValidateArgs,
-    where_used::WhereUsedArgs,
-    work::WorkCommands,
+    asm::AsmCommands, baseline::BaselineCommands, blame::BlameArgs, bulk::BulkCommands,
+    cache::CacheCommands, capa::CapaCommands, cmp::CmpCommands, ctrl::CtrlCommands, diff::DiffArgs,
+    feat::FeatCommands, history::HistoryArgs, import::ImportArgs, init::InitArgs,
+    link::LinkCommands, mate::MateCommands, ncr::NcrCommands, proc::ProcCommands,
+    quote::QuoteCommands, report::ReportCommands, req::ReqCommands, risk::RiskCommands,
+    rslt::RsltCommands, status::StatusArgs, sup::SupCommands, test::TestCommands, tol::TolCommands,
+    trace::TraceCommands, validate::ValidateArgs, where_used::WhereUsedArgs, work::WorkCommands,
 };
 
 /// Custom help template with grouped commands
@@ -102,7 +79,9 @@ OPTIONS:
 #[derive(Parser)]
 #[command(name = "tdt")]
 #[command(author, version, about = "Tessera Design Toolkit")]
-#[command(long_about = "A Unix-style toolkit for managing engineering artifacts as plain text files under git version control.")]
+#[command(
+    long_about = "A Unix-style toolkit for managing engineering artifacts as plain text files under git version control."
+)]
 #[command(propagate_version = true)]
 #[command(help_template = HELP_TEMPLATE)]
 #[command(subcommand_required = true)]
@@ -140,7 +119,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // PROJECT MANAGEMENT
     // ─────────────────────────────────────────────────────────────────────
-
     /// Initialize a new TDT project
     Init(InitArgs),
 
@@ -153,7 +131,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // REQUIREMENTS & RISKS
     // ─────────────────────────────────────────────────────────────────────
-
     /// Requirement management (new, list, show, edit)
     #[command(subcommand)]
     Req(ReqCommands),
@@ -165,7 +142,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // VERIFICATION & VALIDATION
     // ─────────────────────────────────────────────────────────────────────
-
     /// Test protocol management (new, list, show, edit)
     #[command(subcommand)]
     Test(TestCommands),
@@ -177,7 +153,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // BILL OF MATERIALS
     // ─────────────────────────────────────────────────────────────────────
-
     /// Component management (new, list, show, edit)
     #[command(subcommand)]
     Cmp(CmpCommands),
@@ -189,7 +164,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // PROCUREMENT
     // ─────────────────────────────────────────────────────────────────────
-
     /// Quote management (new, list, show, edit)
     #[command(subcommand)]
     Quote(QuoteCommands),
@@ -201,7 +175,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // MANUFACTURING
     // ─────────────────────────────────────────────────────────────────────
-
     /// Manufacturing process management (new, list, show, edit)
     #[command(subcommand)]
     Proc(ProcCommands),
@@ -217,7 +190,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // QUALITY
     // ─────────────────────────────────────────────────────────────────────
-
     /// Non-conformance report management (new, list, show, edit)
     #[command(subcommand)]
     Ncr(NcrCommands),
@@ -229,7 +201,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // TOLERANCE ANALYSIS
     // ─────────────────────────────────────────────────────────────────────
-
     /// Feature management - dimensional features on components
     #[command(subcommand)]
     Feat(FeatCommands),
@@ -245,7 +216,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // TRACEABILITY & REPORTS
     // ─────────────────────────────────────────────────────────────────────
-
     /// Manage links between entities (add, remove, show)
     #[command(subcommand)]
     Link(LinkCommands),
@@ -264,7 +234,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // VERSION CONTROL
     // ─────────────────────────────────────────────────────────────────────
-
     /// View git history for an entity
     History(HistoryArgs),
 
@@ -281,7 +250,6 @@ pub enum Commands {
     // ─────────────────────────────────────────────────────────────────────
     // UTILITIES
     // ─────────────────────────────────────────────────────────────────────
-
     /// Import entities from CSV files
     Import(ImportArgs),
 

@@ -16,18 +16,18 @@ use crate::core::identity::EntityPrefix;
 /// Link types for entity relationships
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkType {
-    TracesTo,      // Requirement traces to another requirement
-    TracesFrom,    // Reverse of traces_to
-    Verifies,      // Test verifies a requirement
-    VerifiedBy,    // Reverse of verifies
-    Mitigates,     // Control/CAPA mitigates a risk
-    MitigatedBy,   // Reverse of mitigates
-    References,    // Generic reference to another entity
-    ReferencedBy,  // Reverse of references
-    Contains,      // Assembly contains component
-    ContainedIn,   // Reverse of contains
-    QuotesFor,     // Quote is for a component
-    QuotedBy,      // Reverse of quotes_for
+    TracesTo,     // Requirement traces to another requirement
+    TracesFrom,   // Reverse of traces_to
+    Verifies,     // Test verifies a requirement
+    VerifiedBy,   // Reverse of verifies
+    Mitigates,    // Control/CAPA mitigates a risk
+    MitigatedBy,  // Reverse of mitigates
+    References,   // Generic reference to another entity
+    ReferencedBy, // Reverse of references
+    Contains,     // Assembly contains component
+    ContainedIn,  // Reverse of contains
+    QuotesFor,    // Quote is for a component
+    QuotedBy,     // Reverse of quotes_for
 }
 
 impl LinkType {

@@ -66,10 +66,7 @@ pub fn run(args: InitArgs) -> Result<()> {
                 "  {} Create your first requirement",
                 style("tdt req new").yellow()
             );
-            println!(
-                "  {} List all requirements",
-                style("tdt req list").yellow()
-            );
+            println!("  {} List all requirements", style("tdt req list").yellow());
             println!(
                 "  {} Validate project files",
                 style("tdt validate").yellow()
@@ -83,10 +80,7 @@ pub fn run(args: InitArgs) -> Result<()> {
                 style(path.display()).cyan()
             );
             println!();
-            println!(
-                "Use {} to reinitialize",
-                style("tdt init --force").yellow()
-            );
+            println!("Use {} to reinitialize", style("tdt init --force").yellow());
             Ok(())
         }
         Err(e) => Err(miette::miette!("{}", e)),
@@ -96,10 +90,7 @@ pub fn run(args: InitArgs) -> Result<()> {
 fn init_git(path: &Path) -> Result<()> {
     let git_dir = path.join(".git");
     if git_dir.exists() {
-        println!(
-            "{} Git repository already exists",
-            style("✓").green()
-        );
+        println!("{} Git repository already exists", style("✓").green());
         return Ok(());
     }
 
@@ -110,10 +101,7 @@ fn init_git(path: &Path) -> Result<()> {
         .into_diagnostic()?;
 
     if output.status.success() {
-        println!(
-            "{} Initialized git repository",
-            style("✓").green()
-        );
+        println!("{} Initialized git repository", style("✓").green());
 
         // Create .gitignore
         let gitignore_path = path.join(".gitignore");

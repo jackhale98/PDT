@@ -168,12 +168,7 @@ impl Entity for Requirement {
 
 impl Requirement {
     /// Create a new requirement with the given parameters
-    pub fn new(
-        req_type: RequirementType,
-        title: String,
-        text: String,
-        author: String,
-    ) -> Self {
+    pub fn new(req_type: RequirementType, title: String, text: String, author: String) -> Self {
         Self {
             id: EntityId::new(crate::core::EntityPrefix::Req),
             req_type,

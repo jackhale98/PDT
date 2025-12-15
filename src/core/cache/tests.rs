@@ -727,7 +727,10 @@ created: 2024-01-15T10:30:00Z
 
     // Check forward link
     let links = cache.get_links_from("REQ-01A");
-    assert!(!links.is_empty(), "Expected links from REQ-01A to be cached");
+    assert!(
+        !links.is_empty(),
+        "Expected links from REQ-01A to be cached"
+    );
     assert!(links.iter().any(|l| l.target_id == "REQ-02B"));
 }
 
@@ -735,9 +738,7 @@ created: 2024-01-15T10:30:00Z
 fn test_link_removal_on_entity_delete() {
     let (_tmp, project) = create_test_project();
 
-    let file_path = project
-        .root()
-        .join("requirements/inputs/REQ-01A.tdt.yaml");
+    let file_path = project.root().join("requirements/inputs/REQ-01A.tdt.yaml");
 
     write_test_entity(
         &project,
@@ -757,7 +758,10 @@ traces_to:
 
     // Verify link exists
     let links = cache.get_links_from("REQ-01A");
-    assert!(!links.is_empty(), "Expected links from REQ-01A after initial sync");
+    assert!(
+        !links.is_empty(),
+        "Expected links from REQ-01A after initial sync"
+    );
 
     // Delete the entity file
     fs::remove_file(&file_path).unwrap();
@@ -1094,7 +1098,7 @@ created: 2024-01-15T10:30:00Z
 traces_to:
   - REQ-0003C
 "#
-            .trim_start(),
+        .trim_start(),
     )
     .unwrap();
 

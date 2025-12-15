@@ -272,9 +272,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             };
 
             // Resolve test ID filter if provided
-            let test_filter = args.test.as_ref().map(|t| {
-                short_ids.resolve(t).unwrap_or_else(|| t.clone())
-            });
+            let test_filter = args
+                .test
+                .as_ref()
+                .map(|t| short_ids.resolve(t).unwrap_or_else(|| t.clone()));
 
             let mut cached_results = cache.list_results(
                 status_filter,
@@ -304,7 +305,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             if let Some(ref exec_filter) = args.executed_by {
                 let exec_lower = exec_filter.to_lowercase();
                 cached_results.retain(|r| {
-                    r.executed_by.as_ref().map_or(false, |e| e.to_lowercase().contains(&exec_lower))
+                    r.executed_by
+                        .as_ref()
+                        .map_or(false, |e| e.to_lowercase().contains(&exec_lower))
                 });
             }
 
@@ -322,10 +325,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
             // Sort
             match args.sort {
-                ListColumn::Short | ListColumn::Id => cached_results.sort_by(|a, b| a.id.cmp(&b.id)),
+                ListColumn::Short | ListColumn::Id => {
+                    cached_results.sort_by(|a, b| a.id.cmp(&b.id))
+                }
                 ListColumn::Title => cached_results.sort_by(|a, b| a.title.cmp(&b.title)),
                 ListColumn::Test => cached_results.sort_by(|a, b| {
-                    a.test_id.as_deref().unwrap_or("").cmp(b.test_id.as_deref().unwrap_or(""))
+                    a.test_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .cmp(b.test_id.as_deref().unwrap_or(""))
                 }),
                 ListColumn::Verdict => cached_results.sort_by(|a, b| {
                     let verdict_order = |v: Option<&str>| match v {
@@ -413,7 +421,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             VerdictFilter::Conditional => r.verdict == Verdict::Conditional,
             VerdictFilter::Incomplete => r.verdict == Verdict::Incomplete,
             VerdictFilter::NotApplicable => r.verdict == Verdict::NotApplicable,
-            VerdictFilter::Issues => matches!(r.verdict, Verdict::Fail | Verdict::Conditional | Verdict::Incomplete),
+            VerdictFilter::Issues => matches!(
+                r.verdict,
+                Verdict::Fail | Verdict::Conditional | Verdict::Incomplete
+            ),
             VerdictFilter::All => true,
         };
 
@@ -436,12 +447,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
         // Category filter (case-insensitive)
         let category_match = args.category.as_ref().map_or(true, |cat| {
-            r.category.as_ref().map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+            r.category
+                .as_ref()
+                .map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
         });
 
         // Tag filter (case-insensitive)
         let tag_match = args.tag.as_ref().map_or(true, |tag| {
-            r.tags.iter().any(|tg| tg.to_lowercase() == tag.to_lowercase())
+            r.tags
+                .iter()
+                .any(|tg| tg.to_lowercase() == tag.to_lowercase())
         });
 
         // Executed by filter
@@ -457,8 +472,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Search filter
         let search_match = args.search.as_ref().map_or(true, |search| {
             let search_lower = search.to_lowercase();
-            r.title.as_ref().map_or(false, |t| t.to_lowercase().contains(&search_lower))
-                || r.notes.as_ref().map_or(false, |n| n.to_lowercase().contains(&search_lower))
+            r.title
+                .as_ref()
+                .map_or(false, |t| t.to_lowercase().contains(&search_lower))
+                || r.notes
+                    .as_ref()
+                    .map_or(false, |n| n.to_lowercase().contains(&search_lower))
         });
 
         // Failures filter
@@ -473,9 +492,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             r.executed_date >= cutoff
         });
 
-        verdict_match && status_match && test_match && category_match && tag_match
-            && executed_by_match && author_match && search_match
-            && failures_match && deviations_match && recent_match
+        verdict_match
+            && status_match
+            && test_match
+            && category_match
+            && tag_match
+            && executed_by_match
+            && author_match
+            && search_match
+            && failures_match
+            && deviations_match
+            && recent_match
     });
 
     if results.is_empty() {
@@ -493,11 +520,18 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     // Sort by specified column
     match args.sort {
-        ListColumn::Short | ListColumn::Id => results.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Short | ListColumn::Id => {
+            results.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string()))
+        }
         ListColumn::Title => results.sort_by(|a, b| {
-            a.title.as_deref().unwrap_or("").cmp(b.title.as_deref().unwrap_or(""))
+            a.title
+                .as_deref()
+                .unwrap_or("")
+                .cmp(b.title.as_deref().unwrap_or(""))
         }),
-        ListColumn::Test => results.sort_by(|a, b| a.test_id.to_string().cmp(&b.test_id.to_string())),
+        ListColumn::Test => {
+            results.sort_by(|a, b| a.test_id.to_string().cmp(&b.test_id.to_string()))
+        }
         ListColumn::Verdict => results.sort_by(|a, b| {
             let verdict_order = |v: &Verdict| match v {
                 Verdict::Fail => 0,
@@ -508,7 +542,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             };
             verdict_order(&a.verdict).cmp(&verdict_order(&b.verdict))
         }),
-        ListColumn::Status => results.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string())),
+        ListColumn::Status => {
+            results.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string()))
+        }
         ListColumn::Author => results.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => results.sort_by(|a, b| a.created.cmp(&b.created)),
     }
@@ -545,7 +581,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,test_id,verdict,status,executed_by,executed_date");
             for result in &results {
-                let short_id = short_ids.get_short_id(&result.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&result.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{}",
                     short_id,
@@ -579,7 +617,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             // Print header
-            let header_line = header_parts.iter().zip(&widths)
+            let header_line = header_parts
+                .iter()
+                .zip(&widths)
                 .map(|(h, w)| format!("{:<width$}", h, width = w))
                 .collect::<Vec<_>>()
                 .join(" ");
@@ -594,21 +634,29 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
                 for col in &args.columns {
                     let part = match col {
-                        ListColumn::Short => short_ids.get_short_id(&result.id.to_string()).unwrap_or_else(|| "?".to_string()),
+                        ListColumn::Short => short_ids
+                            .get_short_id(&result.id.to_string())
+                            .unwrap_or_else(|| "?".to_string()),
                         ListColumn::Id => format_short_id(&result.id),
                         ListColumn::Title => {
                             let title = result.title.as_deref().unwrap_or("Untitled");
                             truncate_str(title, 23)
-                        },
-                        ListColumn::Test => short_ids.get_short_id(&result.test_id.to_string()).unwrap_or_else(|| format_short_id(&result.test_id)),
-                        ListColumn::Verdict => {
-                            match result.verdict {
-                                Verdict::Pass => style(result.verdict.to_string()).green().to_string(),
-                                Verdict::Fail => style(result.verdict.to_string()).red().bold().to_string(),
-                                Verdict::Conditional => style(result.verdict.to_string()).yellow().to_string(),
-                                Verdict::Incomplete => style(result.verdict.to_string()).yellow().to_string(),
-                                Verdict::NotApplicable => style("n/a").dim().to_string(),
+                        }
+                        ListColumn::Test => short_ids
+                            .get_short_id(&result.test_id.to_string())
+                            .unwrap_or_else(|| format_short_id(&result.test_id)),
+                        ListColumn::Verdict => match result.verdict {
+                            Verdict::Pass => style(result.verdict.to_string()).green().to_string(),
+                            Verdict::Fail => {
+                                style(result.verdict.to_string()).red().bold().to_string()
                             }
+                            Verdict::Conditional => {
+                                style(result.verdict.to_string()).yellow().to_string()
+                            }
+                            Verdict::Incomplete => {
+                                style(result.verdict.to_string()).yellow().to_string()
+                            }
+                            Verdict::NotApplicable => style("n/a").dim().to_string(),
                         },
                         ListColumn::Status => result.status.to_string(),
                         ListColumn::Author => truncate_str(&result.author, 13),
@@ -618,7 +666,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 }
 
                 // Print row
-                let row_line = row_parts.iter().zip(&widths)
+                let row_line = row_parts
+                    .iter()
+                    .zip(&widths)
                     .map(|(p, w)| format!("{:<width$}", p, width = w))
                     .collect::<Vec<_>>()
                     .join(" ");
@@ -626,10 +676,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             println!();
-            println!(
-                "{} result(s) found.",
-                style(results.len()).cyan()
-            );
+            println!("{} result(s) found.", style(results.len()).cyan());
         }
         OutputFormat::Id => {
             for result in &results {
@@ -640,7 +687,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Test | Verdict | Status | Executed By | Date |");
             println!("|---|---|---|---|---|---|---|");
             for result in &results {
-                let short_id = short_ids.get_short_id(&result.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&result.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -716,7 +765,9 @@ fn output_cached_results(
             }
 
             // Print header
-            let header_line = header_parts.iter().zip(&widths)
+            let header_line = header_parts
+                .iter()
+                .zip(&widths)
                 .map(|(h, w)| format!("{:<width$}", h, width = w))
                 .collect::<Vec<_>>()
                 .join(" ");
@@ -730,18 +781,22 @@ fn output_cached_results(
 
                 for col in &args.columns {
                     let part = match col {
-                        ListColumn::Short => short_ids.get_short_id(&result.id).unwrap_or_else(|| "?".to_string()),
+                        ListColumn::Short => short_ids
+                            .get_short_id(&result.id)
+                            .unwrap_or_else(|| "?".to_string()),
                         ListColumn::Id => truncate_str(&result.id, 15),
                         ListColumn::Title => truncate_str(&result.title, 23),
-                        ListColumn::Test => {
-                            result.test_id.as_ref()
-                                .and_then(|t| short_ids.get_short_id(t))
-                                .unwrap_or_else(|| {
-                                    result.test_id.as_ref()
-                                        .map(|t| truncate_str(t, 6))
-                                        .unwrap_or_else(|| "-".to_string())
-                                })
-                        },
+                        ListColumn::Test => result
+                            .test_id
+                            .as_ref()
+                            .and_then(|t| short_ids.get_short_id(t))
+                            .unwrap_or_else(|| {
+                                result
+                                    .test_id
+                                    .as_ref()
+                                    .map(|t| truncate_str(t, 6))
+                                    .unwrap_or_else(|| "-".to_string())
+                            }),
                         ListColumn::Verdict => {
                             let v = result.verdict.as_deref().unwrap_or("");
                             match v {
@@ -751,7 +806,7 @@ fn output_cached_results(
                                 "not_applicable" => style("n/a").dim().to_string(),
                                 _ => v.to_string(),
                             }
-                        },
+                        }
                         ListColumn::Status => result.status.clone(),
                         ListColumn::Author => truncate_str(&result.author, 13),
                         ListColumn::Created => result.created.format("%Y-%m-%d").to_string(),
@@ -760,7 +815,9 @@ fn output_cached_results(
                 }
 
                 // Print row
-                let row_line = row_parts.iter().zip(&widths)
+                let row_line = row_parts
+                    .iter()
+                    .zip(&widths)
                     .map(|(p, w)| format!("{:<width$}", p, width = w))
                     .collect::<Vec<_>>()
                     .join(" ");
@@ -768,10 +825,7 @@ fn output_cached_results(
             }
 
             println!();
-            println!(
-                "{} result(s) found.",
-                style(results.len()).cyan()
-            );
+            println!("{} result(s) found.", style(results.len()).cyan());
         }
         OutputFormat::Id => {
             for result in results {
@@ -835,9 +889,7 @@ fn run_new(args: NewArgs) -> Result<()> {
             })
             .unwrap_or(Verdict::Pass);
 
-        let title = result
-            .get_string("title")
-            .map(String::from);
+        let title = result.get_string("title").map(String::from);
 
         let category = result
             .get_string("category")
@@ -855,8 +907,11 @@ fn run_new(args: NewArgs) -> Result<()> {
         let test_id = if let Some(test_query) = &args.test {
             // Try to resolve the test ID
             let short_ids = ShortIdIndex::load(&project);
-            let resolved = short_ids.resolve(test_query).unwrap_or_else(|| test_query.clone());
-            EntityId::parse(&resolved).map_err(|e| miette::miette!("Invalid test ID '{}': {}", test_query, e))?
+            let resolved = short_ids
+                .resolve(test_query)
+                .unwrap_or_else(|| test_query.clone());
+            EntityId::parse(&resolved)
+                .map_err(|e| miette::miette!("Invalid test ID '{}': {}", test_query, e))?
         } else {
             return Err(miette::miette!("Test ID is required. Use --test <TEST_ID>"));
         };
@@ -1042,10 +1097,14 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             if !result.step_results.is_empty() {
                 println!();
                 println!("{}", style("Step Results:").bold());
-                let pass_count = result.step_results.iter()
+                let pass_count = result
+                    .step_results
+                    .iter()
                     .filter(|s| s.result == crate::entities::result::StepResult::Pass)
                     .count();
-                let fail_count = result.step_results.iter()
+                let fail_count = result
+                    .step_results
+                    .iter()
                     .filter(|s| s.result == crate::entities::result::StepResult::Fail)
                     .count();
                 let total = result.step_results.len();
@@ -1073,7 +1132,10 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         "  {}. {}{}",
                         i + 1,
                         failure.description,
-                        failure.step.map(|s| format!(" (step {})", s)).unwrap_or_default()
+                        failure
+                            .step
+                            .map(|s| format!(" (step {})", s))
+                            .unwrap_or_default()
                     );
                     if let Some(ref cause) = failure.root_cause {
                         println!("     {}: {}", style("Cause").dim(), cause);
@@ -1131,10 +1193,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
         .join(format!("{}/results/{}.tdt.yaml", test_type, result.id));
 
     if !file_path.exists() {
-        return Err(miette::miette!(
-            "File not found: {}",
-            file_path.display()
-        ));
+        return Err(miette::miette!("File not found: {}", file_path.display()));
     }
 
     println!(
@@ -1152,7 +1211,9 @@ fn run_edit(args: EditArgs) -> Result<()> {
 fn find_result(project: &Project, id_query: &str) -> Result<TestResult> {
     // First, try to resolve short ID (@N) to full ID
     let short_ids = ShortIdIndex::load(project);
-    let resolved_query = short_ids.resolve(id_query).unwrap_or_else(|| id_query.to_string());
+    let resolved_query = short_ids
+        .resolve(id_query)
+        .unwrap_or_else(|| id_query.to_string());
 
     let mut matches: Vec<(TestResult, std::path::PathBuf)> = Vec::new();
 
@@ -1176,9 +1237,14 @@ fn find_result(project: &Project, id_query: &str) -> Result<TestResult> {
                     matches.push((result, entry.path().to_path_buf()));
                 }
                 // Also check title for fuzzy match (only if not a short ID lookup)
-                else if !id_query.starts_with('@') && !id_query.chars().all(|c| c.is_ascii_digit()) {
+                else if !id_query.starts_with('@')
+                    && !id_query.chars().all(|c| c.is_ascii_digit())
+                {
                     if let Some(ref title) = result.title {
-                        if title.to_lowercase().contains(&resolved_query.to_lowercase()) {
+                        if title
+                            .to_lowercase()
+                            .contains(&resolved_query.to_lowercase())
+                        {
                             matches.push((result, entry.path().to_path_buf()));
                         }
                     }
@@ -1188,16 +1254,10 @@ fn find_result(project: &Project, id_query: &str) -> Result<TestResult> {
     }
 
     match matches.len() {
-        0 => Err(miette::miette!(
-            "No result found matching '{}'",
-            id_query
-        )),
+        0 => Err(miette::miette!("No result found matching '{}'", id_query)),
         1 => Ok(matches.remove(0).0),
         _ => {
-            println!(
-                "{} Multiple matches found:",
-                style("!").yellow()
-            );
+            println!("{} Multiple matches found:", style("!").yellow());
             for (result, _path) in &matches {
                 println!(
                     "  {} - {}",
@@ -1219,18 +1279,19 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve test filter if provided
-    let test_filter = args.test.as_ref().map(|t| {
-        short_ids.resolve(t).unwrap_or_else(|| t.clone())
-    });
+    let test_filter = args
+        .test
+        .as_ref()
+        .map(|t| short_ids.resolve(t).unwrap_or_else(|| t.clone()));
 
     // Get all results from cache
     let results = cache.list_results(
-        None,                      // status
-        test_filter.as_deref(),    // test_id
-        None,                      // verdict
-        None,                      // author
-        None,                      // search
-        None,                      // limit
+        None,                   // status
+        test_filter.as_deref(), // test_id
+        None,                   // verdict
+        None,                   // author
+        None,                   // search
+        None,                   // limit
     );
 
     if results.is_empty() {
@@ -1240,7 +1301,10 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
             _ => {
                 println!("No test results found.");
                 println!();
-                println!("Create one with: {}", style("tdt rslt new --test <TEST_ID>").yellow());
+                println!(
+                    "Create one with: {}",
+                    style("tdt rslt new --test <TEST_ID>").yellow()
+                );
             }
         }
         return Ok(());
@@ -1331,7 +1395,10 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                     "percent": coverage.coverage_percent
                 }
             });
-            println!("{}", serde_json::to_string_pretty(&summary).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&summary).unwrap_or_default()
+            );
         }
         OutputFormat::Yaml => {
             let summary = serde_json::json!({
@@ -1363,7 +1430,8 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", style("─".repeat(50)).dim());
 
             if let Some(ref test_id) = args.test {
-                let display_id = short_ids.get_short_id(&test_filter.clone().unwrap_or_default())
+                let display_id = short_ids
+                    .get_short_id(&test_filter.clone().unwrap_or_default())
                     .unwrap_or_else(|| test_id.clone());
                 println!("Filtered by test: {}", style(display_id).yellow());
                 println!();
@@ -1373,10 +1441,26 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
             println!();
 
             // Verdict breakdown with colors
-            let pass_pct = if total > 0 { (pass_count as f64 / total as f64) * 100.0 } else { 0.0 };
-            let fail_pct = if total > 0 { (fail_count as f64 / total as f64) * 100.0 } else { 0.0 };
-            let cond_pct = if total > 0 { (conditional_count as f64 / total as f64) * 100.0 } else { 0.0 };
-            let inc_pct = if total > 0 { (incomplete_count as f64 / total as f64) * 100.0 } else { 0.0 };
+            let pass_pct = if total > 0 {
+                (pass_count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            let fail_pct = if total > 0 {
+                (fail_count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            let cond_pct = if total > 0 {
+                (conditional_count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
+            let inc_pct = if total > 0 {
+                (incomplete_count as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            };
 
             println!(
                 "  {}: {:>4} ({:>5.1}%)",
@@ -1425,13 +1509,15 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{}", style("Recent Failures (last 30 days):").bold().red());
                 // Sort by date descending
                 let mut sorted_failures = recent_failures.clone();
-                sorted_failures.sort_by(|a, b| {
-                    b.executed_date.as_ref().cmp(&a.executed_date.as_ref())
-                });
+                sorted_failures
+                    .sort_by(|a, b| b.executed_date.as_ref().cmp(&a.executed_date.as_ref()));
                 for failure in sorted_failures.iter().take(5) {
-                    let short_id = short_ids.get_short_id(&failure.id)
+                    let short_id = short_ids
+                        .get_short_id(&failure.id)
                         .unwrap_or_else(|| truncate_str(&failure.id, 8));
-                    let test_short = failure.test_id.as_ref()
+                    let test_short = failure
+                        .test_id
+                        .as_ref()
                         .and_then(|t| short_ids.get_short_id(t))
                         .unwrap_or_else(|| "?".to_string());
                     println!(

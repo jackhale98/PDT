@@ -375,8 +375,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             make_buy_filter,
             category_filter,
             args.author.as_deref(),
-            None,  // No search
-            None,  // No limit yet
+            None, // No search
+            None, // No limit yet
         );
 
         // Apply post-filters
@@ -505,9 +505,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Long lead time filter - check if any supplier has lead_time_days > threshold
         .filter(|c| {
             args.long_lead.map_or(true, |threshold| {
-                c.suppliers.iter().any(|s| {
-                    s.lead_time_days.map_or(false, |days| days > threshold)
-                })
+                c.suppliers
+                    .iter()
+                    .any(|s| s.lead_time_days.map_or(false, |days| days > threshold))
             })
         })
         // Single source filter - exactly one supplier
@@ -522,9 +522,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         .filter(|c| {
             if args.no_quote {
                 let cid_str = c.id.to_string();
-                !quotes.iter().any(|q| {
-                    q.component.as_ref().map_or(false, |qc| qc == &cid_str)
-                })
+                !quotes
+                    .iter()
+                    .any(|q| q.component.as_ref().map_or(false, |qc| qc == &cid_str))
             } else {
                 true
             }
@@ -544,12 +544,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         ListColumn::PartNumber => components.sort_by(|a, b| a.part_number.cmp(&b.part_number)),
         ListColumn::Revision => components.sort_by(|a, b| a.revision.cmp(&b.revision)),
         ListColumn::Title => components.sort_by(|a, b| a.title.cmp(&b.title)),
-        ListColumn::MakeBuy => components.sort_by(|a, b| {
-            format!("{:?}", a.make_buy).cmp(&format!("{:?}", b.make_buy))
-        }),
-        ListColumn::Category => components.sort_by(|a, b| {
-            format!("{:?}", a.category).cmp(&format!("{:?}", b.category))
-        }),
+        ListColumn::MakeBuy => {
+            components.sort_by(|a, b| format!("{:?}", a.make_buy).cmp(&format!("{:?}", b.make_buy)))
+        }
+        ListColumn::Category => {
+            components.sort_by(|a, b| format!("{:?}", a.category).cmp(&format!("{:?}", b.category)))
+        }
         ListColumn::Status => {
             components.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
@@ -601,7 +601,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,part_number,revision,title,make_buy,category,status");
             for cmp in &components {
-                let short_id = short_ids.get_short_id(&cmp.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&cmp.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{},{}",
                     short_id,
@@ -636,19 +638,28 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "-".repeat(100));
 
             for cmp in &components {
-                let short_id = short_ids.get_short_id(&cmp.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&cmp.id.to_string())
+                    .unwrap_or_default();
                 let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
                 for col in &args.columns {
                     let value = match col {
                         ListColumn::Id => format!("{:<17}", format_short_id(&cmp.id)),
-                        ListColumn::PartNumber => format!("{:<12}", truncate_str(&cmp.part_number, 10)),
-                        ListColumn::Revision => format!("{:<8}", cmp.revision.as_deref().unwrap_or("-")),
+                        ListColumn::PartNumber => {
+                            format!("{:<12}", truncate_str(&cmp.part_number, 10))
+                        }
+                        ListColumn::Revision => {
+                            format!("{:<8}", cmp.revision.as_deref().unwrap_or("-"))
+                        }
                         ListColumn::Title => format!("{:<30}", truncate_str(&cmp.title, 28)),
-                        ListColumn::MakeBuy => format!("{:<6}", match cmp.make_buy {
-                            MakeBuy::Make => "make",
-                            MakeBuy::Buy => "buy",
-                        }),
+                        ListColumn::MakeBuy => format!(
+                            "{:<6}",
+                            match cmp.make_buy {
+                                MakeBuy::Make => "make",
+                                MakeBuy::Buy => "buy",
+                            }
+                        ),
                         ListColumn::Category => format!("{:<12}", cmp.category),
                         ListColumn::Status => format!("{:<10}", cmp.status),
                         ListColumn::Author => format!("{:<16}", truncate_str(&cmp.author, 14)),
@@ -675,7 +686,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Part # | Title | M/B | Category | Status |");
             println!("|---|---|---|---|---|---|---|");
             for cmp in &components {
-                let short_id = short_ids.get_short_id(&cmp.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&cmp.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -745,11 +758,20 @@ fn output_cached_components(
                 for col in &args.columns {
                     let value = match col {
                         ListColumn::Id => format!("{:<17}", truncate_str(&cmp.id, 15)),
-                        ListColumn::PartNumber => format!("{:<12}", truncate_str(cmp.part_number.as_deref().unwrap_or(""), 10)),
-                        ListColumn::Revision => format!("{:<8}", cmp.revision.as_deref().unwrap_or("-")),
+                        ListColumn::PartNumber => format!(
+                            "{:<12}",
+                            truncate_str(cmp.part_number.as_deref().unwrap_or(""), 10)
+                        ),
+                        ListColumn::Revision => {
+                            format!("{:<8}", cmp.revision.as_deref().unwrap_or("-"))
+                        }
                         ListColumn::Title => format!("{:<30}", truncate_str(&cmp.title, 28)),
-                        ListColumn::MakeBuy => format!("{:<6}", cmp.make_buy.as_deref().unwrap_or("buy")),
-                        ListColumn::Category => format!("{:<12}", cmp.category.as_deref().unwrap_or("")),
+                        ListColumn::MakeBuy => {
+                            format!("{:<6}", cmp.make_buy.as_deref().unwrap_or("buy"))
+                        }
+                        ListColumn::Category => {
+                            format!("{:<12}", cmp.category.as_deref().unwrap_or(""))
+                        }
                         ListColumn::Status => format!("{:<10}", cmp.status),
                         ListColumn::Author => format!("{:<16}", truncate_str(&cmp.author, 14)),
                         ListColumn::Created => format!("{:<12}", cmp.created.format("%Y-%m-%d")),
@@ -929,7 +951,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No component found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No component found matching '{}'", args.id))?;
 
     // Read and parse component
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -954,11 +977,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&cmp.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&cmp.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&cmp.title).yellow());
             if !cmp.part_number.is_empty() {
                 println!("{}: {}", style("Part Number").bold(), cmp.part_number);
             }
@@ -1089,9 +1108,14 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No component found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No component found matching '{}'", args.id))?;
 
-    println!("Opening {} in {}...", style(path.display()).cyan(), style(config.editor()).yellow());
+    println!(
+        "Opening {} in {}...",
+        style(path.display()).cyan(),
+        style(config.editor()).yellow()
+    );
 
     config.run_editor(&path).into_diagnostic()?;
 
@@ -1110,7 +1134,9 @@ fn load_all_quotes(project: &Project) -> Vec<crate::entities::quote::Quote> {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(quote) = crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path()) {
+            if let Ok(quote) =
+                crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path())
+            {
                 quotes.push(quote);
             }
         }
@@ -1181,7 +1207,8 @@ fn run_set_quote(args: SetQuoteArgs) -> Result<()> {
         }
     }
 
-    let mut component = component.ok_or_else(|| miette::miette!("Component '{}' not found", args.component))?;
+    let mut component =
+        component.ok_or_else(|| miette::miette!("Component '{}' not found", args.component))?;
     let path = found_path.unwrap();
 
     // Update the selected_quote field
@@ -1214,8 +1241,17 @@ fn run_set_quote(args: SetQuoteArgs) -> Result<()> {
     if !quote.price_breaks.is_empty() {
         println!("   Price breaks:");
         for pb in &quote.price_breaks {
-            let lead = pb.lead_time_days.map(|d| format!(" ({}d)", d)).unwrap_or_default();
-            println!("     {} qty {} → ${:.2}{}", style("•").dim(), pb.min_qty, pb.unit_price, lead);
+            let lead = pb
+                .lead_time_days
+                .map(|d| format!(" ({}d)", d))
+                .unwrap_or_default();
+            println!(
+                "     {} qty {} → ${:.2}{}",
+                style("•").dim(),
+                pb.min_qty,
+                pb.unit_price,
+                lead
+            );
         }
     }
 
@@ -1260,7 +1296,8 @@ fn run_clear_quote(args: ClearQuoteArgs) -> Result<()> {
         }
     }
 
-    let mut component = component.ok_or_else(|| miette::miette!("Component '{}' not found", args.component))?;
+    let mut component =
+        component.ok_or_else(|| miette::miette!("Component '{}' not found", args.component))?;
     let path = found_path.unwrap();
 
     let cmp_display = short_ids
@@ -1296,7 +1333,10 @@ fn run_clear_quote(args: ClearQuoteArgs) -> Result<()> {
     if let Some(cost) = component.unit_cost {
         println!("   Will use manual unit_cost: ${:.2}", cost);
     } else {
-        println!("   {}", style("Note: No unit_cost set. BOM costing will show $0.00").yellow());
+        println!(
+            "   {}",
+            style("Note: No unit_cost set. BOM costing will show $0.00").yellow()
+        );
     }
 
     Ok(())
@@ -1319,15 +1359,17 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve component filter if provided
-    let component_filter = args.component.as_ref().map(|c| {
-        short_ids.resolve(c).unwrap_or_else(|| c.clone())
-    });
+    let component_filter = args
+        .component
+        .as_ref()
+        .map(|c| short_ids.resolve(c).unwrap_or_else(|| c.clone()));
 
     let mut interactions: Vec<ComponentInteraction> = Vec::new();
 
     // Build feature-to-component lookup from feature files
     let feature_dir = project.root().join("tolerances/features");
-    let mut feature_to_component: std::collections::HashMap<String, (String, String)> = std::collections::HashMap::new();
+    let mut feature_to_component: std::collections::HashMap<String, (String, String)> =
+        std::collections::HashMap::new();
 
     if feature_dir.exists() {
         for entry in fs::read_dir(&feature_dir).into_diagnostic()?.flatten() {
@@ -1340,7 +1382,10 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                         let comp_name = feat.get("title").and_then(|v| v.as_str()).unwrap_or("");
 
                         if !feat_id.is_empty() && !comp_id.is_empty() {
-                            feature_to_component.insert(feat_id.to_string(), (comp_id.to_string(), comp_name.to_string()));
+                            feature_to_component.insert(
+                                feat_id.to_string(),
+                                (comp_id.to_string(), comp_name.to_string()),
+                            );
                         }
                     }
                 }
@@ -1349,7 +1394,8 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Load component names for display
-    let mut component_names: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut component_names: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
     let cmp_dir = project.root().join("bom/components");
     if cmp_dir.exists() {
         for entry in fs::read_dir(&cmp_dir).into_diagnostic()?.flatten() {
@@ -1369,7 +1415,9 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Load mates to find component interactions
-    if args.interaction_type == InteractionType::All || args.interaction_type == InteractionType::Mate {
+    if args.interaction_type == InteractionType::All
+        || args.interaction_type == InteractionType::Mate
+    {
         let mate_dir = project.root().join("tolerances/mates");
         if mate_dir.exists() {
             for entry in fs::read_dir(&mate_dir).into_diagnostic()?.flatten() {
@@ -1378,26 +1426,44 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(mate) = serde_yml::from_str::<serde_json::Value>(&content) {
                             let mate_id = mate.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                            let mate_title = mate.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                            let mate_title =
+                                mate.get("title").and_then(|v| v.as_str()).unwrap_or("");
 
                             // Get component IDs from mate - handle three formats:
                             // 1. Simple: feature_a: "FEAT-xxx" (string)
                             // 2. Object with component: feature_a: { id: "...", component_id: "CMP-xxx", ... }
                             // 3. Object without component: feature_a: { id: "FEAT-xxx" } (need lookup)
-                            let (comp_a, comp_a_name) = if let Some(feat_a) = mate.get("feature_a") {
+                            let (comp_a, comp_a_name) = if let Some(feat_a) = mate.get("feature_a")
+                            {
                                 if let Some(feat_id) = feat_a.as_str() {
                                     // Simple format - look up from feature file
-                                    let (cid, _) = feature_to_component.get(feat_id).cloned().unwrap_or_default();
-                                    let cname = component_names.get(&cid).cloned().unwrap_or_default();
+                                    let (cid, _) = feature_to_component
+                                        .get(feat_id)
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    let cname =
+                                        component_names.get(&cid).cloned().unwrap_or_default();
                                     (cid, cname)
-                                } else if let Some(comp_id) = feat_a.get("component_id").and_then(|v| v.as_str()) {
+                                } else if let Some(comp_id) =
+                                    feat_a.get("component_id").and_then(|v| v.as_str())
+                                {
                                     // Object format with component_id
-                                    let cname = feat_a.get("component_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let cname = feat_a
+                                        .get("component_name")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
                                     (comp_id.to_string(), cname)
-                                } else if let Some(feat_id) = feat_a.get("id").and_then(|v| v.as_str()) {
+                                } else if let Some(feat_id) =
+                                    feat_a.get("id").and_then(|v| v.as_str())
+                                {
                                     // Object format with only id - look up from feature file
-                                    let (cid, _) = feature_to_component.get(feat_id).cloned().unwrap_or_default();
-                                    let cname = component_names.get(&cid).cloned().unwrap_or_default();
+                                    let (cid, _) = feature_to_component
+                                        .get(feat_id)
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    let cname =
+                                        component_names.get(&cid).cloned().unwrap_or_default();
                                     (cid, cname)
                                 } else {
                                     (String::new(), String::new())
@@ -1406,20 +1472,37 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                                 (String::new(), String::new())
                             };
 
-                            let (comp_b, comp_b_name) = if let Some(feat_b) = mate.get("feature_b") {
+                            let (comp_b, comp_b_name) = if let Some(feat_b) = mate.get("feature_b")
+                            {
                                 if let Some(feat_id) = feat_b.as_str() {
                                     // Simple format - look up from feature file
-                                    let (cid, _) = feature_to_component.get(feat_id).cloned().unwrap_or_default();
-                                    let cname = component_names.get(&cid).cloned().unwrap_or_default();
+                                    let (cid, _) = feature_to_component
+                                        .get(feat_id)
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    let cname =
+                                        component_names.get(&cid).cloned().unwrap_or_default();
                                     (cid, cname)
-                                } else if let Some(comp_id) = feat_b.get("component_id").and_then(|v| v.as_str()) {
+                                } else if let Some(comp_id) =
+                                    feat_b.get("component_id").and_then(|v| v.as_str())
+                                {
                                     // Object format with component_id
-                                    let cname = feat_b.get("component_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                    let cname = feat_b
+                                        .get("component_name")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
                                     (comp_id.to_string(), cname)
-                                } else if let Some(feat_id) = feat_b.get("id").and_then(|v| v.as_str()) {
+                                } else if let Some(feat_id) =
+                                    feat_b.get("id").and_then(|v| v.as_str())
+                                {
                                     // Object format with only id - look up from feature file
-                                    let (cid, _) = feature_to_component.get(feat_id).cloned().unwrap_or_default();
-                                    let cname = component_names.get(&cid).cloned().unwrap_or_default();
+                                    let (cid, _) = feature_to_component
+                                        .get(feat_id)
+                                        .cloned()
+                                        .unwrap_or_default();
+                                    let cname =
+                                        component_names.get(&cid).cloned().unwrap_or_default();
                                     (cid, cname)
                                 } else {
                                     (String::new(), String::new())
@@ -1454,7 +1537,9 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Load tolerance stackups to find component interactions
-    if args.interaction_type == InteractionType::All || args.interaction_type == InteractionType::Tolerance {
+    if args.interaction_type == InteractionType::All
+        || args.interaction_type == InteractionType::Tolerance
+    {
         let stackup_dir = project.root().join("tolerances/stackups");
         if stackup_dir.exists() {
             for entry in fs::read_dir(&stackup_dir).into_diagnostic()?.flatten() {
@@ -1462,8 +1547,10 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                 if path.extension().map_or(false, |e| e == "yaml") {
                     if let Ok(content) = fs::read_to_string(&path) {
                         if let Ok(stackup) = serde_yml::from_str::<serde_json::Value>(&content) {
-                            let stackup_id = stackup.get("id").and_then(|v| v.as_str()).unwrap_or("");
-                            let stackup_title = stackup.get("title").and_then(|v| v.as_str()).unwrap_or("");
+                            let stackup_id =
+                                stackup.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                            let stackup_title =
+                                stackup.get("title").and_then(|v| v.as_str()).unwrap_or("");
 
                             // Collect all unique components in the stackup
                             // Handle multiple formats:
@@ -1472,26 +1559,46 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                             // 3. feature: { id: "FEAT-xxx" } (object without component, need lookup)
                             let mut stackup_components: Vec<(String, String)> = Vec::new();
 
-                            if let Some(contributors) = stackup.get("contributors").and_then(|c| c.as_array()) {
+                            if let Some(contributors) =
+                                stackup.get("contributors").and_then(|c| c.as_array())
+                            {
                                 for contrib in contributors {
-                                    let (comp_id, comp_name) = if let Some(feat_id) = contrib.get("feature_id").and_then(|v| v.as_str()) {
+                                    let (comp_id, comp_name) = if let Some(feat_id) =
+                                        contrib.get("feature_id").and_then(|v| v.as_str())
+                                    {
                                         // Simple feature_id format - look up from feature file
                                         if let Some((cid, _)) = feature_to_component.get(feat_id) {
-                                            let cname = component_names.get(cid).cloned().unwrap_or_default();
+                                            let cname = component_names
+                                                .get(cid)
+                                                .cloned()
+                                                .unwrap_or_default();
                                             (cid.clone(), cname)
                                         } else {
                                             continue;
                                         }
                                     } else if let Some(feature) = contrib.get("feature") {
                                         // Nested feature object
-                                        if let Some(cid) = feature.get("component_id").and_then(|v| v.as_str()) {
+                                        if let Some(cid) =
+                                            feature.get("component_id").and_then(|v| v.as_str())
+                                        {
                                             // Has component_id directly
-                                            let cname = feature.get("component_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                            let cname = feature
+                                                .get("component_name")
+                                                .and_then(|v| v.as_str())
+                                                .unwrap_or("")
+                                                .to_string();
                                             (cid.to_string(), cname)
-                                        } else if let Some(feat_id) = feature.get("id").and_then(|v| v.as_str()) {
+                                        } else if let Some(feat_id) =
+                                            feature.get("id").and_then(|v| v.as_str())
+                                        {
                                             // Only has feature id - look up component
-                                            if let Some((cid, _)) = feature_to_component.get(feat_id) {
-                                                let cname = component_names.get(cid).cloned().unwrap_or_default();
+                                            if let Some((cid, _)) =
+                                                feature_to_component.get(feat_id)
+                                            {
+                                                let cname = component_names
+                                                    .get(cid)
+                                                    .cloned()
+                                                    .unwrap_or_default();
                                                 (cid.clone(), cname)
                                             } else {
                                                 continue;
@@ -1503,7 +1610,9 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                                         continue;
                                     };
 
-                                    if !comp_id.is_empty() && !stackup_components.iter().any(|(id, _)| id == &comp_id) {
+                                    if !comp_id.is_empty()
+                                        && !stackup_components.iter().any(|(id, _)| id == &comp_id)
+                                    {
                                         stackup_components.push((comp_id, comp_name));
                                     }
                                 }
@@ -1545,28 +1654,46 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
         if args.interaction_type == InteractionType::Mate {
             println!("Tip: Create mates with `tdt mate new` to track component interfaces.");
         } else if args.interaction_type == InteractionType::Tolerance {
-            println!("Tip: Create tolerance stackups with `tdt tol new` to track dimensional chains.");
+            println!(
+                "Tip: Create tolerance stackups with `tdt tol new` to track dimensional chains."
+            );
         }
         return Ok(());
     }
 
     // Collect unique components for matrix
-    let mut components: std::collections::BTreeSet<(String, String)> = std::collections::BTreeSet::new();
+    let mut components: std::collections::BTreeSet<(String, String)> =
+        std::collections::BTreeSet::new();
     for interaction in &interactions {
-        components.insert((interaction.component_a.clone(), interaction.component_a_name.clone()));
-        components.insert((interaction.component_b.clone(), interaction.component_b_name.clone()));
+        components.insert((
+            interaction.component_a.clone(),
+            interaction.component_a_name.clone(),
+        ));
+        components.insert((
+            interaction.component_b.clone(),
+            interaction.component_b_name.clone(),
+        ));
     }
     let components: Vec<(String, String)> = components.into_iter().collect();
 
     // Build interaction matrix: [row_idx][col_idx] -> Vec<interaction_type>
-    let mut matrix: Vec<Vec<Vec<&str>>> = vec![vec![Vec::new(); components.len()]; components.len()];
+    let mut matrix: Vec<Vec<Vec<&str>>> =
+        vec![vec![Vec::new(); components.len()]; components.len()];
 
     for interaction in &interactions {
-        let row = components.iter().position(|(id, _)| id == &interaction.component_a);
-        let col = components.iter().position(|(id, _)| id == &interaction.component_b);
+        let row = components
+            .iter()
+            .position(|(id, _)| id == &interaction.component_a);
+        let col = components
+            .iter()
+            .position(|(id, _)| id == &interaction.component_b);
 
         if let (Some(r), Some(c)) = (row, col) {
-            let itype = if interaction.interaction_type == "mate" { "M" } else { "T" };
+            let itype = if interaction.interaction_type == "mate" {
+                "M"
+            } else {
+                "T"
+            };
             if !matrix[r][c].contains(&itype) {
                 matrix[r][c].push(itype);
             }
@@ -1582,15 +1709,26 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
         // Header row: empty, then component names
         print!("\"Component\"");
         for (id, name) in &components {
-            let short = short_ids.get_short_id(id).unwrap_or_else(|| truncate_str(id, 8));
+            let short = short_ids
+                .get_short_id(id)
+                .unwrap_or_else(|| truncate_str(id, 8));
             print!(",\"{}\"", if name.is_empty() { &short } else { name });
         }
         println!();
 
         // Data rows
         for (row_idx, (row_id, row_name)) in components.iter().enumerate() {
-            let short = short_ids.get_short_id(row_id).unwrap_or_else(|| truncate_str(row_id, 8));
-            print!("\"{}\"", if row_name.is_empty() { &short } else { row_name });
+            let short = short_ids
+                .get_short_id(row_id)
+                .unwrap_or_else(|| truncate_str(row_id, 8));
+            print!(
+                "\"{}\"",
+                if row_name.is_empty() {
+                    &short
+                } else {
+                    row_name
+                }
+            );
 
             for col_idx in 0..components.len() {
                 let cell = &matrix[row_idx][col_idx];
@@ -1632,7 +1770,10 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                 "total_interactions": interactions.len(),
                 "total_components": components.len()
             });
-            println!("{}", serde_json::to_string_pretty(&json_output).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json_output).unwrap_or_default()
+            );
             return Ok(());
         }
         OutputFormat::Yaml => {
@@ -1656,7 +1797,15 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     // Human-readable matrix output
     println!();
     println!("{}", style("Component Interaction Matrix").bold().cyan());
-    println!("{}", style(format!("{} components, {} interactions", components.len(), interactions.len())).dim());
+    println!(
+        "{}",
+        style(format!(
+            "{} components, {} interactions",
+            components.len(),
+            interactions.len()
+        ))
+        .dim()
+    );
     println!();
 
     // For large matrices, suggest CSV
@@ -1669,10 +1818,14 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Calculate column width
-    let max_name_len = components.iter()
+    let max_name_len = components
+        .iter()
         .map(|(id, name)| {
             if name.is_empty() {
-                short_ids.get_short_id(id).unwrap_or_else(|| truncate_str(id, 8)).len()
+                short_ids
+                    .get_short_id(id)
+                    .unwrap_or_else(|| truncate_str(id, 8))
+                    .len()
             } else {
                 name.len().min(12)
             }
@@ -1695,7 +1848,9 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 
     // Data rows
     for (row_idx, (row_id, row_name)) in components.iter().enumerate() {
-        let short = short_ids.get_short_id(row_id).unwrap_or_else(|| truncate_str(row_id, 8));
+        let short = short_ids
+            .get_short_id(row_id)
+            .unwrap_or_else(|| truncate_str(row_id, 8));
         let display_name = if row_name.is_empty() {
             truncate_str(&short, max_name_len)
         } else {
@@ -1732,12 +1887,17 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     println!("{}", style("Legend:").bold());
     println!("  {} = Mate interaction", style("M").cyan());
     println!("  {} = Tolerance stackup", style("T").yellow());
-    println!("  {} = Both mate and tolerance", style("MT").magenta().bold());
+    println!(
+        "  {} = Both mate and tolerance",
+        style("MT").magenta().bold()
+    );
 
     println!();
     println!("{}", style("Components:").bold());
     for (idx, (id, name)) in components.iter().enumerate() {
-        let short = short_ids.get_short_id(id).unwrap_or_else(|| truncate_str(id, 8));
+        let short = short_ids
+            .get_short_id(id)
+            .unwrap_or_else(|| truncate_str(id, 8));
         println!(
             "  {:>2}. {} {}",
             idx + 1,

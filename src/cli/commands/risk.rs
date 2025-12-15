@@ -422,8 +422,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             args.category.as_deref(),
             min_rpn,
             args.author.as_deref(),
-            None,  // No search (would need description field)
-            None,  // No limit yet
+            None, // No search (would need description field)
+            None, // No limit yet
         );
 
         // Load full entities from cached file paths
@@ -462,7 +462,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Level filter
         let level_match = match args.level {
             RiskLevelFilter::All => true,
-            RiskLevelFilter::Urgent => matches!(r.risk_level, Some(RiskLevel::High) | Some(RiskLevel::Critical)),
+            RiskLevelFilter::Urgent => matches!(
+                r.risk_level,
+                Some(RiskLevel::High) | Some(RiskLevel::Critical)
+            ),
             RiskLevelFilter::Low => r.risk_level == Some(RiskLevel::Low),
             RiskLevelFilter::Medium => r.risk_level == Some(RiskLevel::Medium),
             RiskLevelFilter::High => r.risk_level == Some(RiskLevel::High),
@@ -476,12 +479,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
         // Category filter (case-insensitive)
         let category_match = args.category.as_ref().map_or(true, |cat| {
-            r.category.as_ref().map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+            r.category
+                .as_ref()
+                .map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
         });
 
         // Tag filter (case-insensitive)
         let tag_match = args.tag.as_ref().map_or(true, |tag| {
-            r.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase())
+            r.tags
+                .iter()
+                .any(|t| t.to_lowercase() == tag.to_lowercase())
         });
 
         // Author filter
@@ -502,12 +509,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Open mitigations filter (has mitigations but not all completed/verified)
         let open_mitigations_match = if args.open_mitigations {
             use crate::entities::risk::MitigationStatus;
-            !r.mitigations.is_empty() && r.mitigations.iter().any(|m| {
-                match m.status {
-                    Some(MitigationStatus::Completed) | Some(MitigationStatus::Verified) => false,
-                    _ => true, // Proposed, InProgress, or None
-                }
-            })
+            !r.mitigations.is_empty()
+                && r.mitigations.iter().any(|m| {
+                    match m.status {
+                        Some(MitigationStatus::Completed) | Some(MitigationStatus::Verified) => {
+                            false
+                        }
+                        _ => true, // Proposed, InProgress, or None
+                    }
+                })
         } else {
             true
         };
@@ -521,9 +531,19 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             r.created >= cutoff
         });
 
-        type_match && status_match && level_match && min_rpn_match && max_rpn_match
-            && category_match && tag_match && author_match && search_match
-            && unmitigated_match && open_mitigations_match && critical_match && recent_match
+        type_match
+            && status_match
+            && level_match
+            && min_rpn_match
+            && max_rpn_match
+            && category_match
+            && tag_match
+            && author_match
+            && search_match
+            && unmitigated_match
+            && open_mitigations_match
+            && critical_match
+            && recent_match
     });
 
     if risks.is_empty() {
@@ -545,9 +565,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     } else {
         match args.sort {
             ListColumn::Id => risks.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
-            ListColumn::Type => risks.sort_by(|a, b| a.risk_type.to_string().cmp(&b.risk_type.to_string())),
+            ListColumn::Type => {
+                risks.sort_by(|a, b| a.risk_type.to_string().cmp(&b.risk_type.to_string()))
+            }
             ListColumn::Title => risks.sort_by(|a, b| a.title.cmp(&b.title)),
-            ListColumn::Status => risks.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string())),
+            ListColumn::Status => {
+                risks.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string()))
+            }
             ListColumn::RiskLevel => {
                 let level_order = |l: &Option<RiskLevel>| match l {
                     Some(RiskLevel::Critical) => 0,
@@ -558,12 +582,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 };
                 risks.sort_by(|a, b| level_order(&a.risk_level).cmp(&level_order(&b.risk_level)));
             }
-            ListColumn::Severity => risks.sort_by(|a, b| b.severity.unwrap_or(0).cmp(&a.severity.unwrap_or(0))),
-            ListColumn::Occurrence => risks.sort_by(|a, b| b.occurrence.unwrap_or(0).cmp(&a.occurrence.unwrap_or(0))),
-            ListColumn::Detection => risks.sort_by(|a, b| b.detection.unwrap_or(0).cmp(&a.detection.unwrap_or(0))),
+            ListColumn::Severity => {
+                risks.sort_by(|a, b| b.severity.unwrap_or(0).cmp(&a.severity.unwrap_or(0)))
+            }
+            ListColumn::Occurrence => {
+                risks.sort_by(|a, b| b.occurrence.unwrap_or(0).cmp(&a.occurrence.unwrap_or(0)))
+            }
+            ListColumn::Detection => {
+                risks.sort_by(|a, b| b.detection.unwrap_or(0).cmp(&a.detection.unwrap_or(0)))
+            }
             ListColumn::Rpn => risks.sort_by(|a, b| b.rpn.unwrap_or(0).cmp(&a.rpn.unwrap_or(0))),
             ListColumn::Category => risks.sort_by(|a, b| {
-                a.category.as_deref().unwrap_or("").cmp(b.category.as_deref().unwrap_or(""))
+                a.category
+                    .as_deref()
+                    .unwrap_or("")
+                    .cmp(b.category.as_deref().unwrap_or(""))
             }),
             ListColumn::Author => risks.sort_by(|a, b| a.author.cmp(&b.author)),
             ListColumn::Created => risks.sort_by(|a, b| a.created.cmp(&b.created)),
@@ -609,7 +642,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,type,title,status,risk_level,severity,occurrence,detection,rpn");
             for risk in &risks {
-                let short_id = short_ids.get_short_id(&risk.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&risk.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{},{},{},{}",
                     short_id,
@@ -649,7 +684,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "-".repeat(90));
 
             for risk in &risks {
-                let short_id = short_ids.get_short_id(&risk.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&risk.id.to_string())
+                    .unwrap_or_default();
                 let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
                 for col in &args.columns {
@@ -658,10 +695,22 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                         ListColumn::Type => format!("{:<9}", risk.risk_type),
                         ListColumn::Title => format!("{:<28}", truncate_str(&risk.title, 26)),
                         ListColumn::Status => format!("{:<10}", risk.status),
-                        ListColumn::RiskLevel => format!("{:<8}", risk.risk_level.map_or("-".to_string(), |l| l.to_string())),
-                        ListColumn::Severity => format!("{:<4}", risk.severity.map_or("-".to_string(), |s| s.to_string())),
-                        ListColumn::Occurrence => format!("{:<4}", risk.occurrence.map_or("-".to_string(), |o| o.to_string())),
-                        ListColumn::Detection => format!("{:<4}", risk.detection.map_or("-".to_string(), |d| d.to_string())),
+                        ListColumn::RiskLevel => format!(
+                            "{:<8}",
+                            risk.risk_level.map_or("-".to_string(), |l| l.to_string())
+                        ),
+                        ListColumn::Severity => format!(
+                            "{:<4}",
+                            risk.severity.map_or("-".to_string(), |s| s.to_string())
+                        ),
+                        ListColumn::Occurrence => format!(
+                            "{:<4}",
+                            risk.occurrence.map_or("-".to_string(), |o| o.to_string())
+                        ),
+                        ListColumn::Detection => format!(
+                            "{:<4}",
+                            risk.detection.map_or("-".to_string(), |d| d.to_string())
+                        ),
                         ListColumn::Rpn => {
                             let rpn_str = risk.rpn.map_or("-".to_string(), |r| r.to_string());
                             let colored = match risk.rpn {
@@ -671,7 +720,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                             };
                             format!("{:<5}", colored)
                         }
-                        ListColumn::Category => format!("{:<14}", truncate_str(risk.category.as_deref().unwrap_or(""), 12)),
+                        ListColumn::Category => format!(
+                            "{:<14}",
+                            truncate_str(risk.category.as_deref().unwrap_or(""), 12)
+                        ),
                         ListColumn::Author => format!("{:<14}", truncate_str(&risk.author, 12)),
                         ListColumn::Created => format!("{:<12}", risk.created.format("%Y-%m-%d")),
                     };
@@ -696,7 +748,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Type | Title | Status | Level | RPN |");
             println!("|---|---|---|---|---|---|---|");
             for risk in &risks {
-                let short_id = short_ids.get_short_id(&risk.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&risk.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -863,11 +917,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style(&risk.id.to_string()).cyan()
             );
             println!("{}: {}", style("Type").bold(), risk.risk_type);
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&risk.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&risk.title).yellow());
             println!("{}: {}", style("Status").bold(), risk.status);
             if let Some(level) = &risk.risk_level {
                 let level_styled = match level {
@@ -940,9 +990,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{}", style("Mitigations:").bold());
                 for (i, m) in risk.mitigations.iter().enumerate() {
                     if !m.action.is_empty() {
-                        let status_str = m.status
-                            .map(|s| format!(" [{}]", s))
-                            .unwrap_or_default();
+                        let status_str = m.status.map(|s| format!(" [{}]", s)).unwrap_or_default();
                         println!("  {}. {}{}", i + 1, m.action, style(status_str).dim());
                     }
                 }
@@ -984,10 +1032,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
         .join(format!("risks/{}/{}.tdt.yaml", risk_type, risk.id));
 
     if !file_path.exists() {
-        return Err(miette::miette!(
-            "File not found: {}",
-            file_path.display()
-        ));
+        return Err(miette::miette!("File not found: {}", file_path.display()));
     }
 
     println!(
@@ -1005,7 +1050,9 @@ fn run_edit(args: EditArgs) -> Result<()> {
 fn find_risk(project: &Project, id_query: &str) -> Result<Risk> {
     // First, try to resolve short ID (@N) to full ID
     let short_ids = ShortIdIndex::load(project);
-    let resolved_query = short_ids.resolve(id_query).unwrap_or_else(|| id_query.to_string());
+    let resolved_query = short_ids
+        .resolve(id_query)
+        .unwrap_or_else(|| id_query.to_string());
 
     let mut matches: Vec<(Risk, std::path::PathBuf)> = Vec::new();
 
@@ -1029,8 +1076,14 @@ fn find_risk(project: &Project, id_query: &str) -> Result<Risk> {
                     matches.push((risk, entry.path().to_path_buf()));
                 }
                 // Also check title for fuzzy match (only if not a short ID lookup)
-                else if !id_query.starts_with('@') && !id_query.chars().all(|c| c.is_ascii_digit()) {
-                    if risk.title.to_lowercase().contains(&resolved_query.to_lowercase()) {
+                else if !id_query.starts_with('@')
+                    && !id_query.chars().all(|c| c.is_ascii_digit())
+                {
+                    if risk
+                        .title
+                        .to_lowercase()
+                        .contains(&resolved_query.to_lowercase())
+                    {
                         matches.push((risk, entry.path().to_path_buf()));
                     }
                 }
@@ -1039,22 +1092,12 @@ fn find_risk(project: &Project, id_query: &str) -> Result<Risk> {
     }
 
     match matches.len() {
-        0 => Err(miette::miette!(
-            "No risk found matching '{}'",
-            id_query
-        )),
+        0 => Err(miette::miette!("No risk found matching '{}'", id_query)),
         1 => Ok(matches.remove(0).0),
         _ => {
-            println!(
-                "{} Multiple matches found:",
-                style("!").yellow()
-            );
+            println!("{} Multiple matches found:", style("!").yellow());
             for (risk, _path) in &matches {
-                println!(
-                    "  {} - {}",
-                    format_short_id(&risk.id),
-                    risk.title
-                );
+                println!("  {} - {}", format_short_id(&risk.id), risk.title);
             }
             Err(miette::miette!(
                 "Ambiguous query '{}'. Please be more specific.",
@@ -1100,9 +1143,13 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
     let total = risks.len();
 
     // Count by level (using effective level - either explicit or calculated from RPN)
-    let mut by_level: std::collections::HashMap<RiskLevel, usize> = std::collections::HashMap::new();
+    let mut by_level: std::collections::HashMap<RiskLevel, usize> =
+        std::collections::HashMap::new();
     for risk in &risks {
-        let level = risk.risk_level.or_else(|| risk.determine_risk_level()).unwrap_or(RiskLevel::Medium);
+        let level = risk
+            .risk_level
+            .or_else(|| risk.determine_risk_level())
+            .unwrap_or(RiskLevel::Medium);
         *by_level.entry(level).or_insert(0) += 1;
     }
 
@@ -1113,9 +1160,7 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Calculate RPN statistics (only for risks that have RPN values)
-    let rpns: Vec<u16> = risks.iter()
-        .filter_map(|r| r.calculate_rpn())
-        .collect();
+    let rpns: Vec<u16> = risks.iter().filter_map(|r| r.calculate_rpn()).collect();
 
     let (avg_rpn, max_rpn, min_rpn) = if rpns.is_empty() {
         (0.0, 0u16, 0u16)
@@ -1127,14 +1172,17 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
     };
 
     // Count unmitigated
-    let unmitigated = risks.iter()
-        .filter(|r| r.mitigations.is_empty())
-        .count();
+    let unmitigated = risks.iter().filter(|r| r.mitigations.is_empty()).count();
 
     // Count with open mitigations (not all verified)
-    let open_mitigations = risks.iter()
-        .filter(|r| !r.mitigations.is_empty() &&
-            r.mitigations.iter().any(|m| m.status != Some(MitigationStatus::Verified)))
+    let open_mitigations = risks
+        .iter()
+        .filter(|r| {
+            !r.mitigations.is_empty()
+                && r.mitigations
+                    .iter()
+                    .any(|m| m.status != Some(MitigationStatus::Verified))
+        })
         .count();
 
     // Sort by RPN for top N (risks without RPN go last)
@@ -1178,7 +1226,10 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                     })
                 }).collect::<Vec<_>>(),
             });
-            println!("{}", serde_json::to_string_pretty(&summary).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&summary).unwrap_or_default()
+            );
         }
         _ => {
             // Human-readable output
@@ -1189,7 +1240,12 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
             println!("{:<20} {}", style("Total Risks:").bold(), total);
             if !rpns.is_empty() {
                 println!("{:<20} {:.1}", style("Average RPN:").bold(), avg_rpn);
-                println!("{:<20} {} (max: {})", style("RPN Range:").bold(), min_rpn, max_rpn);
+                println!(
+                    "{:<20} {} (max: {})",
+                    style("RPN Range:").bold(),
+                    min_rpn,
+                    max_rpn
+                );
             }
             println!();
 
@@ -1212,8 +1268,16 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
 
             // By type
             println!("{}", style("By Risk Type:").bold());
-            println!("  {:<12} {}", "Design:", by_type.get(&RiskType::Design).unwrap_or(&0));
-            println!("  {:<12} {}", "Process:", by_type.get(&RiskType::Process).unwrap_or(&0));
+            println!(
+                "  {:<12} {}",
+                "Design:",
+                by_type.get(&RiskType::Design).unwrap_or(&0)
+            );
+            println!(
+                "  {:<12} {}",
+                "Process:",
+                by_type.get(&RiskType::Process).unwrap_or(&0)
+            );
             println!();
 
             // Mitigation status
@@ -1224,22 +1288,45 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                 println!("  {} {}", style("Unmitigated:").green(), "0");
             }
             if open_mitigations > 0 {
-                println!("  {} {}", style("Open (unverified):").yellow(), open_mitigations);
+                println!(
+                    "  {} {}",
+                    style("Open (unverified):").yellow(),
+                    open_mitigations
+                );
             }
-            let fully_mitigated = total.saturating_sub(unmitigated).saturating_sub(open_mitigations);
+            let fully_mitigated = total
+                .saturating_sub(unmitigated)
+                .saturating_sub(open_mitigations);
             println!("  {:<17} {}", "Fully mitigated:", fully_mitigated);
             println!();
 
             // Top N risks
-            println!("{} {}", style("Top").bold(), style(format!("{} Risks by RPN:", args.top)).bold());
+            println!(
+                "{} {}",
+                style("Top").bold(),
+                style(format!("{} Risks by RPN:", args.top)).bold()
+            );
             println!("{}", "-".repeat(60));
-            println!("{:<10} {:<6} {:<10} {}", style("ID").bold(), style("RPN").bold(), style("LEVEL").bold(), style("TITLE").bold());
+            println!(
+                "{:<10} {:<6} {:<10} {}",
+                style("ID").bold(),
+                style("RPN").bold(),
+                style("LEVEL").bold(),
+                style("TITLE").bold()
+            );
 
             for risk in sorted_risks.iter().take(args.top) {
-                let id_short = short_ids.get_short_id(&risk.id.to_string())
+                let id_short = short_ids
+                    .get_short_id(&risk.id.to_string())
                     .unwrap_or_else(|| truncate_str(&risk.id.to_string(), 8));
-                let rpn = risk.calculate_rpn().map(|r| r.to_string()).unwrap_or_else(|| "-".to_string());
-                let level = risk.risk_level.or_else(|| risk.determine_risk_level()).unwrap_or(RiskLevel::Medium);
+                let rpn = risk
+                    .calculate_rpn()
+                    .map(|r| r.to_string())
+                    .unwrap_or_else(|| "-".to_string());
+                let level = risk
+                    .risk_level
+                    .or_else(|| risk.determine_risk_level())
+                    .unwrap_or(RiskLevel::Medium);
                 let level_str = format!("{:?}", level).to_lowercase();
                 let level_styled = match level {
                     RiskLevel::Critical => style(level_str).red().bold().to_string(),
@@ -1247,11 +1334,13 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                     RiskLevel::Medium => style(level_str).dim().to_string(),
                     RiskLevel::Low => style(level_str).dim().to_string(),
                 };
-                println!("{:<10} {:<6} {:<10} {}",
+                println!(
+                    "{:<10} {:<6} {:<10} {}",
                     style(id_short).cyan(),
                     rpn,
                     level_styled,
-                    truncate_str(&risk.title, 35));
+                    truncate_str(&risk.title, 35)
+                );
             }
 
             // Detailed breakdown by category
@@ -1259,9 +1348,13 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                 println!();
                 println!("{}", style("By Category:").bold());
 
-                let mut by_category: std::collections::HashMap<String, Vec<&Risk>> = std::collections::HashMap::new();
+                let mut by_category: std::collections::HashMap<String, Vec<&Risk>> =
+                    std::collections::HashMap::new();
                 for risk in &risks {
-                    let cat = risk.category.clone().unwrap_or_else(|| "Uncategorized".to_string());
+                    let cat = risk
+                        .category
+                        .clone()
+                        .unwrap_or_else(|| "Uncategorized".to_string());
                     by_category.entry(cat).or_default().push(risk);
                 }
 
@@ -1270,15 +1363,22 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
 
                 for cat in categories {
                     let cat_risks = by_category.get(cat).unwrap();
-                    let cat_rpns: Vec<u16> = cat_risks.iter()
-                        .filter_map(|r| r.calculate_rpn())
-                        .collect();
+                    let cat_rpns: Vec<u16> =
+                        cat_risks.iter().filter_map(|r| r.calculate_rpn()).collect();
                     let cat_avg_rpn = if cat_rpns.is_empty() {
                         "-".to_string()
                     } else {
-                        format!("{:.0}", cat_rpns.iter().map(|&r| r as f64).sum::<f64>() / cat_rpns.len() as f64)
+                        format!(
+                            "{:.0}",
+                            cat_rpns.iter().map(|&r| r as f64).sum::<f64>() / cat_rpns.len() as f64
+                        )
                     };
-                    println!("  {} ({} risks, avg RPN: {})", style(cat).cyan(), cat_risks.len(), cat_avg_rpn);
+                    println!(
+                        "  {} ({} risks, avg RPN: {})",
+                        style(cat).cyan(),
+                        cat_risks.len(),
+                        cat_avg_rpn
+                    );
                 }
             }
         }
@@ -1302,14 +1402,14 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     });
 
     let cached_risks = cache.list_risks(
-        None,              // status
-        type_filter,       // type
-        None,              // level
-        None,              // category
-        None,              // min_rpn
-        None,              // author
-        None,              // search
-        None,              // limit
+        None,        // status
+        type_filter, // type
+        None,        // level
+        None,        // category
+        None,        // min_rpn
+        None,        // author
+        None,        // search
+        None,        // limit
     );
 
     if cached_risks.is_empty() {
@@ -1330,7 +1430,7 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 
         // Map to matrix indices (1-10 or 1-5 for compact)
         let sev_idx = if args.compact {
-            ((sev + 1) / 2).min(size).max(1)  // Map 1-2 -> 1, 3-4 -> 2, etc.
+            ((sev + 1) / 2).min(size).max(1) // Map 1-2 -> 1, 3-4 -> 2, etc.
         } else {
             sev.min(size).max(1)
         };
@@ -1341,7 +1441,8 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
             occ.min(size).max(1)
         };
 
-        let short_id = short_ids.get_short_id(&risk.id)
+        let short_id = short_ids
+            .get_short_id(&risk.id)
             .unwrap_or_else(|| truncate_str(&risk.id, 6));
         matrix[sev_idx][occ_idx].push((risk.id.clone(), short_id));
     }
@@ -1369,7 +1470,10 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                 "total_risks": cached_risks.len(),
                 "cells": json_matrix
             });
-            println!("{}", serde_json::to_string_pretty(&summary).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&summary).unwrap_or_default()
+            );
             return Ok(());
         }
         OutputFormat::Yaml => {
@@ -1404,14 +1508,17 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
         "Risk Matrix".to_string()
     };
     println!("{}", style(title).bold().cyan());
-    println!("{}", style(format!("{} risks displayed", cached_risks.len())).dim());
+    println!(
+        "{}",
+        style(format!("{} risks displayed", cached_risks.len())).dim()
+    );
     println!();
 
     // Determine cell width based on content
     let cell_width = if args.show_ids { 8 } else { 4 };
 
     // Print header row (OCCURRENCE)
-    print!("{:>4} ", "");  // Space for severity label
+    print!("{:>4} ", ""); // Space for severity label
     print!("{}", style("│").dim());
     for occ in 1..=size {
         print!("{:^width$}", occ, width = cell_width);
@@ -1439,7 +1546,9 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 
             let content = if args.show_ids && count > 0 {
                 // Show first risk ID
-                cell.first().map(|(_, short)| short.clone()).unwrap_or_default()
+                cell.first()
+                    .map(|(_, short)| short.clone())
+                    .unwrap_or_default()
             } else if count > 0 {
                 count.to_string()
             } else {
@@ -1478,10 +1587,7 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 
     // Severity label (vertical)
     println!();
-    println!(
-        "{}",
-        style("       ↑ SEVERITY").dim()
-    );
+    println!("{}", style("       ↑ SEVERITY").dim());
 
     // Color legend
     println!();

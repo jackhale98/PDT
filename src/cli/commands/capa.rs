@@ -12,7 +12,9 @@ use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
-use crate::entities::capa::{Capa, CapaStatus, CapaType, Effectiveness, EffectivenessResult, SourceType};
+use crate::entities::capa::{
+    Capa, CapaStatus, CapaType, Effectiveness, EffectivenessResult, SourceType,
+};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
@@ -340,7 +342,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 c.timeline
                     .as_ref()
                     .and_then(|t| t.target_date)
-                    .map_or(false, |target| target < today && c.capa_status != CapaStatus::Closed)
+                    .map_or(false, |target| {
+                        target < today && c.capa_status != CapaStatus::Closed
+                    })
             } else {
                 true
             }
@@ -391,9 +395,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         ListColumn::CapaType => {
             capas.sort_by(|a, b| format!("{:?}", a.capa_type).cmp(&format!("{:?}", b.capa_type)))
         }
-        ListColumn::Status => {
-            capas.sort_by(|a, b| format!("{:?}", a.capa_status).cmp(&format!("{:?}", b.capa_status)))
-        }
+        ListColumn::Status => capas
+            .sort_by(|a, b| format!("{:?}", a.capa_status).cmp(&format!("{:?}", b.capa_status))),
         ListColumn::Author => capas.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => capas.sort_by(|a, b| a.created.cmp(&b.created)),
     }
@@ -437,7 +440,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,title,type,actions,capa_status");
             for capa in &capas {
-                let short_id = short_ids.get_short_id(&capa.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&capa.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{}",
                     short_id,
@@ -475,11 +480,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 print!("{:<width$}", header, width = widths[i]);
             }
             println!();
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             // Print rows
             for capa in &capas {
-                let short_id = short_ids.get_short_id(&capa.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&capa.id.to_string())
+                    .unwrap_or_default();
 
                 // Print SHORT column
                 print!("{:<8}", style(&short_id).cyan());
@@ -505,7 +515,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                                 .timeline
                                 .as_ref()
                                 .and_then(|t| t.target_date)
-                                .map_or(false, |target| target < today && capa.capa_status != CapaStatus::Closed);
+                                .map_or(false, |target| {
+                                    target < today && capa.capa_status != CapaStatus::Closed
+                                });
 
                             let status_styled = if is_overdue {
                                 style(format!("{} !", capa.capa_status)).red().bold()
@@ -543,7 +555,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Title | Type | Actions | Status |");
             println!("|---|---|---|---|---|---|");
             for capa in &capas {
-                let short_id = short_ids.get_short_id(&capa.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&capa.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -717,11 +731,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&capa.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&capa.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&capa.title).yellow());
             println!("{}: {}", style("CAPA Type").bold(), capa.capa_type);
             println!("{}: {}", style("Status").bold(), capa.capa_status);
             println!("{}", style("─".repeat(60)).dim());
@@ -753,12 +763,19 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{} ({}):", style("Actions").bold(), capa.actions.len());
                 for action in &capa.actions {
                     let status_style = match action.status {
-                        crate::entities::capa::ActionStatus::Completed |
-                        crate::entities::capa::ActionStatus::Verified => style(action.status.to_string()).green(),
-                        crate::entities::capa::ActionStatus::InProgress => style(action.status.to_string()).yellow(),
+                        crate::entities::capa::ActionStatus::Completed
+                        | crate::entities::capa::ActionStatus::Verified => {
+                            style(action.status.to_string()).green()
+                        }
+                        crate::entities::capa::ActionStatus::InProgress => {
+                            style(action.status.to_string()).yellow()
+                        }
                         _ => style(action.status.to_string()).dim(),
                     };
-                    println!("  {}. {} [{}]", action.action_number, action.description, status_style);
+                    println!(
+                        "  {}. {} [{}]",
+                        action.action_number, action.description, status_style
+                    );
                 }
             }
 
@@ -899,12 +916,8 @@ fn output_cached_capas(
                     let cell = match col {
                         ListColumn::Id => truncate_str(&capa.id, widths[i] - 2),
                         ListColumn::Title => truncate_str(&capa.title, widths[i] - 2),
-                        ListColumn::CapaType => {
-                            capa.capa_type.as_deref().unwrap_or("").to_string()
-                        }
-                        ListColumn::Status => {
-                            capa.capa_status.as_deref().unwrap_or("").to_string()
-                        }
+                        ListColumn::CapaType => capa.capa_type.as_deref().unwrap_or("").to_string(),
+                        ListColumn::Status => capa.capa_status.as_deref().unwrap_or("").to_string(),
                         ListColumn::Author => truncate_str(&capa.author, widths[i] - 2),
                         ListColumn::Created => capa.created.format("%Y-%m-%d %H:%M").to_string(),
                     };
@@ -977,14 +990,16 @@ fn run_verify(args: VerifyArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No CAPA found matching '{}'", args.capa))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No CAPA found matching '{}'", args.capa))?;
 
     // Read and parse CAPA
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let mut capa: Capa = serde_yml::from_str(&content).into_diagnostic()?;
 
     // Get display ID for user messages
-    let display_id = short_ids.get_short_id(&capa.id.to_string())
+    let display_id = short_ids
+        .get_short_id(&capa.id.to_string())
         .unwrap_or_else(|| format_short_id(&capa.id));
 
     // Validate status allows verification
@@ -1020,7 +1035,10 @@ fn run_verify(args: VerifyArgs, global: &GlobalOpts) -> Result<()> {
         println!("CAPA: {} \"{}\"", style(&display_id).cyan(), &capa.title);
         println!("Current Status: {}", capa.capa_status);
         println!();
-        println!("Recording verification result: {}", style(format!("{:?}", args.result)).yellow());
+        println!(
+            "Recording verification result: {}",
+            style(format!("{:?}", args.result)).yellow()
+        );
         if let Some(ref evidence) = args.evidence {
             println!("Evidence: {}", evidence);
         }
@@ -1028,7 +1046,10 @@ fn run_verify(args: VerifyArgs, global: &GlobalOpts) -> Result<()> {
         // Auto-close if effective
         if matches!(args.result, VerifyResult::Effective) {
             println!();
-            println!("{}", style("Note: CAPA will be closed automatically (result = effective)").dim());
+            println!(
+                "{}",
+                style("Note: CAPA will be closed automatically (result = effective)").dim()
+            );
         }
         println!();
 
@@ -1076,7 +1097,10 @@ fn run_verify(args: VerifyArgs, global: &GlobalOpts) -> Result<()> {
                 "result": effectiveness_result.to_string(),
                 "status": capa.capa_status.to_string(),
             });
-            println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).unwrap_or_default()
+            );
         }
         OutputFormat::Yaml => {
             let result = serde_json::json!({

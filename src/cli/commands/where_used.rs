@@ -24,7 +24,9 @@ pub fn run(args: WhereUsedArgs, global: &GlobalOpts) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve the ID
-    let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
 
     // Determine entity type from prefix
     let entity_type = if resolved_id.starts_with("CMP-") {
@@ -49,7 +51,11 @@ pub fn run(args: WhereUsedArgs, global: &GlobalOpts) -> Result<()> {
         "unknown"
     };
 
-    println!("{} {}", style("Searching for references to:").bold(), style(&resolved_id).cyan());
+    println!(
+        "{} {}",
+        style("Searching for references to:").bold(),
+        style(&resolved_id).cyan()
+    );
     println!("{}: {}\n", style("Entity type").dim(), entity_type);
 
     let mut found_refs: Vec<(String, String, String)> = Vec::new(); // (ref_id, ref_type, relationship)
@@ -94,7 +100,8 @@ pub fn run(args: WhereUsedArgs, global: &GlobalOpts) -> Result<()> {
 
         match format {
             OutputFormat::Json => {
-                let refs: Vec<HashMap<&str, &str>> = found_refs.iter()
+                let refs: Vec<HashMap<&str, &str>> = found_refs
+                    .iter()
                     .map(|(id, typ, rel)| {
                         let mut map = HashMap::new();
                         map.insert("id", id.as_str());
@@ -103,7 +110,10 @@ pub fn run(args: WhereUsedArgs, global: &GlobalOpts) -> Result<()> {
                         map
                     })
                     .collect();
-                println!("{}", serde_json::to_string_pretty(&refs).unwrap_or_default());
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&refs).unwrap_or_default()
+                );
             }
             OutputFormat::Csv => {
                 println!("ref_id,ref_type,relationship");
@@ -112,10 +122,17 @@ pub fn run(args: WhereUsedArgs, global: &GlobalOpts) -> Result<()> {
                 }
             }
             _ => {
-                println!("{:<12} {:<20} {}", style("REF ID").bold(), style("TYPE").bold(), style("RELATIONSHIP").bold());
+                println!(
+                    "{:<12} {:<20} {}",
+                    style("REF ID").bold(),
+                    style("TYPE").bold(),
+                    style("RELATIONSHIP").bold()
+                );
                 println!("{}", "-".repeat(60));
                 for (ref_id, ref_type, rel) in &found_refs {
-                    let ref_short = short_ids.get_short_id(ref_id).unwrap_or_else(|| format_short_id_str(ref_id));
+                    let ref_short = short_ids
+                        .get_short_id(ref_id)
+                        .unwrap_or_else(|| format_short_id_str(ref_id));
                     println!("{:<12} {:<20} {}", style(&ref_short).cyan(), ref_type, rel);
                 }
                 println!();
@@ -144,7 +161,9 @@ fn find_bom_references(
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
     {
-        if let Ok(asm) = crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path()) {
+        if let Ok(asm) =
+            crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path())
+        {
             for item in &asm.bom {
                 if item.component_id.to_string() == target_id {
                     found_refs.push((
@@ -178,7 +197,8 @@ fn find_mate_references(
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
     {
-        if let Ok(mate) = crate::yaml::parse_yaml_file::<crate::entities::mate::Mate>(entry.path()) {
+        if let Ok(mate) = crate::yaml::parse_yaml_file::<crate::entities::mate::Mate>(entry.path())
+        {
             let mut found = false;
             let mut which_feature = "";
 
@@ -221,9 +241,15 @@ fn find_stackup_references(
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
     {
-        if let Ok(stackup) = crate::yaml::parse_yaml_file::<crate::entities::stackup::Stackup>(entry.path()) {
+        if let Ok(stackup) =
+            crate::yaml::parse_yaml_file::<crate::entities::stackup::Stackup>(entry.path())
+        {
             for (i, contrib) in stackup.contributors.iter().enumerate() {
-                if contrib.feature.as_ref().map_or(false, |f| f.id.to_string() == target_id) {
+                if contrib
+                    .feature
+                    .as_ref()
+                    .map_or(false, |f| f.id.to_string() == target_id)
+                {
                     found_refs.push((
                         stackup.id.to_string(),
                         "stackup".to_string(),
@@ -256,9 +282,19 @@ fn find_test_references(
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(test) = crate::yaml::parse_yaml_file::<crate::entities::test::Test>(entry.path()) {
-                let verifies_it = test.links.verifies.iter().any(|id| id.to_string() == target_id);
-                let validates_it = test.links.validates.iter().any(|id| id.to_string() == target_id);
+            if let Ok(test) =
+                crate::yaml::parse_yaml_file::<crate::entities::test::Test>(entry.path())
+            {
+                let verifies_it = test
+                    .links
+                    .verifies
+                    .iter()
+                    .any(|id| id.to_string() == target_id);
+                let validates_it = test
+                    .links
+                    .validates
+                    .iter()
+                    .any(|id| id.to_string() == target_id);
 
                 if verifies_it {
                     found_refs.push((
@@ -298,7 +334,9 @@ fn find_quote_references(
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
     {
-        if let Ok(quote) = crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path()) {
+        if let Ok(quote) =
+            crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path())
+        {
             if quote.supplier == target_id {
                 found_refs.push((
                     quote.id.to_string(),
@@ -329,7 +367,9 @@ fn find_component_quote_references(
         .filter(|e| e.file_type().is_file())
         .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
     {
-        if let Ok(quote) = crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path()) {
+        if let Ok(quote) =
+            crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path())
+        {
             if quote.component.as_ref().map_or(false, |c| c == target_id) {
                 found_refs.push((
                     quote.id.to_string(),
@@ -378,7 +418,9 @@ fn find_generic_link_references(
                     if let Ok(yaml) = serde_yml::from_str::<serde_yml::Value>(&content) {
                         if let Some(id) = yaml.get("id").and_then(|v| v.as_str()) {
                             // Avoid duplicates and self-references
-                            if id != target_id && !found_refs.iter().any(|(ref_id, _, _)| ref_id == id) {
+                            if id != target_id
+                                && !found_refs.iter().any(|(ref_id, _, _)| ref_id == id)
+                            {
                                 found_refs.push((
                                     id.to_string(),
                                     entity_type.to_string(),

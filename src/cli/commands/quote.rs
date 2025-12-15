@@ -8,10 +8,10 @@ use std::fs;
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
-use crate::core::CachedQuote;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::CachedQuote;
 use crate::core::Config;
 use crate::entities::quote::{Quote, QuoteStatus};
 use crate::schema::wizard::SchemaWizard;
@@ -229,18 +229,20 @@ fn parse_price_break(input: &str) -> Result<(u32, f64, Option<u32>)> {
         ));
     }
 
-    let qty: u32 = parts[0].parse().map_err(|_| {
-        miette::miette!("Invalid quantity '{}' in price break", parts[0])
-    })?;
+    let qty: u32 = parts[0]
+        .parse()
+        .map_err(|_| miette::miette!("Invalid quantity '{}' in price break", parts[0]))?;
 
-    let price: f64 = parts[1].parse().map_err(|_| {
-        miette::miette!("Invalid price '{}' in price break", parts[1])
-    })?;
+    let price: f64 = parts[1]
+        .parse()
+        .map_err(|_| miette::miette!("Invalid price '{}' in price break", parts[1]))?;
 
     let lead_time = if parts.len() == 3 {
-        Some(parts[2].parse().map_err(|_| {
-            miette::miette!("Invalid lead time '{}' in price break", parts[2])
-        })?)
+        Some(
+            parts[2]
+                .parse()
+                .map_err(|_| miette::miette!("Invalid lead time '{}' in price break", parts[2]))?,
+        )
     } else {
         None
     };
@@ -270,14 +272,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     };
 
     // Resolve supplier filter if provided
-    let supplier_filter = args.supplier.as_ref().map(|s| {
-        short_ids.resolve(s).unwrap_or_else(|| s.clone())
-    });
+    let supplier_filter = args
+        .supplier
+        .as_ref()
+        .map(|s| short_ids.resolve(s).unwrap_or_else(|| s.clone()));
 
     // Resolve component filter if provided
-    let component_filter = args.component.as_ref().map(|c| {
-        short_ids.resolve(c).unwrap_or_else(|| c.clone())
-    });
+    let component_filter = args
+        .component
+        .as_ref()
+        .map(|c| short_ids.resolve(c).unwrap_or_else(|| c.clone()));
 
     // Check if we can use the fast cache path:
     // - No assembly filter (cache doesn't store this)
@@ -322,21 +326,30 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 ListColumn::Id => quotes.sort_by(|a, b| a.id.cmp(&b.id)),
                 ListColumn::Title => quotes.sort_by(|a, b| a.title.cmp(&b.title)),
                 ListColumn::Supplier => quotes.sort_by(|a, b| {
-                    a.supplier_id.as_deref().unwrap_or("").cmp(b.supplier_id.as_deref().unwrap_or(""))
+                    a.supplier_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .cmp(b.supplier_id.as_deref().unwrap_or(""))
                 }),
                 ListColumn::Component => quotes.sort_by(|a, b| {
-                    a.component_id.as_deref().unwrap_or("").cmp(b.component_id.as_deref().unwrap_or(""))
+                    a.component_id
+                        .as_deref()
+                        .unwrap_or("")
+                        .cmp(b.component_id.as_deref().unwrap_or(""))
                 }),
                 ListColumn::Price => quotes.sort_by(|a, b| {
                     let price_a = a.unit_price.unwrap_or(0.0);
                     let price_b = b.unit_price.unwrap_or(0.0);
-                    price_a.partial_cmp(&price_b).unwrap_or(std::cmp::Ordering::Equal)
+                    price_a
+                        .partial_cmp(&price_b)
+                        .unwrap_or(std::cmp::Ordering::Equal)
                 }),
-                ListColumn::QuoteStatus => {
-                    quotes.sort_by(|a, b| {
-                        a.quote_status.as_deref().unwrap_or("").cmp(b.quote_status.as_deref().unwrap_or(""))
-                    })
-                }
+                ListColumn::QuoteStatus => quotes.sort_by(|a, b| {
+                    a.quote_status
+                        .as_deref()
+                        .unwrap_or("")
+                        .cmp(b.quote_status.as_deref().unwrap_or(""))
+                }),
                 ListColumn::Status => quotes.sort_by(|a, b| a.status.cmp(&b.status)),
                 ListColumn::Author => quotes.sort_by(|a, b| a.author.cmp(&b.author)),
                 ListColumn::Created => quotes.sort_by(|a, b| a.created.cmp(&b.created)),
@@ -367,9 +380,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Resolve assembly filter if provided
-    let assembly_filter = args.assembly.as_ref().map(|a| {
-        short_ids.resolve(a).unwrap_or_else(|| a.clone())
-    });
+    let assembly_filter = args
+        .assembly
+        .as_ref()
+        .map(|a| short_ids.resolve(a).unwrap_or_else(|| a.clone()));
 
     // Load and parse all quotes
     let mut quotes: Vec<Quote> = Vec::new();
@@ -460,17 +474,14 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         ListColumn::Price => quotes.sort_by(|a, b| {
             let price_a = a.price_for_qty(1).unwrap_or(0.0);
             let price_b = b.price_for_qty(1).unwrap_or(0.0);
-            price_a.partial_cmp(&price_b).unwrap_or(std::cmp::Ordering::Equal)
+            price_a
+                .partial_cmp(&price_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         }),
-        ListColumn::QuoteStatus => {
-            quotes.sort_by(|a, b| {
-                format!("{:?}", a.quote_status).cmp(&format!("{:?}", b.quote_status))
-            })
-        }
+        ListColumn::QuoteStatus => quotes
+            .sort_by(|a, b| format!("{:?}", a.quote_status).cmp(&format!("{:?}", b.quote_status))),
         ListColumn::Status => {
-            quotes.sort_by(|a, b| {
-                format!("{:?}", a.status).cmp(&format!("{:?}", b.status))
-            })
+            quotes.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
         ListColumn::Author => quotes.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => quotes.sort_by(|a, b| a.created.cmp(&b.created)),
@@ -518,11 +529,19 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             print!("{}", yaml);
         }
         OutputFormat::Csv => {
-            println!("short_id,id,title,supplier,linked_item,unit_price,lead_time,quote_status,status");
+            println!(
+                "short_id,id,title,supplier,linked_item,unit_price,lead_time,quote_status,status"
+            );
             for quote in &quotes {
-                let short_id = short_ids.get_short_id(&quote.id.to_string()).unwrap_or_default();
-                let unit_price = quote.price_for_qty(1).map_or("".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote.lead_time_days.map_or("".to_string(), |d| d.to_string());
+                let short_id = short_ids
+                    .get_short_id(&quote.id.to_string())
+                    .unwrap_or_default();
+                let unit_price = quote
+                    .price_for_qty(1)
+                    .map_or("".to_string(), |p| format!("{:.2}", p));
+                let lead_time = quote
+                    .lead_time_days
+                    .map_or("".to_string(), |d| d.to_string());
                 let linked_item = quote.linked_item().unwrap_or("-");
                 let supplier_short = short_ids
                     .get_short_id(&quote.supplier)
@@ -579,9 +598,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                         }
                         ListColumn::Component => {
                             let linked_item = quote.linked_item().unwrap_or("-");
-                            let item_short = short_ids.get_short_id(linked_item).unwrap_or_else(|| {
-                                truncate_str(linked_item, 10).to_string()
-                            });
+                            let item_short = short_ids
+                                .get_short_id(linked_item)
+                                .unwrap_or_else(|| truncate_str(linked_item, 10).to_string());
                             format!("{:<12}", item_short)
                         }
                         ListColumn::Price => {
@@ -667,15 +686,23 @@ fn output_cached_quotes(
 
     match format {
         OutputFormat::Csv => {
-            println!("short_id,id,title,supplier,linked_item,unit_price,lead_time,quote_status,status");
+            println!(
+                "short_id,id,title,supplier,linked_item,unit_price,lead_time,quote_status,status"
+            );
             for quote in quotes {
                 let short_id = short_ids.get_short_id(&quote.id).unwrap_or_default();
-                let unit_price = quote.unit_price.map_or("".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote.lead_time_days.map_or("".to_string(), |d| d.to_string());
+                let unit_price = quote
+                    .unit_price
+                    .map_or("".to_string(), |p| format!("{:.2}", p));
+                let lead_time = quote
+                    .lead_time_days
+                    .map_or("".to_string(), |d| d.to_string());
                 let linked_item = quote.component_id.as_deref().unwrap_or("-");
-                let supplier_short = quote.supplier_id.as_ref().map(|s| {
-                    short_ids.get_short_id(s).unwrap_or_else(|| s.clone())
-                }).unwrap_or_else(|| "-".to_string());
+                let supplier_short = quote
+                    .supplier_id
+                    .as_ref()
+                    .map(|s| short_ids.get_short_id(s).unwrap_or_else(|| s.clone()))
+                    .unwrap_or_else(|| "-".to_string());
                 println!(
                     "{},{},{},{},{},{},{},{},{}",
                     short_id,
@@ -719,20 +746,28 @@ fn output_cached_quotes(
                         ListColumn::Id => format!("{:<17}", truncate_str(&quote.id, 15)),
                         ListColumn::Title => format!("{:<20}", truncate_str(&quote.title, 18)),
                         ListColumn::Supplier => {
-                            let supplier_short = quote.supplier_id.as_ref().map(|s| {
-                                short_ids.get_short_id(s).unwrap_or_else(|| truncate_str(s, 13).to_string())
-                            }).unwrap_or_else(|| "-".to_string());
+                            let supplier_short = quote
+                                .supplier_id
+                                .as_ref()
+                                .map(|s| {
+                                    short_ids
+                                        .get_short_id(s)
+                                        .unwrap_or_else(|| truncate_str(s, 13).to_string())
+                                })
+                                .unwrap_or_else(|| "-".to_string());
                             format!("{:<15}", supplier_short)
                         }
                         ListColumn::Component => {
                             let linked_item = quote.component_id.as_deref().unwrap_or("-");
-                            let item_short = short_ids.get_short_id(linked_item).unwrap_or_else(|| {
-                                truncate_str(linked_item, 10).to_string()
-                            });
+                            let item_short = short_ids
+                                .get_short_id(linked_item)
+                                .unwrap_or_else(|| truncate_str(linked_item, 10).to_string());
                             format!("{:<12}", item_short)
                         }
                         ListColumn::Price => {
-                            let unit_price = quote.unit_price.map_or("-".to_string(), |p| format!("{:.2}", p));
+                            let unit_price = quote
+                                .unit_price
+                                .map_or("-".to_string(), |p| format!("{:.2}", p));
                             format!("{:<10}", unit_price)
                         }
                         ListColumn::QuoteStatus => {
@@ -764,12 +799,18 @@ fn output_cached_quotes(
             println!("|---|---|---|---|---|---|---|---|");
             for quote in quotes {
                 let short_id = short_ids.get_short_id(&quote.id).unwrap_or_default();
-                let unit_price = quote.unit_price.map_or("-".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote.lead_time_days.map_or("-".to_string(), |d| format!("{}d", d));
+                let unit_price = quote
+                    .unit_price
+                    .map_or("-".to_string(), |p| format!("{:.2}", p));
+                let lead_time = quote
+                    .lead_time_days
+                    .map_or("-".to_string(), |d| format!("{}d", d));
                 let linked_item = quote.component_id.as_deref().unwrap_or("-");
-                let supplier_short = quote.supplier_id.as_ref().map(|s| {
-                    short_ids.get_short_id(s).unwrap_or_else(|| s.clone())
-                }).unwrap_or_else(|| "-".to_string());
+                let supplier_short = quote
+                    .supplier_id
+                    .as_ref()
+                    .map(|s| short_ids.get_short_id(s).unwrap_or_else(|| s.clone()))
+                    .unwrap_or_else(|| "-".to_string());
                 println!(
                     "| {} | {} | {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -851,12 +892,8 @@ fn run_new(args: NewArgs) -> Result<()> {
             ));
         }
 
-        component = args
-            .component
-            .map(|c| short_ids.resolve(&c).unwrap_or(c));
-        assembly = args
-            .assembly
-            .map(|a| short_ids.resolve(&a).unwrap_or(a));
+        component = args.component.map(|c| short_ids.resolve(&c).unwrap_or(c));
+        assembly = args.assembly.map(|a| short_ids.resolve(&a).unwrap_or(a));
 
         let supplier_input = args
             .supplier
@@ -1017,7 +1054,9 @@ fn run_new(args: NewArgs) -> Result<()> {
     }
 
     // Open in editor if requested
-    if args.edit || (!args.no_edit && !args.interactive && args.breaks.is_empty() && args.price.is_none()) {
+    if args.edit
+        || (!args.no_edit && !args.interactive && args.breaks.is_empty() && args.price.is_none())
+    {
         println!();
         println!("Opening in {}...", style(config.editor()).yellow());
 
@@ -1055,7 +1094,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No quote found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No quote found matching '{}'", args.id))?;
 
     // Read and parse quote
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -1086,18 +1126,29 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style(&quote.title).yellow()
             );
             if let Some(ref cmp) = quote.component {
-                let cmp_display = short_ids.get_short_id(cmp)
-                    .unwrap_or_else(|| cmp.clone());
-                println!("{}: {}", style("Component").bold(), style(&cmp_display).cyan());
+                let cmp_display = short_ids.get_short_id(cmp).unwrap_or_else(|| cmp.clone());
+                println!(
+                    "{}: {}",
+                    style("Component").bold(),
+                    style(&cmp_display).cyan()
+                );
             }
             if let Some(ref asm) = quote.assembly {
-                let asm_display = short_ids.get_short_id(asm)
-                    .unwrap_or_else(|| asm.clone());
-                println!("{}: {}", style("Assembly").bold(), style(&asm_display).cyan());
+                let asm_display = short_ids.get_short_id(asm).unwrap_or_else(|| asm.clone());
+                println!(
+                    "{}: {}",
+                    style("Assembly").bold(),
+                    style(&asm_display).cyan()
+                );
             }
-            let sup_display = short_ids.get_short_id(&quote.supplier)
+            let sup_display = short_ids
+                .get_short_id(&quote.supplier)
                 .unwrap_or_else(|| quote.supplier.clone());
-            println!("{}: {}", style("Supplier").bold(), style(&sup_display).cyan());
+            println!(
+                "{}: {}",
+                style("Supplier").bold(),
+                style(&sup_display).cyan()
+            );
             println!("{}: {}", style("Status").bold(), quote.status);
             println!("{}", style("─".repeat(60)).dim());
 
@@ -1187,7 +1238,8 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No quote found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No quote found matching '{}'", args.id))?;
 
     // Open in editor
     config.run_editor(&path).into_diagnostic()?;
@@ -1225,10 +1277,7 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
                     .component
                     .as_ref()
                     .map_or(false, |c| c.contains(&item))
-                    || quote
-                        .assembly
-                        .as_ref()
-                        .map_or(false, |a| a.contains(&item));
+                    || quote.assembly.as_ref().map_or(false, |a| a.contains(&item));
                 if matches {
                     quotes.push(quote);
                 }

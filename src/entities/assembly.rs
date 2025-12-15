@@ -167,7 +167,11 @@ impl Default for Assembly {
 
 impl Assembly {
     /// Create a new assembly with required fields
-    pub fn new(part_number: impl Into<String>, title: impl Into<String>, author: impl Into<String>) -> Self {
+    pub fn new(
+        part_number: impl Into<String>,
+        title: impl Into<String>,
+        author: impl Into<String>,
+    ) -> Self {
         Self {
             id: EntityId::new(EntityPrefix::Asm),
             part_number: part_number.into(),
@@ -276,7 +280,12 @@ mod tests {
         let item = BomItem {
             component_id: "CMP-001".to_string(),
             quantity: 4,
-            reference_designators: vec!["U1".to_string(), "U2".to_string(), "U3".to_string(), "U4".to_string()],
+            reference_designators: vec![
+                "U1".to_string(),
+                "U2".to_string(),
+                "U3".to_string(),
+                "U4".to_string(),
+            ],
             notes: Some("IC chips - handle with ESD precautions".to_string()),
         };
 

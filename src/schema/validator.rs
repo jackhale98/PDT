@@ -247,8 +247,8 @@ impl Validator {
         let filename = path.file_name().unwrap_or_default().to_string_lossy();
 
         // Determine entity type from filename
-        let prefix = EntityPrefix::from_filename(&filename)
-            .or_else(|| EntityPrefix::from_path(path));
+        let prefix =
+            EntityPrefix::from_filename(&filename).or_else(|| EntityPrefix::from_path(path));
 
         match prefix {
             Some(p) => self
@@ -289,7 +289,8 @@ fn format_schema_error(error: &JsonSchemaError) -> String {
 
     match &error.kind {
         jsonschema::error::ValidationErrorKind::Required { property } => {
-            let prop_str = property.as_str()
+            let prop_str = property
+                .as_str()
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| property.to_string());
             format!("Missing required field: {} at {}", prop_str, path)
@@ -299,19 +300,22 @@ fn format_schema_error(error: &JsonSchemaError) -> String {
         }
         jsonschema::error::ValidationErrorKind::Enum { options } => {
             let opts = format_enum_options(options);
-            format!(
-                "Invalid value at {}: must be one of: {}",
-                path, opts
-            )
+            format!("Invalid value at {}: must be one of: {}", path, opts)
         }
         jsonschema::error::ValidationErrorKind::Pattern { pattern } => {
             format!("Value at {} doesn't match pattern: {}", path, pattern)
         }
         jsonschema::error::ValidationErrorKind::MinLength { limit } => {
-            format!("Value at {} is too short: minimum {} characters", path, limit)
+            format!(
+                "Value at {} is too short: minimum {} characters",
+                path, limit
+            )
         }
         jsonschema::error::ValidationErrorKind::MaxLength { limit } => {
-            format!("Value at {} is too long: maximum {} characters", path, limit)
+            format!(
+                "Value at {} is too long: maximum {} characters",
+                path, limit
+            )
         }
         jsonschema::error::ValidationErrorKind::Minimum { limit } => {
             format!("Value at {} is too small: minimum {}", path, limit)
@@ -320,11 +324,7 @@ fn format_schema_error(error: &JsonSchemaError) -> String {
             format!("Value at {} is too large: maximum {}", path, limit)
         }
         jsonschema::error::ValidationErrorKind::AdditionalProperties { unexpected } => {
-            format!(
-                "Unknown field(s) at {}: {}",
-                path,
-                unexpected.join(", ")
-            )
+            format!("Unknown field(s) at {}: {}", path, unexpected.join(", "))
         }
         _ => {
             format!("Validation error at {}: {}", path, error)
@@ -336,7 +336,11 @@ fn format_schema_error(error: &JsonSchemaError) -> String {
 fn format_enum_options(options: &JsonValue) -> String {
     if let Some(arr) = options.as_array() {
         arr.iter()
-            .map(|v| v.as_str().map(|s| s.to_string()).unwrap_or_else(|| v.to_string()))
+            .map(|v| {
+                v.as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| v.to_string())
+            })
             .collect::<Vec<_>>()
             .join(", ")
     } else {
@@ -347,13 +351,17 @@ fn format_enum_options(options: &JsonValue) -> String {
 /// Generate a short hint for the error label
 fn format_error_hint(error: &JsonSchemaError) -> String {
     match &error.kind {
-        jsonschema::error::ValidationErrorKind::Required { .. } => "required field missing".to_string(),
+        jsonschema::error::ValidationErrorKind::Required { .. } => {
+            "required field missing".to_string()
+        }
         jsonschema::error::ValidationErrorKind::Type { .. } => "wrong type".to_string(),
         jsonschema::error::ValidationErrorKind::Enum { .. } => "invalid value".to_string(),
         jsonschema::error::ValidationErrorKind::Pattern { .. } => "pattern mismatch".to_string(),
         jsonschema::error::ValidationErrorKind::MinLength { .. } => "too short".to_string(),
         jsonschema::error::ValidationErrorKind::MaxLength { .. } => "too long".to_string(),
-        jsonschema::error::ValidationErrorKind::AdditionalProperties { .. } => "unknown field".to_string(),
+        jsonschema::error::ValidationErrorKind::AdditionalProperties { .. } => {
+            "unknown field".to_string()
+        }
         _ => "validation error".to_string(),
     }
 }
@@ -362,7 +370,8 @@ fn format_error_hint(error: &JsonSchemaError) -> String {
 fn generate_help_message(error: &JsonSchemaError) -> Option<String> {
     match &error.kind {
         jsonschema::error::ValidationErrorKind::Required { property } => {
-            let prop_str = property.as_str()
+            let prop_str = property
+                .as_str()
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| property.to_string());
             Some(format!("Add the '{}' field to your file", prop_str))
@@ -384,7 +393,10 @@ fn generate_help_message(error: &JsonSchemaError) -> Option<String> {
         }
         jsonschema::error::ValidationErrorKind::AdditionalProperties { unexpected } => {
             if unexpected.len() == 1 {
-                Some(format!("Remove the '{}' field or check spelling", unexpected[0]))
+                Some(format!(
+                    "Remove the '{}' field or check spelling",
+                    unexpected[0]
+                ))
             } else {
                 Some("Remove unknown fields or check spelling".to_string())
             }
@@ -508,7 +520,11 @@ revision: 1
 "#;
 
         let result = validator.validate(yaml, "test.tdt.yaml", EntityPrefix::Req);
-        assert!(result.is_ok(), "Valid requirement should pass: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Valid requirement should pass: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -549,7 +565,8 @@ author: Test
         assert!(result.is_err(), "Invalid enum value should fail");
         let err = result.unwrap_err();
         assert!(
-            err.to_string().contains("status") || err.violations.iter().any(|v| v.message.contains("status")),
+            err.to_string().contains("status")
+                || err.violations.iter().any(|v| v.message.contains("status")),
             "Error should mention status field"
         );
     }
@@ -688,7 +705,11 @@ author: Test
 "#;
 
         let result = validator.validate(yaml, "test.tdt.yaml", EntityPrefix::Risk);
-        assert!(result.is_ok(), "Risk with FMEA fields should pass: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Risk with FMEA fields should pass: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -735,7 +756,11 @@ author: Test
 "#;
 
         let result = validator.validate(yaml, "test.tdt.yaml", EntityPrefix::Risk);
-        assert!(result.is_ok(), "Risk with mitigations should pass: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Risk with mitigations should pass: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -855,7 +880,11 @@ author: Test Engineer
 "#;
 
         let result = validator.validate(yaml, "test.tdt.yaml", EntityPrefix::Test);
-        assert!(result.is_ok(), "Test with procedure should pass: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Test with procedure should pass: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -991,7 +1020,11 @@ author: Test Engineer
 "#;
 
         let result = validator.validate(yaml, "test.tdt.yaml", EntityPrefix::Rslt);
-        assert!(result.is_ok(), "Result with step results should pass: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Result with step results should pass: {:?}",
+            result
+        );
     }
 
     #[test]
@@ -1017,7 +1050,11 @@ author: Test Engineer
 "#;
 
         let result = validator.validate(yaml, "test.tdt.yaml", EntityPrefix::Rslt);
-        assert!(result.is_ok(), "Result with failures should pass: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Result with failures should pass: {:?}",
+            result
+        );
     }
 
     #[test]

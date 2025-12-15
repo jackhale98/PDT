@@ -319,14 +319,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             match args.sort {
                 ListColumn::Id => entities.sort_by(|a, b| a.id.cmp(&b.id)),
                 ListColumn::Title => entities.sort_by(|a, b| a.title.cmp(&b.title)),
-                ListColumn::ProcessType => {
-                    entities.sort_by(|a, b| {
-                        a.entity_type
-                            .as_deref()
-                            .unwrap_or("")
-                            .cmp(b.entity_type.as_deref().unwrap_or(""))
-                    })
-                }
+                ListColumn::ProcessType => entities.sort_by(|a, b| {
+                    a.entity_type
+                        .as_deref()
+                        .unwrap_or("")
+                        .cmp(b.entity_type.as_deref().unwrap_or(""))
+                }),
                 ListColumn::Operation => {} // Not in cache
                 ListColumn::Status => entities.sort_by(|a, b| a.status.cmp(&b.status)),
                 ListColumn::Author => entities.sort_by(|a, b| a.author.cmp(&b.author)),
@@ -424,11 +422,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     match args.sort {
         ListColumn::Id => processes.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
         ListColumn::Title => processes.sort_by(|a, b| a.title.cmp(&b.title)),
-        ListColumn::ProcessType => processes.sort_by(|a, b| {
-            format!("{:?}", a.process_type).cmp(&format!("{:?}", b.process_type))
-        }),
+        ListColumn::ProcessType => processes
+            .sort_by(|a, b| format!("{:?}", a.process_type).cmp(&format!("{:?}", b.process_type))),
         ListColumn::Operation => processes.sort_by(|a, b| {
-            a.operation_number.as_deref().unwrap_or("").cmp(b.operation_number.as_deref().unwrap_or(""))
+            a.operation_number
+                .as_deref()
+                .unwrap_or("")
+                .cmp(b.operation_number.as_deref().unwrap_or(""))
         }),
         ListColumn::Status => {
             processes.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
@@ -476,7 +476,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,title,type,op_number,cycle_time,status");
             for proc in &processes {
-                let short_id = short_ids.get_short_id(&proc.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&proc.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{}",
                     short_id,
@@ -484,7 +486,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     escape_csv(&proc.title),
                     proc.process_type,
                     proc.operation_number.as_deref().unwrap_or(""),
-                    proc.cycle_time_minutes.map_or(String::new(), |t| t.to_string()),
+                    proc.cycle_time_minutes
+                        .map_or(String::new(), |t| t.to_string()),
                     proc.status
                 );
             }
@@ -520,11 +523,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 print!("{:<width$}", header, width = widths[i]);
             }
             println!();
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             // Print rows
             for proc in &processes {
-                let short_id = short_ids.get_short_id(&proc.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&proc.id.to_string())
+                    .unwrap_or_default();
 
                 // Always show SHORT first
                 print!("{:<8} ", style(&short_id).cyan());
@@ -534,7 +542,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                         ListColumn::Id => format_short_id(&proc.id),
                         ListColumn::Title => truncate_str(&proc.title, 28),
                         ListColumn::ProcessType => proc.process_type.to_string(),
-                        ListColumn::Operation => proc.operation_number.as_deref().unwrap_or("-").to_string(),
+                        ListColumn::Operation => {
+                            proc.operation_number.as_deref().unwrap_or("-").to_string()
+                        }
                         ListColumn::Status => proc.status.to_string(),
                         ListColumn::Author => truncate_str(&proc.author, 18),
                         ListColumn::Created => proc.created.format("%Y-%m-%d %H:%M").to_string(),
@@ -571,7 +581,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Title | Type | Op # | Cycle | Status |");
             println!("|---|---|---|---|---|---|---|");
             for proc in &processes {
-                let short_id = short_ids.get_short_id(&proc.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&proc.id.to_string())
+                    .unwrap_or_default();
                 let cycle_str = proc
                     .cycle_time_minutes
                     .map_or("-".to_string(), |t| format!("{:.1}m", t));
@@ -705,7 +717,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No process found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No process found matching '{}'", args.id))?;
 
     // Read and parse process
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -730,11 +743,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&proc.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&proc.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&proc.title).yellow());
             if let Some(ref op) = proc.operation_number {
                 println!("{}: {}", style("Operation #").bold(), op);
             }
@@ -767,7 +776,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Parameters
             if !proc.parameters.is_empty() {
                 println!();
-                println!("{} ({}):", style("Parameters").bold(), proc.parameters.len());
+                println!(
+                    "{} ({}):",
+                    style("Parameters").bold(),
+                    proc.parameters.len()
+                );
                 for param in &proc.parameters {
                     print!("  • {}: {}", param.name, param.value);
                     if let Some(ref units) = param.units {
@@ -838,7 +851,8 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No process found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No process found matching '{}'", args.id))?;
 
     println!(
         "Opening {} in {}...",
@@ -1038,7 +1052,8 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
                         let proc_id = ctrl.get("process").and_then(|v| v.as_str()).unwrap_or("");
 
                         if !proc_id.is_empty() {
-                            let short = short_ids.get_short_id(ctrl_id)
+                            let short = short_ids
+                                .get_short_id(ctrl_id)
                                 .unwrap_or_else(|| truncate_str(ctrl_id, 8));
                             controls_by_process
                                 .entry(proc_id.to_string())
@@ -1062,7 +1077,8 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
                         let proc_id = work.get("process").and_then(|v| v.as_str()).unwrap_or("");
 
                         if !proc_id.is_empty() {
-                            let short = short_ids.get_short_id(work_id)
+                            let short = short_ids
+                                .get_short_id(work_id)
                                 .unwrap_or_else(|| truncate_str(work_id, 8));
                             work_by_process
                                 .entry(proc_id.to_string())
@@ -1092,7 +1108,10 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
                     "work_instructions": work_by_process.get(&proc_id).cloned().unwrap_or_default(),
                 })
             }).collect();
-            println!("{}", serde_json::to_string_pretty(&flow).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&flow).unwrap_or_default()
+            );
             return Ok(());
         }
         OutputFormat::Yaml => {
@@ -1121,7 +1140,8 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
 
     for (i, proc) in processes.iter().enumerate() {
         let proc_id = proc.id.to_string();
-        let short_id = short_ids.get_short_id(&proc_id)
+        let short_id = short_ids
+            .get_short_id(&proc_id)
             .unwrap_or_else(|| truncate_str(&proc_id, 8));
         let op_num = proc.operation_number.as_deref().unwrap_or("???");
 
@@ -1141,12 +1161,20 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
         if let Some(setup) = proc.setup_time_minutes {
             details.push(format!("Setup: {:.0} min", setup));
         }
-        println!("  {} {}", style("│").dim(), style(details.join(" | ")).dim());
+        println!(
+            "  {} {}",
+            style("│").dim(),
+            style(details.join(" | ")).dim()
+        );
 
         // Equipment
         if !proc.equipment.is_empty() {
             let equip_names: Vec<&str> = proc.equipment.iter().map(|e| e.name.as_str()).collect();
-            println!("  {} Equipment: {}", style("│").dim(), equip_names.join(", "));
+            println!(
+                "  {} Equipment: {}",
+                style("│").dim(),
+                equip_names.join(", ")
+            );
         }
 
         // Controls

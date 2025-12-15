@@ -295,7 +295,13 @@ impl TemplateContext {
         self
     }
 
-    pub fn with_target(mut self, name: impl Into<String>, nominal: f64, upper: f64, lower: f64) -> Self {
+    pub fn with_target(
+        mut self,
+        name: impl Into<String>,
+        nominal: f64,
+        upper: f64,
+        lower: f64,
+    ) -> Self {
         self.target_name = Some(name.into());
         self.target_nominal = Some(nominal);
         self.target_upper = Some(upper);
@@ -450,12 +456,22 @@ impl TemplateGenerator {
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("created_date", &ctx.created.format("%Y-%m-%d").to_string());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("req_type", &ctx.req_type.clone().unwrap_or_else(|| "input".to_string()));
-        context.insert("priority", &ctx.priority.clone().unwrap_or_else(|| "medium".to_string()));
+        context.insert(
+            "req_type",
+            &ctx.req_type.clone().unwrap_or_else(|| "input".to_string()),
+        );
+        context.insert(
+            "priority",
+            &ctx.priority.clone().unwrap_or_else(|| "medium".to_string()),
+        );
         context.insert("category", &ctx.category.clone().unwrap_or_default());
 
         // Try to use embedded template, fall back to hardcoded
-        if self.tera.get_template_names().any(|n| n == "requirement.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "requirement.yaml.tera")
+        {
             self.tera
                 .render("requirement.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -472,14 +488,41 @@ impl TemplateGenerator {
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("test_type", &ctx.test_type.clone().unwrap_or_else(|| "verification".to_string()));
-        context.insert("test_level", &ctx.test_level.clone().unwrap_or_else(|| "system".to_string()));
-        context.insert("test_method", &ctx.test_method.clone().unwrap_or_else(|| "test".to_string()));
-        context.insert("priority", &ctx.priority.clone().unwrap_or_else(|| "medium".to_string()));
+        context.insert(
+            "test_type",
+            &ctx.test_type
+                .clone()
+                .unwrap_or_else(|| "verification".to_string()),
+        );
+        context.insert(
+            "test_level",
+            &ctx.test_level
+                .clone()
+                .unwrap_or_else(|| "system".to_string()),
+        );
+        context.insert(
+            "test_method",
+            &ctx.test_method
+                .clone()
+                .unwrap_or_else(|| "test".to_string()),
+        );
+        context.insert(
+            "priority",
+            &ctx.priority.clone().unwrap_or_else(|| "medium".to_string()),
+        );
         context.insert("category", &ctx.category.clone().unwrap_or_default());
-        context.insert("estimated_duration", &ctx.estimated_duration.clone().unwrap_or_else(|| "1 hour".to_string()));
+        context.insert(
+            "estimated_duration",
+            &ctx.estimated_duration
+                .clone()
+                .unwrap_or_else(|| "1 hour".to_string()),
+        );
 
-        if self.tera.get_template_names().any(|n| n == "test.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "test.yaml.tera")
+        {
             self.tera
                 .render("test.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -495,14 +538,35 @@ impl TemplateGenerator {
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("test_id", &ctx.test_id.as_ref().map(|id| id.to_string()).unwrap_or_default());
-        context.insert("verdict", &ctx.verdict.clone().unwrap_or_else(|| "pass".to_string()));
-        context.insert("executed_by", &ctx.executed_by.clone().unwrap_or_else(|| ctx.author.clone()));
-        context.insert("executed_date", &ctx.executed_date.unwrap_or(ctx.created).to_rfc3339());
+        context.insert(
+            "test_id",
+            &ctx.test_id
+                .as_ref()
+                .map(|id| id.to_string())
+                .unwrap_or_default(),
+        );
+        context.insert(
+            "verdict",
+            &ctx.verdict.clone().unwrap_or_else(|| "pass".to_string()),
+        );
+        context.insert(
+            "executed_by",
+            &ctx.executed_by
+                .clone()
+                .unwrap_or_else(|| ctx.author.clone()),
+        );
+        context.insert(
+            "executed_date",
+            &ctx.executed_date.unwrap_or(ctx.created).to_rfc3339(),
+        );
         context.insert("category", &ctx.category.clone().unwrap_or_default());
         context.insert("duration", &ctx.duration.clone().unwrap_or_default());
 
-        if self.tera.get_template_names().any(|n| n == "rslt.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "rslt.yaml.tera")
+        {
             self.tera
                 .render("rslt.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -519,7 +583,12 @@ impl TemplateGenerator {
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("created_date", &ctx.created.format("%Y-%m-%d").to_string());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("risk_type", &ctx.risk_type.clone().unwrap_or_else(|| "design".to_string()));
+        context.insert(
+            "risk_type",
+            &ctx.risk_type
+                .clone()
+                .unwrap_or_else(|| "design".to_string()),
+        );
         context.insert("category", &ctx.category.clone().unwrap_or_default());
         context.insert("severity", &ctx.severity.unwrap_or(5));
         context.insert("occurrence", &ctx.occurrence.unwrap_or(5));
@@ -528,10 +597,19 @@ impl TemplateGenerator {
         let o = ctx.occurrence.unwrap_or(5) as u16;
         let d = ctx.detection.unwrap_or(5) as u16;
         context.insert("rpn", &(s * o * d));
-        context.insert("risk_level", &ctx.risk_level.clone().unwrap_or_else(|| "medium".to_string()));
+        context.insert(
+            "risk_level",
+            &ctx.risk_level
+                .clone()
+                .unwrap_or_else(|| "medium".to_string()),
+        );
 
         // Try to use embedded template, fall back to hardcoded
-        if self.tera.get_template_names().any(|n| n == "risk.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "risk.yaml.tera")
+        {
             self.tera
                 .render("risk.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -549,12 +627,27 @@ impl TemplateGenerator {
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
         context.insert("part_number", &ctx.part_number.clone().unwrap_or_default());
-        context.insert("part_revision", &ctx.part_revision.clone().unwrap_or_default());
-        context.insert("make_buy", &ctx.make_buy.clone().unwrap_or_else(|| "buy".to_string()));
-        context.insert("category", &ctx.component_category.clone().unwrap_or_else(|| "mechanical".to_string()));
+        context.insert(
+            "part_revision",
+            &ctx.part_revision.clone().unwrap_or_default(),
+        );
+        context.insert(
+            "make_buy",
+            &ctx.make_buy.clone().unwrap_or_else(|| "buy".to_string()),
+        );
+        context.insert(
+            "category",
+            &ctx.component_category
+                .clone()
+                .unwrap_or_else(|| "mechanical".to_string()),
+        );
         context.insert("material", &ctx.material.clone().unwrap_or_default());
 
-        if self.tera.get_template_names().any(|n| n == "component.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "component.yaml.tera")
+        {
             self.tera
                 .render("component.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -571,9 +664,16 @@ impl TemplateGenerator {
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
         context.insert("part_number", &ctx.part_number.clone().unwrap_or_default());
-        context.insert("part_revision", &ctx.part_revision.clone().unwrap_or_default());
+        context.insert(
+            "part_revision",
+            &ctx.part_revision.clone().unwrap_or_default(),
+        );
 
-        if self.tera.get_template_names().any(|n| n == "assembly.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "assembly.yaml.tera")
+        {
             self.tera
                 .render("assembly.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -648,10 +748,22 @@ entity_revision: 1
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("component_id", &ctx.component_id.clone().unwrap_or_default());
-        context.insert("feature_type", &ctx.feature_type.clone().unwrap_or_else(|| "hole".to_string()));
+        context.insert(
+            "component_id",
+            &ctx.component_id.clone().unwrap_or_default(),
+        );
+        context.insert(
+            "feature_type",
+            &ctx.feature_type
+                .clone()
+                .unwrap_or_else(|| "hole".to_string()),
+        );
 
-        if self.tera.get_template_names().any(|n| n == "feature.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "feature.yaml.tera")
+        {
             self.tera
                 .render("feature.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -663,7 +775,10 @@ entity_revision: 1
     fn hardcoded_feature_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
         let component_id = ctx.component_id.clone().unwrap_or_default();
-        let feature_type = ctx.feature_type.clone().unwrap_or_else(|| "hole".to_string());
+        let feature_type = ctx
+            .feature_type
+            .clone()
+            .unwrap_or_else(|| "hole".to_string());
         let created = ctx.created.to_rfc3339();
 
         // Determine if feature is internal based on type
@@ -740,9 +855,18 @@ entity_revision: 1
         context.insert("title", &ctx.title.clone().unwrap_or_default());
         context.insert("feature_a", &ctx.feature_a.clone().unwrap_or_default());
         context.insert("feature_b", &ctx.feature_b.clone().unwrap_or_default());
-        context.insert("mate_type", &ctx.mate_type.clone().unwrap_or_else(|| "clearance_fit".to_string()));
+        context.insert(
+            "mate_type",
+            &ctx.mate_type
+                .clone()
+                .unwrap_or_else(|| "clearance_fit".to_string()),
+        );
 
-        if self.tera.get_template_names().any(|n| n == "mate.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "mate.yaml.tera")
+        {
             self.tera
                 .render("mate.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -755,7 +879,10 @@ entity_revision: 1
         let title = ctx.title.clone().unwrap_or_default();
         let feature_a = ctx.feature_a.clone().unwrap_or_default();
         let feature_b = ctx.feature_b.clone().unwrap_or_default();
-        let mate_type = ctx.mate_type.clone().unwrap_or_else(|| "clearance_fit".to_string());
+        let mate_type = ctx
+            .mate_type
+            .clone()
+            .unwrap_or_else(|| "clearance_fit".to_string());
         let created = ctx.created.to_rfc3339();
 
         format!(
@@ -820,12 +947,19 @@ entity_revision: 1
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("target_name", &ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string()));
+        context.insert(
+            "target_name",
+            &ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string()),
+        );
         context.insert("target_nominal", &ctx.target_nominal.unwrap_or(1.0));
         context.insert("target_upper", &ctx.target_upper.unwrap_or(1.5));
         context.insert("target_lower", &ctx.target_lower.unwrap_or(0.5));
 
-        if self.tera.get_template_names().any(|n| n == "stackup.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "stackup.yaml.tera")
+        {
             self.tera
                 .render("stackup.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -923,7 +1057,10 @@ entity_revision: 1
         let part_number = ctx.part_number.clone().unwrap_or_default();
         let part_revision = ctx.part_revision.clone().unwrap_or_default();
         let make_buy = ctx.make_buy.clone().unwrap_or_else(|| "buy".to_string());
-        let category = ctx.component_category.clone().unwrap_or_else(|| "mechanical".to_string());
+        let category = ctx
+            .component_category
+            .clone()
+            .unwrap_or_else(|| "mechanical".to_string());
         let material = ctx.material.clone().unwrap_or_default();
         let created = ctx.created.to_rfc3339();
 
@@ -988,14 +1125,20 @@ entity_revision: 1
 
     fn hardcoded_risk_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
-        let risk_type = ctx.risk_type.clone().unwrap_or_else(|| "design".to_string());
+        let risk_type = ctx
+            .risk_type
+            .clone()
+            .unwrap_or_else(|| "design".to_string());
         let category = ctx.category.clone().unwrap_or_default();
         let created = ctx.created.to_rfc3339();
         let severity = ctx.severity.unwrap_or(5);
         let occurrence = ctx.occurrence.unwrap_or(5);
         let detection = ctx.detection.unwrap_or(5);
         let rpn = severity as u16 * occurrence as u16 * detection as u16;
-        let risk_level = ctx.risk_level.clone().unwrap_or_else(|| "medium".to_string());
+        let risk_level = ctx
+            .risk_level
+            .clone()
+            .unwrap_or_else(|| "medium".to_string());
 
         format!(
             r#"# Risk: {title}
@@ -1126,12 +1269,24 @@ revision: 1
 
     fn hardcoded_test_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
-        let test_type = ctx.test_type.clone().unwrap_or_else(|| "verification".to_string());
-        let test_level = ctx.test_level.clone().unwrap_or_else(|| "system".to_string());
-        let test_method = ctx.test_method.clone().unwrap_or_else(|| "test".to_string());
+        let test_type = ctx
+            .test_type
+            .clone()
+            .unwrap_or_else(|| "verification".to_string());
+        let test_level = ctx
+            .test_level
+            .clone()
+            .unwrap_or_else(|| "system".to_string());
+        let test_method = ctx
+            .test_method
+            .clone()
+            .unwrap_or_else(|| "test".to_string());
         let priority = ctx.priority.clone().unwrap_or_else(|| "medium".to_string());
         let category = ctx.category.clone().unwrap_or_default();
-        let estimated_duration = ctx.estimated_duration.clone().unwrap_or_else(|| "1 hour".to_string());
+        let estimated_duration = ctx
+            .estimated_duration
+            .clone()
+            .unwrap_or_else(|| "1 hour".to_string());
         let created = ctx.created.to_rfc3339();
 
         format!(
@@ -1212,9 +1367,16 @@ revision: 1
 
     fn hardcoded_result_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
-        let test_id = ctx.test_id.as_ref().map(|id| id.to_string()).unwrap_or_default();
+        let test_id = ctx
+            .test_id
+            .as_ref()
+            .map(|id| id.to_string())
+            .unwrap_or_default();
         let verdict = ctx.verdict.clone().unwrap_or_else(|| "pass".to_string());
-        let executed_by = ctx.executed_by.clone().unwrap_or_else(|| ctx.author.clone());
+        let executed_by = ctx
+            .executed_by
+            .clone()
+            .unwrap_or_else(|| ctx.author.clone());
         let executed_date = ctx.executed_date.unwrap_or(ctx.created).to_rfc3339();
         let category = ctx.category.clone().unwrap_or_default();
         let duration = ctx.duration.clone().unwrap_or_default();
@@ -1311,10 +1473,17 @@ revision: 1
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("component_id", &ctx.component_id.clone().unwrap_or_default());
+        context.insert(
+            "component_id",
+            &ctx.component_id.clone().unwrap_or_default(),
+        );
         context.insert("supplier", &ctx.supplier.clone().unwrap_or_default());
 
-        if self.tera.get_template_names().any(|n| n == "quote.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "quote.yaml.tera")
+        {
             self.tera
                 .render("quote.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -1403,10 +1572,17 @@ entity_revision: 1
         context.insert("name", &ctx.title.clone().unwrap_or_default());
         context.insert("short_name", &ctx.short_name.clone().unwrap_or_default());
         context.insert("website", &ctx.website.clone().unwrap_or_default());
-        context.insert("payment_terms", &ctx.payment_terms.clone().unwrap_or_default());
+        context.insert(
+            "payment_terms",
+            &ctx.payment_terms.clone().unwrap_or_default(),
+        );
         context.insert("notes", &ctx.notes.clone().unwrap_or_default());
 
-        if self.tera.get_template_names().any(|n| n == "supplier.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "supplier.yaml.tera")
+        {
             self.tera
                 .render("supplier.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -1506,10 +1682,22 @@ entity_revision: 1
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("process_type", &ctx.process_type.clone().unwrap_or_else(|| "machining".to_string()));
-        context.insert("operation_number", &ctx.operation_number.clone().unwrap_or_default());
+        context.insert(
+            "process_type",
+            &ctx.process_type
+                .clone()
+                .unwrap_or_else(|| "machining".to_string()),
+        );
+        context.insert(
+            "operation_number",
+            &ctx.operation_number.clone().unwrap_or_default(),
+        );
 
-        if self.tera.get_template_names().any(|n| n == "process.yaml.tera") {
+        if self
+            .tera
+            .get_template_names()
+            .any(|n| n == "process.yaml.tera")
+        {
             self.tera
                 .render("process.yaml.tera", &context)
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
@@ -1520,7 +1708,10 @@ entity_revision: 1
 
     fn hardcoded_process_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
-        let process_type = ctx.process_type.clone().unwrap_or_else(|| "machining".to_string());
+        let process_type = ctx
+            .process_type
+            .clone()
+            .unwrap_or_else(|| "machining".to_string());
         let operation_number = ctx.operation_number.clone().unwrap_or_default();
         let created = ctx.created.to_rfc3339();
 
@@ -1608,7 +1799,10 @@ entity_revision: 1
 
     fn hardcoded_control_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
-        let control_type = ctx.control_type.clone().unwrap_or_else(|| "inspection".to_string());
+        let control_type = ctx
+            .control_type
+            .clone()
+            .unwrap_or_else(|| "inspection".to_string());
         let process_id = ctx.process_id.clone().unwrap_or_default();
         let feature_id = ctx.feature_id.clone().unwrap_or_default();
         let critical = ctx.critical;
@@ -1699,7 +1893,10 @@ entity_revision: 1
     }
 
     /// Generate a work instruction template
-    pub fn generate_work_instruction(&self, ctx: &TemplateContext) -> Result<String, TemplateError> {
+    pub fn generate_work_instruction(
+        &self,
+        ctx: &TemplateContext,
+    ) -> Result<String, TemplateError> {
         Ok(self.hardcoded_work_instruction_template(ctx))
     }
 
@@ -1800,9 +1997,18 @@ entity_revision: 1
 
     fn hardcoded_ncr_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
-        let ncr_type = ctx.ncr_type.clone().unwrap_or_else(|| "internal".to_string());
-        let severity = ctx.ncr_severity.clone().unwrap_or_else(|| "minor".to_string());
-        let category = ctx.ncr_category.clone().unwrap_or_else(|| "dimensional".to_string());
+        let ncr_type = ctx
+            .ncr_type
+            .clone()
+            .unwrap_or_else(|| "internal".to_string());
+        let severity = ctx
+            .ncr_severity
+            .clone()
+            .unwrap_or_else(|| "minor".to_string());
+        let category = ctx
+            .ncr_category
+            .clone()
+            .unwrap_or_else(|| "dimensional".to_string());
         let created = ctx.created.to_rfc3339();
         let report_date = ctx.created.format("%Y-%m-%d").to_string();
 
@@ -1896,7 +2102,10 @@ entity_revision: 1
 
     fn hardcoded_capa_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
-        let capa_type = ctx.capa_type.clone().unwrap_or_else(|| "corrective".to_string());
+        let capa_type = ctx
+            .capa_type
+            .clone()
+            .unwrap_or_else(|| "corrective".to_string());
         let source_type = ctx.source_type.clone().unwrap_or_else(|| "ncr".to_string());
         let source_ref = ctx.source_ref.clone().unwrap_or_default();
         let created = ctx.created.to_rfc3339();
@@ -2004,13 +2213,10 @@ mod tests {
     #[test]
     fn test_template_generates_valid_yaml() {
         let generator = TemplateGenerator::new().unwrap();
-        let ctx = TemplateContext::new(
-            EntityId::new(EntityPrefix::Req),
-            "test".to_string(),
-        )
-        .with_title("Test Requirement")
-        .with_req_type("input")
-        .with_priority("high");
+        let ctx = TemplateContext::new(EntityId::new(EntityPrefix::Req), "test".to_string())
+            .with_title("Test Requirement")
+            .with_req_type("input")
+            .with_priority("high");
 
         let yaml = generator.generate_requirement(&ctx).unwrap();
 

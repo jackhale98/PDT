@@ -157,7 +157,13 @@ fn run_query(sql: &str, format: OutputFormat) -> Result<()> {
             // CSV output
             println!("{}", columns.join(","));
             for row in rows {
-                println!("{}", row.iter().map(|s| escape_csv(s)).collect::<Vec<_>>().join(","));
+                println!(
+                    "{}",
+                    row.iter()
+                        .map(|s| escape_csv(s))
+                        .collect::<Vec<_>>()
+                        .join(",")
+                );
             }
         }
         OutputFormat::Yaml => {
@@ -193,7 +199,8 @@ fn run_clear() -> Result<()> {
     let cache_path = project.root().join(".tdt/cache.db");
 
     if cache_path.exists() {
-        std::fs::remove_file(&cache_path).map_err(|e| miette::miette!("Failed to remove cache: {}", e))?;
+        std::fs::remove_file(&cache_path)
+            .map_err(|e| miette::miette!("Failed to remove cache: {}", e))?;
 
         // Also remove WAL and journal files if they exist
         let _ = std::fs::remove_file(project.root().join(".tdt/cache.db-journal"));
@@ -220,8 +227,8 @@ fn escape_csv(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
 
     fn create_test_project() -> (tempfile::TempDir, Project) {
         let tmp = tempdir().unwrap();

@@ -295,7 +295,10 @@ impl Supplier {
 
     /// Get the primary contact, if any
     pub fn primary_contact(&self) -> Option<&Contact> {
-        self.contacts.iter().find(|c| c.primary).or(self.contacts.first())
+        self.contacts
+            .iter()
+            .find(|c| c.primary)
+            .or(self.contacts.first())
     }
 
     /// Get display name (short_name if available, otherwise name)
@@ -317,7 +320,10 @@ impl Supplier {
         let threshold = today + chrono::Duration::days(days);
         self.certifications
             .iter()
-            .filter(|c| c.expiry.map_or(false, |exp| exp <= threshold && exp >= today))
+            .filter(|c| {
+                c.expiry
+                    .map_or(false, |exp| exp <= threshold && exp >= today)
+            })
             .collect()
     }
 }

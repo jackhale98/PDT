@@ -263,9 +263,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .filter(|m| {
-            args.author
-                .as_ref()
-                .map_or(true, |a| m.author.to_lowercase().contains(&a.to_lowercase()))
+            args.author.as_ref().map_or(true, |a| {
+                m.author.to_lowercase().contains(&a.to_lowercase())
+            })
         })
         .filter(|m| {
             args.recent.map_or(true, |days| {
@@ -281,10 +281,20 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         match sort_column {
             ListColumn::Id => mates.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
             ListColumn::Title => mates.sort_by(|a, b| a.title.cmp(&b.title)),
-            ListColumn::MateType => mates.sort_by(|a, b| format!("{}", a.mate_type).cmp(&format!("{}", b.mate_type))),
+            ListColumn::MateType => {
+                mates.sort_by(|a, b| format!("{}", a.mate_type).cmp(&format!("{}", b.mate_type)))
+            }
             ListColumn::FitResult => mates.sort_by(|a, b| {
-                let fit_a = a.fit_analysis.as_ref().map(|f| format!("{}", f.fit_result)).unwrap_or_default();
-                let fit_b = b.fit_analysis.as_ref().map(|f| format!("{}", f.fit_result)).unwrap_or_default();
+                let fit_a = a
+                    .fit_analysis
+                    .as_ref()
+                    .map(|f| format!("{}", f.fit_result))
+                    .unwrap_or_default();
+                let fit_b = b
+                    .fit_analysis
+                    .as_ref()
+                    .map(|f| format!("{}", f.fit_result))
+                    .unwrap_or_default();
                 fit_a.cmp(&fit_b)
             }),
             ListColumn::Match => mates.sort_by(|a, b| {
@@ -292,8 +302,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 let match_b = fit_matches_type(b);
                 match_a.cmp(&match_b)
             }),
-            ListColumn::FeatureA => mates.sort_by(|a, b| a.feature_a.id.to_string().cmp(&b.feature_a.id.to_string())),
-            ListColumn::FeatureB => mates.sort_by(|a, b| a.feature_b.id.to_string().cmp(&b.feature_b.id.to_string())),
+            ListColumn::FeatureA => {
+                mates.sort_by(|a, b| a.feature_a.id.to_string().cmp(&b.feature_a.id.to_string()))
+            }
+            ListColumn::FeatureB => {
+                mates.sort_by(|a, b| a.feature_b.id.to_string().cmp(&b.feature_b.id.to_string()))
+            }
             ListColumn::Status => mates.sort_by(|a, b| a.status().cmp(b.status())),
             ListColumn::Author => mates.sort_by(|a, b| a.author.cmp(&b.author)),
             ListColumn::Created => mates.sort_by(|a, b| a.created.cmp(&b.created)),
@@ -340,8 +354,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,title,mate_type,fit_result,status");
             for mate in &mates {
-                let short_id = short_ids.get_short_id(&mate.id.to_string()).unwrap_or_default();
-                let fit_result = mate.fit_analysis.as_ref()
+                let short_id = short_ids
+                    .get_short_id(&mate.id.to_string())
+                    .unwrap_or_default();
+                let fit_result = mate
+                    .fit_analysis
+                    .as_ref()
                     .map(|a| format!("{}", a.fit_result))
                     .unwrap_or_else(|| "n/a".to_string());
                 println!(
@@ -376,11 +394,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 widths.push(width);
             }
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             // Build rows
             for mate in &mates {
-                let short_id = short_ids.get_short_id(&mate.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&mate.id.to_string())
+                    .unwrap_or_default();
                 let mut row_parts = Vec::new();
 
                 for (i, col) in args.columns.iter().enumerate() {
@@ -395,14 +418,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                             format!("{:<width$}", style(&id_str).cyan(), width = width)
                         }
                         ListColumn::Title => {
-                            format!("{:<width$}", truncate_str(&mate.title, width.saturating_sub(2)), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&mate.title, width.saturating_sub(2)),
+                                width = width
+                            )
                         }
                         ListColumn::MateType => {
                             let type_str = format!("{}", mate.mate_type);
-                            format!("{:<width$}", truncate_str(&type_str, width.saturating_sub(2)), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&type_str, width.saturating_sub(2)),
+                                width = width
+                            )
                         }
                         ListColumn::FitResult => {
-                            let fit_result = mate.fit_analysis.as_ref()
+                            let fit_result = mate
+                                .fit_analysis
+                                .as_ref()
                                 .map(|a| format!("{}", a.fit_result))
                                 .unwrap_or_else(|| "n/a".to_string());
                             let styled = match fit_result.as_str() {
@@ -422,22 +455,40 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                             format!("{:<width$}", styled, width = width)
                         }
                         ListColumn::FeatureA => {
-                            let display = mate.feature_a.name.clone()
+                            let display = mate
+                                .feature_a
+                                .name
+                                .clone()
                                 .or_else(|| short_ids.get_short_id(&mate.feature_a.id.to_string()))
                                 .unwrap_or_else(|| mate.feature_a.id.to_string());
-                            format!("{:<width$}", truncate_str(&display, width.saturating_sub(2)), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&display, width.saturating_sub(2)),
+                                width = width
+                            )
                         }
                         ListColumn::FeatureB => {
-                            let display = mate.feature_b.name.clone()
+                            let display = mate
+                                .feature_b
+                                .name
+                                .clone()
                                 .or_else(|| short_ids.get_short_id(&mate.feature_b.id.to_string()))
                                 .unwrap_or_else(|| mate.feature_b.id.to_string());
-                            format!("{:<width$}", truncate_str(&display, width.saturating_sub(2)), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&display, width.saturating_sub(2)),
+                                width = width
+                            )
                         }
                         ListColumn::Status => {
                             format!("{:<width$}", mate.status(), width = width)
                         }
                         ListColumn::Author => {
-                            format!("{:<width$}", truncate_str(&mate.author, width.saturating_sub(2)), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&mate.author, width.saturating_sub(2)),
+                                width = width
+                            )
                         }
                         ListColumn::Created => {
                             format!("{:<width$}", mate.created.format("%Y-%m-%d"), width = width)
@@ -464,8 +515,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Title | Type | Fit | Status |");
             println!("|---|---|---|---|---|---|");
             for mate in &mates {
-                let short_id = short_ids.get_short_id(&mate.id.to_string()).unwrap_or_default();
-                let fit_result = mate.fit_analysis.as_ref()
+                let short_id = short_ids
+                    .get_short_id(&mate.id.to_string())
+                    .unwrap_or_default();
+                let fit_result = mate
+                    .fit_analysis
+                    .as_ref()
                     .map(|a| format!("{}", a.fit_result))
                     .unwrap_or_else(|| "n/a".to_string());
                 println!(
@@ -502,8 +557,12 @@ fn run_new(args: NewArgs) -> Result<()> {
 
     // Resolve feature IDs
     let short_ids = ShortIdIndex::load(&project);
-    let feature_a = short_ids.resolve(&feat_a_input).unwrap_or_else(|| feat_a_input.clone());
-    let feature_b = short_ids.resolve(&feat_b_input).unwrap_or_else(|| feat_b_input.clone());
+    let feature_a = short_ids
+        .resolve(&feat_a_input)
+        .unwrap_or_else(|| feat_a_input.clone());
+    let feature_b = short_ids
+        .resolve(&feat_b_input)
+        .unwrap_or_else(|| feat_b_input.clone());
 
     // Validate features exist and load them for fit calculation
     let feat_dir = project.root().join("tolerances/features");
@@ -618,7 +677,9 @@ fn run_new(args: NewArgs) -> Result<()> {
     // Show fit analysis if calculated
     if let Some(ref analysis) = mate.fit_analysis {
         // Use the clearance magnitude to determine precision for display
-        let ref_precision = analysis.worst_case_min_clearance.abs()
+        let ref_precision = analysis
+            .worst_case_min_clearance
+            .abs()
             .max(analysis.worst_case_max_clearance.abs())
             .max(0.001); // Minimum precision for tiny values
         let min_rounded = smart_round(analysis.worst_case_min_clearance, ref_precision);
@@ -698,11 +759,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&mate.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&mate.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&mate.title).yellow());
             println!("{}: {}", style("Type").bold(), mate.mate_type);
             println!("{}: {}", style("Status").bold(), mate.status);
             println!("{}", style("─".repeat(60)).dim());
@@ -710,21 +767,27 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Features
             println!();
             println!("{}", style("Mating Features:").bold());
-            let feat_a_display = short_ids.get_short_id(&mate.feature_a.id.to_string())
+            let feat_a_display = short_ids
+                .get_short_id(&mate.feature_a.id.to_string())
                 .unwrap_or_else(|| format_short_id(&mate.feature_a.id));
-            let feat_b_display = short_ids.get_short_id(&mate.feature_b.id.to_string())
+            let feat_b_display = short_ids
+                .get_short_id(&mate.feature_b.id.to_string())
                 .unwrap_or_else(|| format_short_id(&mate.feature_b.id));
 
-            println!("  Feature A: {} - {}",
+            println!(
+                "  Feature A: {} - {}",
                 style(&feat_a_display).cyan(),
-                mate.feature_a.name.as_deref().unwrap_or(""));
+                mate.feature_a.name.as_deref().unwrap_or("")
+            );
             if let Some(ref cmp_name) = mate.feature_a.component_name {
                 println!("             ({})", style(cmp_name).dim());
             }
 
-            println!("  Feature B: {} - {}",
+            println!(
+                "  Feature B: {} - {}",
                 style(&feat_b_display).cyan(),
-                mate.feature_b.name.as_deref().unwrap_or(""));
+                mate.feature_b.name.as_deref().unwrap_or("")
+            );
             if let Some(ref cmp_name) = mate.feature_b.component_name {
                 println!("             ({})", style(cmp_name).dim());
             }
@@ -732,7 +795,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Fit Analysis
             if let Some(ref fit) = mate.fit_analysis {
                 // Use the clearance magnitude to determine precision for display
-                let ref_precision = fit.worst_case_min_clearance.abs()
+                let ref_precision = fit
+                    .worst_case_min_clearance
+                    .abs()
                     .max(fit.worst_case_max_clearance.abs())
                     .max(0.001);
                 let min_rounded = smart_round(fit.worst_case_min_clearance, ref_precision);
@@ -813,7 +878,11 @@ fn run_edit(args: EditArgs) -> Result<()> {
 
     let path = found_path.ok_or_else(|| miette::miette!("No mate found matching '{}'", args.id))?;
 
-    println!("Opening {} in {}...", style(path.display()).cyan(), style(config.editor()).yellow());
+    println!(
+        "Opening {} in {}...",
+        style(path.display()).cyan(),
+        style(config.editor()).yellow()
+    );
 
     config.run_editor(&path).into_diagnostic()?;
 
@@ -884,7 +953,9 @@ fn run_recalc(args: RecalcArgs) -> Result<()> {
     }
 
     if feat_a.is_none() || feat_b.is_none() {
-        return Err(miette::miette!("Could not find both features to calculate fit"));
+        return Err(miette::miette!(
+            "Could not find both features to calculate fit"
+        ));
     }
 
     // Calculate fit
@@ -903,7 +974,9 @@ fn run_recalc(args: RecalcArgs) -> Result<()> {
 
     if let Some(ref analysis) = mate.fit_analysis {
         // Use the clearance magnitude to determine precision for display
-        let ref_precision = analysis.worst_case_min_clearance.abs()
+        let ref_precision = analysis
+            .worst_case_min_clearance
+            .abs()
             .max(analysis.worst_case_max_clearance.abs())
             .max(0.001);
         let min_rounded = smart_round(analysis.worst_case_min_clearance, ref_precision);
@@ -949,7 +1022,8 @@ fn run_recalc_all(args: RecalcAllArgs) -> Result<()> {
 
     // Load all components for cached data
     let cmp_dir = project.root().join("bom/components");
-    let mut components: std::collections::HashMap<String, (String, String)> = std::collections::HashMap::new(); // id -> (id, title)
+    let mut components: std::collections::HashMap<String, (String, String)> =
+        std::collections::HashMap::new(); // id -> (id, title)
     if cmp_dir.exists() {
         for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
@@ -1131,9 +1205,9 @@ fn calculate_fit_from_features(feat_a: &Feature, feat_b: &Feature) -> Option<Fit
 /// Result of checking if fit_result matches mate_type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum FitMatch {
-    Match,     // Fit result matches intended mate type
-    Mismatch,  // Fit result doesn't match intended type (warning)
-    Unknown,   // No fit analysis available
+    Match,    // Fit result matches intended mate type
+    Mismatch, // Fit result doesn't match intended type (warning)
+    Unknown,  // No fit analysis available
 }
 
 /// Check if a mate's calculated fit_result matches its intended mate_type

@@ -358,7 +358,12 @@ fn run_show(args: ShowLinksArgs) -> Result<()> {
             println!("  {}", style("(none)").dim());
         } else {
             for (source_id, link_type) in incoming {
-                println!("  {} ← {} ({})", format_short_id(&entity.id), format_short_id(&source_id), link_type);
+                println!(
+                    "  {} ← {} ({})",
+                    format_short_id(&entity.id),
+                    format_short_id(&source_id),
+                    link_type
+                );
             }
         }
     }
@@ -436,7 +441,10 @@ fn run_check(args: CheckLinksArgs) -> Result<()> {
                                                     );
 
                                                     if args.fix {
-                                                        println!("  {} Would remove broken link", style("fix:").yellow());
+                                                        println!(
+                                                            "  {} Would remove broken link",
+                                                            style("fix:").yellow()
+                                                        );
                                                     }
                                                 }
                                             }
@@ -457,7 +465,10 @@ fn run_check(args: CheckLinksArgs) -> Result<()> {
                                             );
 
                                             if args.fix {
-                                                println!("  {} Would remove broken link", style("fix:").yellow());
+                                                println!(
+                                                    "  {} Would remove broken link",
+                                                    style("fix:").yellow()
+                                                );
                                             }
                                         }
                                     }
@@ -483,15 +494,9 @@ fn run_check(args: CheckLinksArgs) -> Result<()> {
     );
 
     if broken_count > 0 {
-        Err(miette::miette!(
-            "{} broken link(s) found",
-            broken_count
-        ))
+        Err(miette::miette!("{} broken link(s) found", broken_count))
     } else {
-        println!(
-            "{} All links are valid!",
-            style("✓").green().bold()
-        );
+        println!("{} All links are valid!", style("✓").green().bold());
         Ok(())
     }
 }
@@ -508,7 +513,9 @@ struct EntityInfo {
 fn find_entity(project: &Project, id_query: &str) -> Result<EntityInfo> {
     // Resolve short ID (e.g., REQ@1) to full ID
     let short_ids = ShortIdIndex::load(project);
-    let resolved_query = short_ids.resolve(id_query).unwrap_or_else(|| id_query.to_string());
+    let resolved_query = short_ids
+        .resolve(id_query)
+        .unwrap_or_else(|| id_query.to_string());
 
     // Determine which directories to search based on prefix
     let search_dirs = get_search_dirs_for_query(project, &resolved_query);
@@ -535,7 +542,8 @@ fn find_entity(project: &Project, id_query: &str) -> Result<EntityInfo> {
                     if let Some(id_str) = value.get("id").and_then(|v| v.as_str()) {
                         if id_str.starts_with(&resolved_query) || id_str == resolved_query {
                             if let Ok(id) = id_str.parse::<EntityId>() {
-                                let title = value.get("title")
+                                let title = value
+                                    .get("title")
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("(untitled)")
                                     .to_string();
@@ -553,22 +561,12 @@ fn find_entity(project: &Project, id_query: &str) -> Result<EntityInfo> {
     }
 
     match matches.len() {
-        0 => Err(miette::miette!(
-            "No entity found matching '{}'",
-            id_query
-        )),
+        0 => Err(miette::miette!("No entity found matching '{}'", id_query)),
         1 => Ok(matches.remove(0)),
         _ => {
-            println!(
-                "{} Multiple matches found:",
-                style("!").yellow()
-            );
+            println!("{} Multiple matches found:", style("!").yellow());
             for info in &matches {
-                println!(
-                    "  {} - {}",
-                    format_short_id(&info.id),
-                    info.title
-                );
+                println!("  {} - {}", format_short_id(&info.id), info.title);
             }
             Err(miette::miette!(
                 "Ambiguous query '{}'. Please be more specific.",
@@ -658,10 +656,7 @@ fn add_link_to_yaml(content: &str, link_type: &str, target_id: &str) -> Result<S
             arr.push(new_value);
         }
     } else {
-        return Err(miette::miette!(
-            "Link type '{}' is not an array",
-            link_type
-        ));
+        return Err(miette::miette!("Link type '{}' is not an array", link_type));
     }
 
     // Serialize back
@@ -740,7 +735,10 @@ fn find_incoming_links(project: &Project, target_id: &EntityId) -> Result<Vec<(E
                                         for item in arr {
                                             if let Some(link_str) = item.as_str() {
                                                 if link_str == target_str {
-                                                    incoming.push((source_id.clone(), link_type.to_string()));
+                                                    incoming.push((
+                                                        source_id.clone(),
+                                                        link_type.to_string(),
+                                                    ));
                                                 }
                                             }
                                         }
@@ -748,7 +746,8 @@ fn find_incoming_links(project: &Project, target_id: &EntityId) -> Result<Vec<(E
                                     // Check single-value links
                                     else if let Some(link_str) = val.as_str() {
                                         if link_str == target_str {
-                                            incoming.push((source_id.clone(), link_type.to_string()));
+                                            incoming
+                                                .push((source_id.clone(), link_type.to_string()));
                                         }
                                     }
                                 }
@@ -799,7 +798,9 @@ fn collect_all_entity_ids(project: &Project) -> Result<Vec<String>> {
 
 /// Check if an entity exists
 fn entity_exists(all_ids: &[String], id: &str) -> bool {
-    all_ids.iter().any(|existing| existing == id || existing.starts_with(id))
+    all_ids
+        .iter()
+        .any(|existing| existing == id || existing.starts_with(id))
 }
 
 /// Add a reciprocal link from target back to source

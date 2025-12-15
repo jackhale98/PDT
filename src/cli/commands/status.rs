@@ -9,12 +9,12 @@ use std::collections::HashSet;
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::entity::Status;
 use crate::core::project::Project;
-use crate::entities::risk::{Risk, RiskLevel};
-use crate::entities::result::{Result as TestResult, Verdict};
-use crate::entities::ncr::Ncr;
 use crate::entities::capa::Capa;
-use crate::entities::stackup::{AnalysisResult, Stackup};
 use crate::entities::mate::Mate;
+use crate::entities::ncr::Ncr;
+use crate::entities::result::{Result as TestResult, Verdict};
+use crate::entities::risk::{Risk, RiskLevel};
+use crate::entities::stackup::{AnalysisResult, Stackup};
 use crate::entities::test::Test;
 
 #[derive(clap::Args, Debug)]
@@ -49,7 +49,10 @@ pub fn run(_args: StatusArgs, global: &GlobalOpts) -> Result<()> {
                 "bom": bom_metrics,
                 "tolerances": tol_metrics,
             });
-            println!("{}", serde_json::to_string_pretty(&status).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&status).unwrap_or_default()
+            );
         }
         _ => {
             // Human-readable dashboard
@@ -94,7 +97,13 @@ pub fn run(_args: StatusArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "═".repeat(width));
 
             // Overall health indicator
-            let health = calculate_health(&req_metrics, &risk_metrics, &test_metrics, &quality_metrics, &tol_metrics);
+            let health = calculate_health(
+                &req_metrics,
+                &risk_metrics,
+                &test_metrics,
+                &quality_metrics,
+                &tol_metrics,
+            );
             let health_style = match health.as_str() {
                 "Healthy" => style(health.clone()).green().bold(),
                 "Warning" => style(health.clone()).yellow().bold(),
@@ -215,7 +224,9 @@ fn collect_requirement_metrics(project: &Project) -> RequirementMetrics {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(req) = crate::yaml::parse_yaml_file::<crate::entities::requirement::Requirement>(entry.path()) {
+            if let Ok(req) = crate::yaml::parse_yaml_file::<crate::entities::requirement::Requirement>(
+                entry.path(),
+            ) {
                 metrics.total += 1;
 
                 let status_str = format!("{:?}", req.status).to_lowercase();
@@ -262,7 +273,10 @@ fn collect_risk_metrics(project: &Project) -> RiskMetrics {
             if let Ok(risk) = crate::yaml::parse_yaml_file::<Risk>(entry.path()) {
                 metrics.total += 1;
 
-                let level = risk.risk_level.or_else(|| risk.determine_risk_level()).unwrap_or(RiskLevel::Medium);
+                let level = risk
+                    .risk_level
+                    .or_else(|| risk.determine_risk_level())
+                    .unwrap_or(RiskLevel::Medium);
                 let level_str = format!("{:?}", level).to_lowercase();
                 *metrics.by_level.entry(level_str).or_insert(0) += 1;
 
@@ -303,7 +317,9 @@ fn collect_test_metrics(project: &Project) -> TestMetrics {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(test) = crate::yaml::parse_yaml_file::<crate::entities::test::Test>(entry.path()) {
+            if let Ok(test) =
+                crate::yaml::parse_yaml_file::<crate::entities::test::Test>(entry.path())
+            {
                 metrics.protocols += 1;
                 test_ids.insert(test.id.to_string());
             }
@@ -412,7 +428,9 @@ fn collect_bom_metrics(project: &Project) -> BomMetrics {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(cmp) = crate::yaml::parse_yaml_file::<crate::entities::component::Component>(entry.path()) {
+            if let Ok(cmp) =
+                crate::yaml::parse_yaml_file::<crate::entities::component::Component>(entry.path())
+            {
                 metrics.components += 1;
 
                 match cmp.make_buy {
@@ -434,7 +452,9 @@ fn collect_bom_metrics(project: &Project) -> BomMetrics {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(_asm) = crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path()) {
+            if let Ok(_asm) =
+                crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path())
+            {
                 metrics.assemblies += 1;
             }
         }
@@ -449,7 +469,9 @@ fn collect_bom_metrics(project: &Project) -> BomMetrics {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(quote) = crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path()) {
+            if let Ok(quote) =
+                crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path())
+            {
                 if let Some(ref cmp_id) = quote.component {
                     if let Some(suppliers) = component_suppliers.get_mut(cmp_id) {
                         if !suppliers.contains(&quote.supplier) {
@@ -484,7 +506,9 @@ fn collect_tolerance_metrics(project: &Project) -> ToleranceMetrics {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if crate::yaml::parse_yaml_file::<crate::entities::feature::Feature>(entry.path()).is_ok() {
+            if crate::yaml::parse_yaml_file::<crate::entities::feature::Feature>(entry.path())
+                .is_ok()
+            {
                 metrics.features += 1;
             }
         }
@@ -556,9 +580,7 @@ fn format_requirement_metrics(m: &RequirementMetrics) -> Vec<String> {
 }
 
 fn format_risk_metrics(m: &RiskMetrics) -> Vec<String> {
-    let mut lines = vec![
-        format!("Total:      {}", m.total),
-    ];
+    let mut lines = vec![format!("Total:      {}", m.total)];
 
     let critical = *m.by_level.get("critical").unwrap_or(&0);
     let high = *m.by_level.get("high").unwrap_or(&0);
@@ -569,7 +591,10 @@ fn format_risk_metrics(m: &RiskMetrics) -> Vec<String> {
     if high > 0 {
         lines.push(format!("High:       {}", high));
     }
-    lines.push(format!("Medium:     {}", m.by_level.get("medium").unwrap_or(&0)));
+    lines.push(format!(
+        "Medium:     {}",
+        m.by_level.get("medium").unwrap_or(&0)
+    ));
     lines.push(format!("Avg RPN:    {:.0}", m.avg_rpn));
 
     lines
@@ -600,13 +625,20 @@ fn format_quality_metrics(m: &QualityMetrics) -> Vec<String> {
 
 fn format_bom_metrics(m: &BomMetrics) -> Vec<String> {
     let mut lines = vec![
-        format!("Components: {}  (Make: {}, Buy: {})", m.components, m.make_parts, m.buy_parts),
+        format!(
+            "Components: {}  (Make: {}, Buy: {})",
+            m.components, m.make_parts, m.buy_parts
+        ),
         format!("Assemblies: {}", m.assemblies),
         format!("With Quotes: {}", m.with_quotes),
     ];
 
     if m.single_source > 0 {
-        lines.push(format!("Single-source: {} {}", m.single_source, style("⚠").yellow()));
+        lines.push(format!(
+            "Single-source: {} {}",
+            m.single_source,
+            style("⚠").yellow()
+        ));
     }
 
     lines
@@ -622,7 +654,10 @@ fn format_tolerance_metrics(m: &ToleranceMetrics) -> Vec<String> {
     if m.mates > 0 {
         let mates_unanalyzed = m.mates - m.mates_with_analysis;
         if mates_unanalyzed > 0 {
-            lines.push(format!("Mates:      {} ({} unanalyzed)", m.mates, mates_unanalyzed));
+            lines.push(format!(
+                "Mates:      {} ({} unanalyzed)",
+                m.mates, mates_unanalyzed
+            ));
         } else {
             lines.push(format!("Mates:      {}", m.mates));
         }
@@ -636,10 +671,18 @@ fn format_tolerance_metrics(m: &ToleranceMetrics) -> Vec<String> {
 
         if m.stackups_with_analysis > 0 {
             if m.stackups_fail > 0 {
-                lines.push(format!("  Failing:  {} {}", m.stackups_fail, style("⚠").red()));
+                lines.push(format!(
+                    "  Failing:  {} {}",
+                    m.stackups_fail,
+                    style("⚠").red()
+                ));
             }
             if m.stackups_marginal > 0 {
-                lines.push(format!("  Marginal: {} {}", m.stackups_marginal, style("⚠").yellow()));
+                lines.push(format!(
+                    "  Marginal: {} {}",
+                    m.stackups_marginal,
+                    style("⚠").yellow()
+                ));
             }
             lines.push(format!("  Passing:  {}", m.stackups_pass));
         }
@@ -667,10 +710,20 @@ fn format_tolerance_metrics(m: &ToleranceMetrics) -> Vec<String> {
     lines
 }
 
-fn print_two_columns(title1: &str, lines1: &[String], title2: &str, lines2: &[String], _width: usize) {
+fn print_two_columns(
+    title1: &str,
+    lines1: &[String],
+    title2: &str,
+    lines2: &[String],
+    _width: usize,
+) {
     let col_width = 32;
 
-    println!("{:<col_width$} {}", style(title1).bold(), style(title2).bold());
+    println!(
+        "{:<col_width$} {}",
+        style(title1).bold(),
+        style(title2).bold()
+    );
     println!("{:-<col_width$} {:-<col_width$}", "", "");
 
     let max_lines = lines1.len().max(lines2.len());

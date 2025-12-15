@@ -313,9 +313,7 @@ impl Quote {
 
     /// Get the linked item ID (component or assembly)
     pub fn linked_item(&self) -> Option<&str> {
-        self.component
-            .as_deref()
-            .or(self.assembly.as_deref())
+        self.component.as_deref().or(self.assembly.as_deref())
     }
 
     /// Check if quote is for a component

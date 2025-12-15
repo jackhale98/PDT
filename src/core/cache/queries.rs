@@ -8,14 +8,12 @@ use std::path::PathBuf;
 use rusqlite::{params, OptionalExtension};
 
 use super::{
-    parse_datetime, CachedCapa, CachedComponent, CachedControl, CachedEntity,
-    CachedFeature, CachedNcr, CachedProcess, CachedQuote, CachedRequirement,
-    CachedResult, CachedRisk, CachedSupplier, CachedTest, CachedWork,
-    EntityCache, EntityFilter,
+    parse_datetime, CachedCapa, CachedComponent, CachedControl, CachedEntity, CachedFeature,
+    CachedNcr, CachedProcess, CachedQuote, CachedRequirement, CachedResult, CachedRisk,
+    CachedSupplier, CachedTest, CachedWork, EntityCache, EntityFilter,
 };
 
 impl EntityCache {
-
     /// Get entity by ID (full or partial match)
     pub fn get_entity(&self, id: &str) -> Option<CachedEntity> {
         // Try exact match first
@@ -75,32 +73,36 @@ impl EntityCache {
 
     /// Get feature by ID with dimension data
     pub fn get_feature(&self, id: &str) -> Option<CachedFeature> {
-        self.conn.query_row(
-            r#"SELECT e.id, e.title, e.status, f.component_id, f.feature_type,
+        self.conn
+            .query_row(
+                r#"SELECT e.id, e.title, e.status, f.component_id, f.feature_type,
                       f.dim_name, f.dim_nominal, f.dim_plus_tol, f.dim_minus_tol, f.dim_internal,
                       e.author, e.created, e.file_path
                FROM features f
                JOIN entities e ON f.id = e.id
                WHERE f.id = ?1"#,
-            params![id],
-            |row| {
-                Ok(CachedFeature {
-                    id: row.get(0)?,
-                    title: row.get(1)?,
-                    status: row.get(2)?,
-                    component_id: row.get(3)?,
-                    feature_type: row.get(4)?,
-                    dim_name: row.get(5)?,
-                    dim_nominal: row.get(6)?,
-                    dim_plus_tol: row.get(7)?,
-                    dim_minus_tol: row.get(8)?,
-                    dim_internal: row.get::<_, Option<i32>>(9)?.map(|v| v != 0),
-                    author: row.get(10)?,
-                    created: parse_datetime(row.get::<_, String>(11)?),
-                    file_path: PathBuf::from(row.get::<_, String>(12)?),
-                })
-            },
-        ).optional().ok().flatten()
+                params![id],
+                |row| {
+                    Ok(CachedFeature {
+                        id: row.get(0)?,
+                        title: row.get(1)?,
+                        status: row.get(2)?,
+                        component_id: row.get(3)?,
+                        feature_type: row.get(4)?,
+                        dim_name: row.get(5)?,
+                        dim_nominal: row.get(6)?,
+                        dim_plus_tol: row.get(7)?,
+                        dim_minus_tol: row.get(8)?,
+                        dim_internal: row.get::<_, Option<i32>>(9)?.map(|v| v != 0),
+                        author: row.get(10)?,
+                        created: parse_datetime(row.get::<_, String>(11)?),
+                        file_path: PathBuf::from(row.get::<_, String>(12)?),
+                    })
+                },
+            )
+            .optional()
+            .ok()
+            .flatten()
     }
 
     /// Get all features for a component
@@ -196,12 +198,18 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             let tags_str: Option<String> = row.get(10)?;
             let tags = tags_str
-                .map(|s| s.split(',').filter(|t| !t.is_empty()).map(String::from).collect())
+                .map(|s| {
+                    s.split(',')
+                        .filter(|t| !t.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
                 .unwrap_or_default();
             Ok(CachedEntity {
                 id: row.get(0)?,
@@ -277,12 +285,18 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             let caps_str: Option<String> = row.get(7)?;
             let capabilities = caps_str
-                .map(|s| s.split(',').filter(|t| !t.is_empty()).map(String::from).collect())
+                .map(|s| {
+                    s.split(',')
+                        .filter(|t| !t.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
                 .unwrap_or_default();
             Ok(CachedSupplier {
                 id: row.get(0)?,
@@ -366,12 +380,18 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             let tags_str: Option<String> = row.get(8)?;
             let tags = tags_str
-                .map(|s| s.split(',').filter(|t| !t.is_empty()).map(String::from).collect())
+                .map(|s| {
+                    s.split(',')
+                        .filter(|t| !t.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
                 .unwrap_or_default();
             Ok(CachedRequirement {
                 id: row.get(0)?,
@@ -451,7 +471,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedComponent {
@@ -549,7 +570,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedTest {
@@ -636,7 +658,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedQuote {
@@ -724,7 +747,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedNcr {
@@ -796,7 +820,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedCapa {
@@ -886,7 +911,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedRisk {
@@ -970,7 +996,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedFeature {
@@ -1096,7 +1123,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedProcess {
@@ -1180,7 +1208,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedControl {
@@ -1253,7 +1282,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedWork {
@@ -1330,7 +1360,8 @@ impl EntityCache {
             Err(_) => return vec![],
         };
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
             Ok(CachedResult {

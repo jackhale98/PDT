@@ -393,12 +393,7 @@ impl Entity for Result {
 
 impl Result {
     /// Create a new result with the given parameters
-    pub fn new(
-        test_id: EntityId,
-        verdict: Verdict,
-        executed_by: String,
-        author: String,
-    ) -> Self {
+    pub fn new(test_id: EntityId, verdict: Verdict, executed_by: String, author: String) -> Self {
         let now = Utc::now();
         Self {
             id: EntityId::new(crate::core::EntityPrefix::Rslt),
@@ -450,7 +445,9 @@ impl Result {
         if self.step_results.is_empty() {
             return None;
         }
-        let passed = self.step_results.iter()
+        let passed = self
+            .step_results
+            .iter()
             .filter(|s| s.result == StepResult::Pass)
             .count();
         Some((passed as f64 / self.step_results.len() as f64) * 100.0)
@@ -548,7 +545,10 @@ mod tests {
 
         assert_eq!(parsed.step_results.len(), 2);
         assert_eq!(parsed.step_results[0].step, 1);
-        assert_eq!(parsed.step_results[1].measurement.as_ref().unwrap().value, Some(25.5));
+        assert_eq!(
+            parsed.step_results[1].measurement.as_ref().unwrap().value,
+            Some(25.5)
+        );
     }
 
     #[test]

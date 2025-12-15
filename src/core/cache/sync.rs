@@ -104,14 +104,12 @@ impl EntityCache {
         let priority = value["priority"].as_str();
         let entity_type = value["type"].as_str();
         let category = value["category"].as_str();
-        let tags: Option<String> = value["tags"]
-            .as_sequence()
-            .map(|seq| {
-                seq.iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            });
+        let tags: Option<String> = value["tags"].as_sequence().map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        });
 
         let prefix = id
             .split('-')
@@ -124,8 +122,21 @@ impl EntityCache {
                    (id, prefix, title, status, author, created, file_path, file_mtime, file_hash,
                     priority, entity_type, category, tags)
                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"#,
-                params![id, prefix, title, status, author, created, rel_path, mtime, hash,
-                        priority, entity_type, category, tags],
+                params![
+                    id,
+                    prefix,
+                    title,
+                    status,
+                    author,
+                    created,
+                    rel_path,
+                    mtime,
+                    hash,
+                    priority,
+                    entity_type,
+                    category,
+                    tags
+                ],
             )
             .into_diagnostic()?;
 
@@ -260,9 +271,19 @@ impl EntityCache {
 
         // Delete from type-specific tables
         for table in &[
-            "features", "components", "risks", "tests", "quotes",
-            "suppliers", "processes", "controls", "works", "ncrs",
-            "capas", "assemblies", "results",
+            "features",
+            "components",
+            "risks",
+            "tests",
+            "quotes",
+            "suppliers",
+            "processes",
+            "controls",
+            "works",
+            "ncrs",
+            "capas",
+            "assemblies",
+            "results",
         ] {
             self.conn
                 .execute(&format!("DELETE FROM {} WHERE id = ?1", table), params![id])
@@ -281,7 +302,11 @@ impl EntityCache {
     }
 
     /// Extract and cache links from an entity
-    pub(super) fn cache_entity_links(&self, source_id: &str, value: &serde_yml::Value) -> Result<()> {
+    pub(super) fn cache_entity_links(
+        &self,
+        source_id: &str,
+        value: &serde_yml::Value,
+    ) -> Result<()> {
         self.conn
             .execute("DELETE FROM links WHERE source_id = ?1", params![source_id])
             .into_diagnostic()?;
@@ -303,26 +328,27 @@ impl EntityCache {
         ];
 
         // Helper to extract links from a value
-        let extract_links = |value: &serde_yml::Value, field: &str, link_type: &str| -> Vec<(String, String)> {
-            let mut links = Vec::new();
-            if let Some(targets) = value[field].as_sequence() {
-                for target in targets {
-                    if let Some(target_id) = target.as_str() {
-                        links.push((target_id.to_string(), link_type.to_string()));
-                    } else if let Some(target_obj) = target.as_mapping() {
-                        if let Some(target_id) = target_obj
-                            .get(serde_yml::Value::String("id".to_string()))
-                            .and_then(|v| v.as_str())
-                        {
+        let extract_links =
+            |value: &serde_yml::Value, field: &str, link_type: &str| -> Vec<(String, String)> {
+                let mut links = Vec::new();
+                if let Some(targets) = value[field].as_sequence() {
+                    for target in targets {
+                        if let Some(target_id) = target.as_str() {
                             links.push((target_id.to_string(), link_type.to_string()));
+                        } else if let Some(target_obj) = target.as_mapping() {
+                            if let Some(target_id) = target_obj
+                                .get(serde_yml::Value::String("id".to_string()))
+                                .and_then(|v| v.as_str())
+                            {
+                                links.push((target_id.to_string(), link_type.to_string()));
+                            }
                         }
                     }
+                } else if let Some(target_id) = value[field].as_str() {
+                    links.push((target_id.to_string(), link_type.to_string()));
                 }
-            } else if let Some(target_id) = value[field].as_str() {
-                links.push((target_id.to_string(), link_type.to_string()));
-            }
-            links
-        };
+                links
+            };
 
         for (field, link_type) in link_fields {
             // Check at top level
@@ -346,7 +372,12 @@ impl EntityCache {
         Ok(())
     }
 
-    pub(super) fn insert_link(&self, source_id: &str, target_id: &str, link_type: &str) -> Result<()> {
+    pub(super) fn insert_link(
+        &self,
+        source_id: &str,
+        target_id: &str,
+        link_type: &str,
+    ) -> Result<()> {
         self.conn
             .execute(
                 "INSERT OR IGNORE INTO links (source_id, target_id, link_type) VALUES (?1, ?2, ?3)",
@@ -470,9 +501,12 @@ impl EntityCache {
             value["contact"].clone()
         };
 
-        let capabilities: Option<String> = value["capabilities"]
-            .as_sequence()
-            .map(|seq| seq.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(","));
+        let capabilities: Option<String> = value["capabilities"].as_sequence().map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        });
 
         self.conn
             .execute(
@@ -496,9 +530,12 @@ impl EntityCache {
     }
 
     pub(super) fn cache_process_data(&self, id: &str, value: &serde_yml::Value) -> Result<()> {
-        let equipment = value["equipment"]
-            .as_sequence()
-            .map(|seq| seq.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>().join(","));
+        let equipment = value["equipment"].as_sequence().map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join(",")
+        });
 
         self.conn
             .execute(

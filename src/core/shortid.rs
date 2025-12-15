@@ -158,8 +158,11 @@ impl ShortIdIndex {
             let prefix = &reference[..at_pos];
             if !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphabetic()) {
                 // Normalize to uppercase for lookup
-                let normalized =
-                    format!("{}@{}", prefix.to_ascii_uppercase(), &reference[at_pos + 1..]);
+                let normalized = format!(
+                    "{}@{}",
+                    prefix.to_ascii_uppercase(),
+                    &reference[at_pos + 1..]
+                );
                 return self.entries.get(&normalized).cloned();
             }
         }

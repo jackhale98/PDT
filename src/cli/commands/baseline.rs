@@ -111,17 +111,22 @@ fn run_create(args: CreateArgs) -> Result<()> {
 
     let has_uncommitted = !status_output.stdout.is_empty();
     if has_uncommitted {
-        println!("{}", style("Warning: There are uncommitted changes.").yellow());
+        println!(
+            "{}",
+            style("Warning: There are uncommitted changes.").yellow()
+        );
         if !args.force {
-            return Err(miette::miette!("Commit or stash changes before creating a baseline. Use --force to override."));
+            return Err(miette::miette!(
+                "Commit or stash changes before creating a baseline. Use --force to override."
+            ));
         }
     }
 
     // Run validation unless skipped
     if !args.skip_validation {
         println!("{}", style("Running validation...").dim());
-        let validate_result = crate::cli::commands::validate::run(
-            crate::cli::commands::validate::ValidateArgs {
+        let validate_result =
+            crate::cli::commands::validate::run(crate::cli::commands::validate::ValidateArgs {
                 paths: vec![],
                 entity_type: None,
                 strict: false,
@@ -129,22 +134,26 @@ fn run_create(args: CreateArgs) -> Result<()> {
                 fail_fast: false,
                 summary: false,
                 fix: false,
-            }
-        );
+            });
 
         if let Err(e) = validate_result {
             println!("{} {}", style("Validation failed:").red().bold(), e);
             if !args.force {
                 return Err(miette::miette!("Fix validation errors before creating baseline. Use --force to override (not recommended)."));
             }
-            println!("{}", style("Proceeding anyway due to --force flag.").yellow());
+            println!(
+                "{}",
+                style("Proceeding anyway due to --force flag.").yellow()
+            );
         } else {
             println!("{}", style("Validation passed.").green());
         }
     }
 
     // Create annotated tag
-    let message = args.message.unwrap_or_else(|| format!("TDT Baseline: {}", tag_name));
+    let message = args
+        .message
+        .unwrap_or_else(|| format!("TDT Baseline: {}", tag_name));
 
     let tag_output = Command::new("git")
         .args(["tag", "-a", &tag_name, "-m", &message])
@@ -157,7 +166,11 @@ fn run_create(args: CreateArgs) -> Result<()> {
         return Err(miette::miette!("Failed to create tag: {}", stderr));
     }
 
-    println!("\n{} {}", style("Created baseline:").green().bold(), style(&tag_name).cyan());
+    println!(
+        "\n{} {}",
+        style("Created baseline:").green().bold(),
+        style(&tag_name).cyan()
+    );
     println!("{}", style("Push with: git push origin --tags").dim());
 
     Ok(())
@@ -169,16 +182,27 @@ fn run_compare(args: CompareArgs) -> Result<()> {
 
     // Normalize baseline names
     let baseline1 = normalize_baseline_name(&args.baseline1);
-    let baseline2 = args.baseline2.map(|b| normalize_baseline_name(&b)).unwrap_or_else(|| "HEAD".to_string());
+    let baseline2 = args
+        .baseline2
+        .map(|b| normalize_baseline_name(&b))
+        .unwrap_or_else(|| "HEAD".to_string());
 
-    println!("{} {} .. {}\n",
+    println!(
+        "{} {} .. {}\n",
         style("Comparing:").bold(),
         style(&baseline1).cyan(),
-        style(&baseline2).cyan());
+        style(&baseline2).cyan()
+    );
 
     // Get changed files
     let output = Command::new("git")
-        .args(["diff", "--name-status", &format!("{}..{}", baseline1, baseline2), "--", "*.tdt.yaml"])
+        .args([
+            "diff",
+            "--name-status",
+            &format!("{}..{}", baseline1, baseline2),
+            "--",
+            "*.tdt.yaml",
+        ])
         .current_dir(project.root())
         .output()
         .map_err(|e| miette::miette!("Failed to run git diff: {}", e))?;
@@ -199,7 +223,12 @@ fn run_compare(args: CompareArgs) -> Result<()> {
     let mut deleted = 0;
     let mut modified_files: Vec<String> = Vec::new();
 
-    println!("{:<8} {:<12} {}", style("STATUS").bold(), style("ID").bold(), style("FILE").bold());
+    println!(
+        "{:<8} {:<12} {}",
+        style("STATUS").bold(),
+        style("ID").bold(),
+        style("FILE").bold()
+    );
     println!("{}", "-".repeat(70));
 
     for line in stdout.lines() {
@@ -209,13 +238,19 @@ fn run_compare(args: CompareArgs) -> Result<()> {
             let file = parts[1];
 
             let (_status_str, status_style) = match status {
-                "A" => { added += 1; ("Added", style("Added").green()) },
+                "A" => {
+                    added += 1;
+                    ("Added", style("Added").green())
+                }
                 "M" => {
                     modified += 1;
                     modified_files.push(file.to_string());
                     ("Modified", style("Modified").yellow())
-                },
-                "D" => { deleted += 1; ("Deleted", style("Deleted").red()) },
+                }
+                "D" => {
+                    deleted += 1;
+                    ("Deleted", style("Deleted").red())
+                }
                 _ => ("Changed", style("Changed").dim()),
             };
 
@@ -230,20 +265,19 @@ fn run_compare(args: CompareArgs) -> Result<()> {
                     .and_then(|id| short_ids.get_short_id(&id).or(Some(id)))
                     .unwrap_or_else(|| "-".to_string());
 
-                println!("{:<8} {:<12} {}",
-                    status_style,
-                    style(&id).cyan(),
-                    file);
+                println!("{:<8} {:<12} {}", status_style, style(&id).cyan(), file);
             }
         }
     }
 
     if !args.ids_only {
-        println!("\n{} {} added, {} modified, {} deleted",
+        println!(
+            "\n{} {} added, {} modified, {} deleted",
             style("Summary:").bold(),
             style(added).green(),
             style(modified).yellow(),
-            style(deleted).red());
+            style(deleted).red()
+        );
     }
 
     // Show diffs for modified files if requested
@@ -256,10 +290,12 @@ fn run_compare(args: CompareArgs) -> Result<()> {
                 .and_then(|id| short_ids.get_short_id(&id).or(Some(id)))
                 .unwrap_or_else(|| "-".to_string());
 
-            println!("{} {} ({})",
+            println!(
+                "{} {} ({})",
                 style("───").dim(),
                 style(&id).cyan().bold(),
-                style(file).dim());
+                style(file).dim()
+            );
 
             let diff_output = Command::new("git")
                 .args(["diff", &format!("{}..{}", baseline1, baseline2), "--", file])
@@ -298,7 +334,11 @@ fn run_changed(args: ChangedArgs) -> Result<()> {
 
     let baseline = normalize_baseline_name(&args.since);
 
-    println!("{} {}\n", style("Changed since:").bold(), style(&baseline).cyan());
+    println!(
+        "{} {}\n",
+        style("Changed since:").bold(),
+        style(&baseline).cyan()
+    );
 
     // Build glob pattern based on entity type filter
     let glob_pattern = if let Some(ref entity_type) = args.entity_type {
@@ -310,7 +350,13 @@ fn run_changed(args: ChangedArgs) -> Result<()> {
 
     // Get changed files
     let output = Command::new("git")
-        .args(["diff", "--name-only", &format!("{}..HEAD", baseline), "--", &glob_pattern])
+        .args([
+            "diff",
+            "--name-only",
+            &format!("{}..HEAD", baseline),
+            "--",
+            &glob_pattern,
+        ])
         .current_dir(project.root())
         .output()
         .map_err(|e| miette::miette!("Failed to run git diff: {}", e))?;
@@ -389,7 +435,10 @@ fn run_list(args: ListArgs) -> Result<()> {
             println!("{}", style("No git tags found.").yellow());
         } else {
             println!("{}", style("No TDT baselines found.").yellow());
-            println!("{}", style("Create one with: tdt baseline create <name>").dim());
+            println!(
+                "{}",
+                style("Create one with: tdt baseline create <name>").dim()
+            );
         }
         return Ok(());
     }
@@ -421,7 +470,8 @@ fn run_list(args: ListArgs) -> Result<()> {
                 .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
                 .unwrap_or_default();
 
-            let msg = msg_output.split_once(' ')
+            let msg = msg_output
+                .split_once(' ')
                 .map(|(_, m)| m.trim())
                 .unwrap_or("");
 

@@ -187,7 +187,10 @@ mod tests {
     #[test]
     fn test_format_short_id_str() {
         assert_eq!(format_short_id_str("SHORT"), "SHORT");
-        assert_eq!(format_short_id_str("REQ-01J123456789ABCDEF123456"), "REQ-01J123456...");
+        assert_eq!(
+            format_short_id_str("REQ-01J123456789ABCDEF123456"),
+            "REQ-01J123456..."
+        );
     }
 
     #[test]

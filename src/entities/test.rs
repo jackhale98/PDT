@@ -291,12 +291,7 @@ impl Entity for Test {
 
 impl Test {
     /// Create a new test with the given parameters
-    pub fn new(
-        test_type: TestType,
-        title: String,
-        objective: String,
-        author: String,
-    ) -> Self {
+    pub fn new(test_type: TestType, title: String, objective: String, author: String) -> Self {
         Self {
             id: EntityId::new(crate::core::EntityPrefix::Test),
             test_type,
@@ -506,7 +501,9 @@ mod tests {
 
         assert!(!test.has_verifications());
 
-        test.links.verifies.push(EntityId::new(crate::core::EntityPrefix::Req));
+        test.links
+            .verifies
+            .push(EntityId::new(crate::core::EntityPrefix::Req));
         assert!(test.has_verifications());
     }
 }

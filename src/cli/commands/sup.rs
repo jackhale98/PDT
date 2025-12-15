@@ -254,7 +254,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         ListColumn::ShortName => suppliers.sort_by(|a, b| a.short_name.cmp(&b.short_name)),
         ListColumn::Status => suppliers.sort_by(|a, b| a.status.cmp(&b.status)),
         ListColumn::Website => suppliers.sort_by(|a, b| a.website.cmp(&b.website)),
-        ListColumn::Capabilities => suppliers.sort_by(|a, b| a.capabilities.len().cmp(&b.capabilities.len())),
+        ListColumn::Capabilities => {
+            suppliers.sort_by(|a, b| a.capabilities.len().cmp(&b.capabilities.len()))
+        }
         ListColumn::Author => suppliers.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => suppliers.sort_by(|a, b| a.created.cmp(&b.created)),
     }
@@ -355,9 +357,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     let value = match col {
                         ListColumn::Id => format!("{:<17}", truncate_str(&sup.id, 15)),
                         ListColumn::Name => format!("{:<25}", truncate_str(&sup.name, 23)),
-                        ListColumn::ShortName => format!("{:<12}", truncate_str(sup.short_name.as_deref().unwrap_or("-"), 10)),
+                        ListColumn::ShortName => format!(
+                            "{:<12}",
+                            truncate_str(sup.short_name.as_deref().unwrap_or("-"), 10)
+                        ),
                         ListColumn::Status => format!("{:<10}", sup.status),
-                        ListColumn::Website => format!("{:<25}", truncate_str(sup.website.as_deref().unwrap_or("-"), 23)),
+                        ListColumn::Website => format!(
+                            "{:<25}",
+                            truncate_str(sup.website.as_deref().unwrap_or("-"), 23)
+                        ),
                         ListColumn::Capabilities => {
                             let caps: Vec<_> = sup.capabilities.iter().take(2).cloned().collect();
                             let caps_display = if sup.capabilities.len() > 2 {
@@ -432,8 +440,7 @@ fn run_new(args: NewArgs) -> Result<()> {
 
     // Generate template
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
-    let ctx = TemplateContext::new(id.clone(), config.author())
-        .with_title(&name);
+    let ctx = TemplateContext::new(id.clone(), config.author()).with_title(&name);
 
     let ctx = if let Some(ref short) = args.short_name {
         ctx.with_short_name(short)
@@ -524,7 +531,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No supplier found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No supplier found matching '{}'", args.id))?;
 
     // Read and parse supplier
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -549,11 +557,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&sup.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Name").bold(),
-                style(&sup.name).yellow()
-            );
+            println!("{}: {}", style("Name").bold(), style(&sup.name).yellow());
             println!("{}: {}", style("Status").bold(), sup.status);
             println!("{}", style("─".repeat(60)).dim());
 
@@ -596,14 +600,19 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Capabilities
             if !sup.capabilities.is_empty() {
                 println!();
-                let cap_strs: Vec<String> = sup.capabilities.iter().map(|c| c.to_string()).collect();
+                let cap_strs: Vec<String> =
+                    sup.capabilities.iter().map(|c| c.to_string()).collect();
                 println!("{}: {}", style("Capabilities").bold(), cap_strs.join(", "));
             }
 
             // Certifications
             if !sup.certifications.is_empty() {
                 println!();
-                println!("{} ({}):", style("Certifications").bold(), sup.certifications.len());
+                println!(
+                    "{} ({}):",
+                    style("Certifications").bold(),
+                    sup.certifications.len()
+                );
                 for cert in &sup.certifications {
                     print!("  • {}", cert.name);
                     if let Some(expiry) = cert.expiry {
@@ -674,9 +683,14 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No supplier found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No supplier found matching '{}'", args.id))?;
 
-    println!("Opening {} in {}...", style(path.display()).cyan(), style(config.editor()).yellow());
+    println!(
+        "Opening {} in {}...",
+        style(path.display()).cyan(),
+        style(config.editor()).yellow()
+    );
 
     config.run_editor(&path).into_diagnostic()?;
 

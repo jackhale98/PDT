@@ -73,19 +73,22 @@ pub fn run(args: ImportArgs) -> Result<()> {
     // Handle template generation
     if args.template {
         let entity_type = args.entity_type.ok_or_else(|| {
-            miette::miette!("Entity type required for template generation. Usage: tdt import --template req")
+            miette::miette!(
+                "Entity type required for template generation. Usage: tdt import --template req"
+            )
         })?;
         return generate_template(entity_type);
     }
 
     // Require both entity type and file for import
-    let entity_type = args.entity_type.ok_or_else(|| {
-        miette::miette!("Entity type required. Usage: tdt import req data.csv")
-    })?;
+    let entity_type = args
+        .entity_type
+        .ok_or_else(|| miette::miette!("Entity type required. Usage: tdt import req data.csv"))?;
 
-    let file_path = args.file.clone().ok_or_else(|| {
-        miette::miette!("CSV file required. Usage: tdt import req data.csv")
-    })?;
+    let file_path = args
+        .file
+        .clone()
+        .ok_or_else(|| miette::miette!("CSV file required. Usage: tdt import req data.csv"))?;
 
     if !file_path.exists() {
         return Err(miette::miette!("File not found: {}", file_path.display()));
@@ -98,7 +101,11 @@ pub fn run(args: ImportArgs) -> Result<()> {
         style("→").blue(),
         style(entity_type.as_str()).cyan(),
         style(file_path.display()).yellow(),
-        if args.dry_run { style(" (dry run)").dim().to_string() } else { String::new() }
+        if args.dry_run {
+            style(" (dry run)").dim().to_string()
+        } else {
+            String::new()
+        }
     );
     println!();
 
@@ -127,9 +134,15 @@ pub fn run(args: ImportArgs) -> Result<()> {
     println!("{}", style("Import Summary").bold());
     println!("{}", style("─".repeat(50)).dim());
     println!("  Rows processed:   {}", style(stats.rows_processed).cyan());
-    println!("  Entities created: {}", style(stats.entities_created).green());
+    println!(
+        "  Entities created: {}",
+        style(stats.entities_created).green()
+    );
     if stats.entities_updated > 0 {
-        println!("  Entities updated: {}", style(stats.entities_updated).yellow());
+        println!(
+            "  Entities updated: {}",
+            style(stats.entities_updated).yellow()
+        );
     }
     if stats.errors > 0 {
         println!("  Errors:           {}", style(stats.errors).red());
@@ -140,11 +153,17 @@ pub fn run(args: ImportArgs) -> Result<()> {
 
     if args.dry_run {
         println!();
-        println!("{}", style("Dry run complete. No files were created.").yellow());
+        println!(
+            "{}",
+            style("Dry run complete. No files were created.").yellow()
+        );
     }
 
     if stats.errors > 0 && !args.skip_errors {
-        return Err(miette::miette!("Import completed with {} error(s)", stats.errors));
+        return Err(miette::miette!(
+            "Import completed with {} error(s)",
+            stats.errors
+        ));
     }
 
     Ok(())
@@ -177,43 +196,115 @@ fn generate_template(entity_type: EntityPrefix) -> Result<()> {
 fn get_csv_headers(entity_type: EntityPrefix) -> Vec<&'static str> {
     match entity_type {
         EntityPrefix::Req => vec![
-            "title", "type", "priority", "status", "text", "rationale", "tags",
+            "title",
+            "type",
+            "priority",
+            "status",
+            "text",
+            "rationale",
+            "tags",
         ],
         EntityPrefix::Risk => vec![
-            "title", "type", "description", "failure_mode", "cause", "effect",
-            "severity", "occurrence", "detection", "tags",
+            "title",
+            "type",
+            "description",
+            "failure_mode",
+            "cause",
+            "effect",
+            "severity",
+            "occurrence",
+            "detection",
+            "tags",
         ],
         EntityPrefix::Cmp => vec![
-            "part_number", "title", "make_buy", "category", "description",
-            "material", "finish", "mass", "cost", "tags",
+            "part_number",
+            "title",
+            "make_buy",
+            "category",
+            "description",
+            "material",
+            "finish",
+            "mass",
+            "cost",
+            "tags",
         ],
         EntityPrefix::Sup => vec![
-            "short_name", "title", "website", "contact_email", "contact_phone",
-            "address", "lead_time_days", "tags",
+            "short_name",
+            "title",
+            "website",
+            "contact_email",
+            "contact_phone",
+            "address",
+            "lead_time_days",
+            "tags",
         ],
         EntityPrefix::Test => vec![
-            "title", "type", "level", "method", "category", "priority",
-            "objective", "description", "estimated_duration", "tags",
+            "title",
+            "type",
+            "level",
+            "method",
+            "category",
+            "priority",
+            "objective",
+            "description",
+            "estimated_duration",
+            "tags",
         ],
         EntityPrefix::Proc => vec![
-            "title", "type", "operation_number", "description",
-            "cycle_time_minutes", "setup_time_minutes", "operator_skill", "tags",
+            "title",
+            "type",
+            "operation_number",
+            "description",
+            "cycle_time_minutes",
+            "setup_time_minutes",
+            "operator_skill",
+            "tags",
         ],
         EntityPrefix::Ctrl => vec![
-            "title", "type", "category", "description", "characteristic_name",
-            "nominal", "upper_limit", "lower_limit", "units", "critical", "tags",
+            "title",
+            "type",
+            "category",
+            "description",
+            "characteristic_name",
+            "nominal",
+            "upper_limit",
+            "lower_limit",
+            "units",
+            "critical",
+            "tags",
         ],
         EntityPrefix::Ncr => vec![
-            "title", "type", "severity", "category", "description",
-            "part_number", "quantity_affected", "characteristic", "specification", "actual", "tags",
+            "title",
+            "type",
+            "severity",
+            "category",
+            "description",
+            "part_number",
+            "quantity_affected",
+            "characteristic",
+            "specification",
+            "actual",
+            "tags",
         ],
         EntityPrefix::Capa => vec![
-            "title", "type", "source_type", "source_ref", "problem_statement",
-            "root_cause", "tags",
+            "title",
+            "type",
+            "source_type",
+            "source_ref",
+            "problem_statement",
+            "root_cause",
+            "tags",
         ],
         EntityPrefix::Quot => vec![
-            "title", "supplier", "component", "currency", "unit_price",
-            "lead_time_days", "moq", "description", "tags",
+            "title",
+            "supplier",
+            "component",
+            "currency",
+            "unit_price",
+            "lead_time_days",
+            "moq",
+            "description",
+            "tags",
         ],
         _ => vec!["title", "description", "tags"],
     }
@@ -223,55 +314,115 @@ fn get_csv_headers(entity_type: EntityPrefix) -> Vec<&'static str> {
 fn get_csv_example(entity_type: EntityPrefix) -> Vec<&'static str> {
     match entity_type {
         EntityPrefix::Req => vec![
-            "\"Stroke Length\"", "input", "critical", "draft",
+            "\"Stroke Length\"",
+            "input",
+            "critical",
+            "draft",
             "\"The actuator shall have a minimum stroke length of 100mm\"",
-            "\"Required for full range of motion\"", "\"mechanical,critical\"",
+            "\"Required for full range of motion\"",
+            "\"mechanical,critical\"",
         ],
         EntityPrefix::Risk => vec![
-            "\"Seal Failure\"", "design", "\"O-ring may fail under pressure\"",
-            "\"Seal extrusion\"", "\"Excessive pressure differential\"",
-            "\"Fluid leakage and system failure\"", "8", "4", "6", "\"seal,pressure\"",
+            "\"Seal Failure\"",
+            "design",
+            "\"O-ring may fail under pressure\"",
+            "\"Seal extrusion\"",
+            "\"Excessive pressure differential\"",
+            "\"Fluid leakage and system failure\"",
+            "8",
+            "4",
+            "6",
+            "\"seal,pressure\"",
         ],
         EntityPrefix::Cmp => vec![
-            "\"PN-001\"", "\"Housing Assembly\"", "make", "mechanical",
-            "\"Main structural housing\"", "\"6061-T6 Aluminum\"", "\"Anodize\"",
-            "0.5", "125.00", "\"structural,machined\"",
+            "\"PN-001\"",
+            "\"Housing Assembly\"",
+            "make",
+            "mechanical",
+            "\"Main structural housing\"",
+            "\"6061-T6 Aluminum\"",
+            "\"Anodize\"",
+            "0.5",
+            "125.00",
+            "\"structural,machined\"",
         ],
         EntityPrefix::Sup => vec![
-            "\"ACME\"", "\"ACME Manufacturing Co.\"", "\"https://acme.example.com\"",
-            "\"sales@acme.example.com\"", "\"+1-555-123-4567\"",
-            "\"123 Industrial Way, City, ST 12345\"", "14", "\"machining,precision\"",
+            "\"ACME\"",
+            "\"ACME Manufacturing Co.\"",
+            "\"https://acme.example.com\"",
+            "\"sales@acme.example.com\"",
+            "\"+1-555-123-4567\"",
+            "\"123 Industrial Way, City, ST 12345\"",
+            "14",
+            "\"machining,precision\"",
         ],
         EntityPrefix::Test => vec![
-            "\"Housing Dimensional Inspection\"", "verification", "unit", "inspection",
-            "\"mechanical\"", "high", "\"Verify housing dimensions meet specification\"",
-            "\"Measure critical dimensions of machined housing\"", "\"30 min\"",
+            "\"Housing Dimensional Inspection\"",
+            "verification",
+            "unit",
+            "inspection",
+            "\"mechanical\"",
+            "high",
+            "\"Verify housing dimensions meet specification\"",
+            "\"Measure critical dimensions of machined housing\"",
+            "\"30 min\"",
             "\"verification,dimensional\"",
         ],
         EntityPrefix::Proc => vec![
-            "\"CNC Rough Machining\"", "machining", "\"OP-010\"",
+            "\"CNC Rough Machining\"",
+            "machining",
+            "\"OP-010\"",
             "\"Initial rough machining of housing blank\"",
-            "45", "30", "intermediate", "\"machining,cnc\"",
+            "45",
+            "30",
+            "intermediate",
+            "\"machining,cnc\"",
         ],
         EntityPrefix::Ctrl => vec![
-            "\"Bore Diameter Check\"", "inspection", "variable",
-            "\"In-process check of bore diameter\"", "\"Bore Diameter\"",
-            "25.0", "25.02", "24.98", "mm", "true", "\"dimensional,critical\"",
+            "\"Bore Diameter Check\"",
+            "inspection",
+            "variable",
+            "\"In-process check of bore diameter\"",
+            "\"Bore Diameter\"",
+            "25.0",
+            "25.02",
+            "24.98",
+            "mm",
+            "true",
+            "\"dimensional,critical\"",
         ],
         EntityPrefix::Ncr => vec![
-            "\"Out-of-spec bore diameter\"", "internal", "minor", "dimensional",
+            "\"Out-of-spec bore diameter\"",
+            "internal",
+            "minor",
+            "dimensional",
             "\"Bore diameter measured outside tolerance\"",
-            "\"PN-001\"", "5", "\"Bore Diameter\"", "\"25.0 +/- 0.02mm\"", "\"25.05mm\"",
+            "\"PN-001\"",
+            "5",
+            "\"Bore Diameter\"",
+            "\"25.0 +/- 0.02mm\"",
+            "\"25.05mm\"",
             "\"dimensional,machining\"",
         ],
         EntityPrefix::Capa => vec![
-            "\"Improve bore machining process\"", "corrective", "ncr", "\"NCR@1\"",
+            "\"Improve bore machining process\"",
+            "corrective",
+            "ncr",
+            "\"NCR@1\"",
             "\"Recurring out-of-spec bore diameters\"",
-            "\"Tool wear not being monitored\"", "\"machining,process\"",
+            "\"Tool wear not being monitored\"",
+            "\"machining,process\"",
         ],
         EntityPrefix::Quot => vec![
-            "\"Housing Quote - Acme\"", "\"SUP@1\"", "\"CMP@1\"", "USD",
-            "125.00", "14", "100", "\"Quote for housing assembly\"", "\"machining\"",
+            "\"Housing Quote - Acme\"",
+            "\"SUP@1\"",
+            "\"CMP@1\"",
+            "USD",
+            "125.00",
+            "14",
+            "100",
+            "\"Quote for housing assembly\"",
+            "\"machining\"",
         ],
         _ => vec![],
     }
@@ -311,7 +462,12 @@ fn import_requirements(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -323,10 +479,17 @@ fn import_requirements(
         // Extract fields
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
@@ -416,11 +579,7 @@ fn import_requirements(
 }
 
 /// Import risks from CSV
-fn import_risks(
-    project: &Project,
-    file_path: &PathBuf,
-    args: &ImportArgs,
-) -> Result<ImportStats> {
+fn import_risks(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
     let config = Config::load();
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
@@ -449,7 +608,12 @@ fn import_risks(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -460,10 +624,17 @@ fn import_risks(
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
@@ -473,12 +644,12 @@ fn import_risks(
         let failure_mode = get_field(&record, &header_map, "failure_mode");
         let cause = get_field(&record, &header_map, "cause");
         let effect = get_field(&record, &header_map, "effect");
-        let severity: Option<u8> = get_field(&record, &header_map, "severity")
-            .and_then(|s| s.parse().ok());
-        let occurrence: Option<u8> = get_field(&record, &header_map, "occurrence")
-            .and_then(|s| s.parse().ok());
-        let detection: Option<u8> = get_field(&record, &header_map, "detection")
-            .and_then(|s| s.parse().ok());
+        let severity: Option<u8> =
+            get_field(&record, &header_map, "severity").and_then(|s| s.parse().ok());
+        let occurrence: Option<u8> =
+            get_field(&record, &header_map, "occurrence").and_then(|s| s.parse().ok());
+        let detection: Option<u8> =
+            get_field(&record, &header_map, "detection").and_then(|s| s.parse().ok());
         let tags = get_field(&record, &header_map, "tags");
 
         let id = EntityId::new(EntityPrefix::Risk);
@@ -516,7 +687,7 @@ fn import_risks(
             if !fm.is_empty() {
                 yaml = yaml.replace(
                     "failure_mode: |\n  # How does this failure manifest?",
-                    &format!("failure_mode: \"{}\"", fm.replace('"', "\\\""))
+                    &format!("failure_mode: \"{}\"", fm.replace('"', "\\\"")),
                 );
             }
         }
@@ -524,7 +695,7 @@ fn import_risks(
             if !c.is_empty() {
                 yaml = yaml.replace(
                     "cause: |\n  # What is the root cause or mechanism?",
-                    &format!("cause: \"{}\"", c.replace('"', "\\\""))
+                    &format!("cause: \"{}\"", c.replace('"', "\\\"")),
                 );
             }
         }
@@ -532,7 +703,7 @@ fn import_risks(
             if !e.is_empty() {
                 yaml = yaml.replace(
                     "effect: |\n  # What is the impact or consequence?",
-                    &format!("effect: \"{}\"", e.replace('"', "\\\""))
+                    &format!("effect: \"{}\"", e.replace('"', "\\\"")),
                 );
             }
         }
@@ -624,7 +795,12 @@ fn import_components(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -637,7 +813,11 @@ fn import_components(
         let part_number = get_field(&record, &header_map, "part_number").unwrap_or_default();
 
         if title.is_empty() && part_number.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title' or 'part_number'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title' or 'part_number'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
                 return Err(miette::miette!("Missing required field at row {}", row_num));
@@ -645,16 +825,21 @@ fn import_components(
             continue;
         }
 
-        let effective_title = if title.is_empty() { &part_number } else { &title };
+        let effective_title = if title.is_empty() {
+            &part_number
+        } else {
+            &title
+        };
         let make_buy = get_field(&record, &header_map, "make_buy").unwrap_or("make".to_string());
-        let category = get_field(&record, &header_map, "category").unwrap_or("mechanical".to_string());
+        let category =
+            get_field(&record, &header_map, "category").unwrap_or("mechanical".to_string());
         let description = get_field(&record, &header_map, "description");
         let material = get_field(&record, &header_map, "material");
         let finish = get_field(&record, &header_map, "finish");
-        let mass: Option<f64> = get_field(&record, &header_map, "mass")
-            .and_then(|s| s.parse().ok());
-        let cost: Option<f64> = get_field(&record, &header_map, "cost")
-            .and_then(|s| s.parse().ok());
+        let mass: Option<f64> =
+            get_field(&record, &header_map, "mass").and_then(|s| s.parse().ok());
+        let cost: Option<f64> =
+            get_field(&record, &header_map, "cost").and_then(|s| s.parse().ok());
         let tags = get_field(&record, &header_map, "tags");
 
         let id = EntityId::new(EntityPrefix::Cmp);
@@ -691,7 +876,11 @@ fn import_components(
                 let mat_value = material.clone().unwrap_or_default();
                 yaml = yaml.replace(
                     &format!("material: \"{}\"", mat_value),
-                    &format!("material: \"{}\"\nfinish: \"{}\"", mat_value, fin.replace('"', "\\\"")),
+                    &format!(
+                        "material: \"{}\"\nfinish: \"{}\"",
+                        mat_value,
+                        fin.replace('"', "\\\"")
+                    ),
                 );
             }
         }
@@ -780,7 +969,12 @@ fn import_suppliers(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -793,7 +987,11 @@ fn import_suppliers(
         let short_name = get_field(&record, &header_map, "short_name").unwrap_or_default();
 
         if title.is_empty() && short_name.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title' or 'short_name'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title' or 'short_name'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
                 return Err(miette::miette!("Missing required field at row {}", row_num));
@@ -801,10 +999,18 @@ fn import_suppliers(
             continue;
         }
 
-        let effective_title = if title.is_empty() { &short_name } else { &title };
+        let effective_title = if title.is_empty() {
+            &short_name
+        } else {
+            &title
+        };
         let effective_short = if short_name.is_empty() {
             // Generate short name from title (first word, uppercase)
-            effective_title.split_whitespace().next().unwrap_or("SUP").to_uppercase()
+            effective_title
+                .split_whitespace()
+                .next()
+                .unwrap_or("SUP")
+                .to_uppercase()
         } else {
             short_name.clone()
         };
@@ -814,8 +1020,8 @@ fn import_suppliers(
         let contact_phone = get_field(&record, &header_map, "contact_phone");
         let address = get_field(&record, &header_map, "address");
         // Note: lead_time_days is parsed but not used - it's a per-component field, not supplier-level
-        let _lead_time: Option<u32> = get_field(&record, &header_map, "lead_time_days")
-            .and_then(|s| s.parse().ok());
+        let _lead_time: Option<u32> =
+            get_field(&record, &header_map, "lead_time_days").and_then(|s| s.parse().ok());
         let tags = get_field(&record, &header_map, "tags");
 
         let id = EntityId::new(EntityPrefix::Sup);
@@ -901,11 +1107,7 @@ fn import_suppliers(
 }
 
 /// Import tests from CSV
-fn import_tests(
-    project: &Project,
-    file_path: &PathBuf,
-    args: &ImportArgs,
-) -> Result<ImportStats> {
+fn import_tests(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
     let config = Config::load();
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
@@ -934,7 +1136,12 @@ fn import_tests(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -945,22 +1152,32 @@ fn import_tests(
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
 
-        let test_type = get_field(&record, &header_map, "type").unwrap_or("verification".to_string());
+        let test_type =
+            get_field(&record, &header_map, "type").unwrap_or("verification".to_string());
         let test_level = get_field(&record, &header_map, "level").unwrap_or("unit".to_string());
-        let test_method = get_field(&record, &header_map, "method").unwrap_or("inspection".to_string());
+        let test_method =
+            get_field(&record, &header_map, "method").unwrap_or("inspection".to_string());
         let category = get_field(&record, &header_map, "category").unwrap_or_default();
         let priority = get_field(&record, &header_map, "priority").unwrap_or("medium".to_string());
         let objective = get_field(&record, &header_map, "objective");
         let description = get_field(&record, &header_map, "description");
-        let estimated_duration = get_field(&record, &header_map, "estimated_duration").unwrap_or("1 hour".to_string());
+        let estimated_duration =
+            get_field(&record, &header_map, "estimated_duration").unwrap_or("1 hour".to_string());
         let tags = get_field(&record, &header_map, "tags");
 
         let id = EntityId::new(EntityPrefix::Test);
@@ -1083,7 +1300,12 @@ fn import_processes(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -1094,21 +1316,29 @@ fn import_processes(
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
 
-        let process_type = get_field(&record, &header_map, "type").unwrap_or("machining".to_string());
+        let process_type =
+            get_field(&record, &header_map, "type").unwrap_or("machining".to_string());
         let operation_number = get_field(&record, &header_map, "operation_number");
         let description = get_field(&record, &header_map, "description");
-        let cycle_time: Option<f64> = get_field(&record, &header_map, "cycle_time_minutes")
-            .and_then(|s| s.parse().ok());
-        let setup_time: Option<f64> = get_field(&record, &header_map, "setup_time_minutes")
-            .and_then(|s| s.parse().ok());
+        let cycle_time: Option<f64> =
+            get_field(&record, &header_map, "cycle_time_minutes").and_then(|s| s.parse().ok());
+        let setup_time: Option<f64> =
+            get_field(&record, &header_map, "setup_time_minutes").and_then(|s| s.parse().ok());
         let operator_skill = get_field(&record, &header_map, "operator_skill");
         let tags = get_field(&record, &header_map, "tags");
 
@@ -1137,16 +1367,25 @@ fn import_processes(
 
         // Add cycle/setup times
         if let Some(ct) = cycle_time {
-            yaml = yaml.replace("cycle_time_minutes: null", &format!("cycle_time_minutes: {}", ct));
+            yaml = yaml.replace(
+                "cycle_time_minutes: null",
+                &format!("cycle_time_minutes: {}", ct),
+            );
         }
         if let Some(st) = setup_time {
-            yaml = yaml.replace("setup_time_minutes: null", &format!("setup_time_minutes: {}", st));
+            yaml = yaml.replace(
+                "setup_time_minutes: null",
+                &format!("setup_time_minutes: {}", st),
+            );
         }
 
         // Replace operator skill if provided
         if let Some(skill) = operator_skill {
             if !skill.is_empty() {
-                yaml = yaml.replace("operator_skill: intermediate", &format!("operator_skill: {}", skill));
+                yaml = yaml.replace(
+                    "operator_skill: intermediate",
+                    &format!("operator_skill: {}", skill),
+                );
             }
         }
 
@@ -1226,7 +1465,12 @@ fn import_controls(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -1237,24 +1481,33 @@ fn import_controls(
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
 
-        let control_type = get_field(&record, &header_map, "type").unwrap_or("inspection".to_string());
-        let control_category = get_field(&record, &header_map, "category").unwrap_or("variable".to_string());
+        let control_type =
+            get_field(&record, &header_map, "type").unwrap_or("inspection".to_string());
+        let control_category =
+            get_field(&record, &header_map, "category").unwrap_or("variable".to_string());
         let description = get_field(&record, &header_map, "description");
         let characteristic_name = get_field(&record, &header_map, "characteristic_name");
-        let nominal: Option<f64> = get_field(&record, &header_map, "nominal")
-            .and_then(|s| s.parse().ok());
-        let upper_limit: Option<f64> = get_field(&record, &header_map, "upper_limit")
-            .and_then(|s| s.parse().ok());
-        let lower_limit: Option<f64> = get_field(&record, &header_map, "lower_limit")
-            .and_then(|s| s.parse().ok());
+        let nominal: Option<f64> =
+            get_field(&record, &header_map, "nominal").and_then(|s| s.parse().ok());
+        let upper_limit: Option<f64> =
+            get_field(&record, &header_map, "upper_limit").and_then(|s| s.parse().ok());
+        let lower_limit: Option<f64> =
+            get_field(&record, &header_map, "lower_limit").and_then(|s| s.parse().ok());
         let units = get_field(&record, &header_map, "units").unwrap_or("mm".to_string());
         let critical = get_field(&record, &header_map, "critical")
             .map(|s| s.to_lowercase() == "true" || s == "1")
@@ -1273,7 +1526,10 @@ fn import_controls(
             .map_err(|e| miette::miette!("Template error at row {}: {}", row_num, e))?;
 
         // Replace control_category
-        yaml = yaml.replace("control_category: variable", &format!("control_category: {}", control_category));
+        yaml = yaml.replace(
+            "control_category: variable",
+            &format!("control_category: {}", control_category),
+        );
 
         // Replace description if provided
         if let Some(desc) = description {
@@ -1343,11 +1599,7 @@ fn import_controls(
 }
 
 /// Import NCRs from CSV
-fn import_ncrs(
-    project: &Project,
-    file_path: &PathBuf,
-    args: &ImportArgs,
-) -> Result<ImportStats> {
+fn import_ncrs(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
     let config = Config::load();
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
@@ -1376,7 +1628,12 @@ fn import_ncrs(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -1387,21 +1644,30 @@ fn import_ncrs(
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
 
         let ncr_type = get_field(&record, &header_map, "type").unwrap_or("internal".to_string());
-        let ncr_severity = get_field(&record, &header_map, "severity").unwrap_or("minor".to_string());
-        let ncr_category = get_field(&record, &header_map, "category").unwrap_or("dimensional".to_string());
+        let ncr_severity =
+            get_field(&record, &header_map, "severity").unwrap_or("minor".to_string());
+        let ncr_category =
+            get_field(&record, &header_map, "category").unwrap_or("dimensional".to_string());
         let description = get_field(&record, &header_map, "description");
         let part_number = get_field(&record, &header_map, "part_number");
-        let quantity_affected: Option<u32> = get_field(&record, &header_map, "quantity_affected")
-            .and_then(|s| s.parse().ok());
+        let quantity_affected: Option<u32> =
+            get_field(&record, &header_map, "quantity_affected").and_then(|s| s.parse().ok());
         let characteristic = get_field(&record, &header_map, "characteristic");
         let specification = get_field(&record, &header_map, "specification");
         let actual = get_field(&record, &header_map, "actual");
@@ -1423,15 +1689,24 @@ fn import_ncrs(
             yaml = yaml.replace("part_number: \"\"", &format!("part_number: \"{}\"", pn));
         }
         if let Some(qty) = quantity_affected {
-            yaml = yaml.replace("quantity_affected: 1", &format!("quantity_affected: {}", qty));
+            yaml = yaml.replace(
+                "quantity_affected: 1",
+                &format!("quantity_affected: {}", qty),
+            );
         }
 
         // Add defect details
         if let Some(char_name) = characteristic {
-            yaml = yaml.replace("characteristic: \"\"", &format!("characteristic: \"{}\"", char_name));
+            yaml = yaml.replace(
+                "characteristic: \"\"",
+                &format!("characteristic: \"{}\"", char_name),
+            );
         }
         if let Some(spec) = specification {
-            yaml = yaml.replace("specification: \"\"", &format!("specification: \"{}\"", spec));
+            yaml = yaml.replace(
+                "specification: \"\"",
+                &format!("specification: \"{}\"", spec),
+            );
         }
         if let Some(act) = actual {
             yaml = yaml.replace("actual: \"\"", &format!("actual: \"{}\"", act));
@@ -1484,11 +1759,7 @@ fn import_ncrs(
 }
 
 /// Import CAPAs from CSV
-fn import_capas(
-    project: &Project,
-    file_path: &PathBuf,
-    args: &ImportArgs,
-) -> Result<ImportStats> {
+fn import_capas(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
     let config = Config::load();
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
@@ -1517,7 +1788,12 @@ fn import_capas(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -1528,16 +1804,24 @@ fn import_capas(
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
 
         let capa_type = get_field(&record, &header_map, "type").unwrap_or("corrective".to_string());
-        let source_type = get_field(&record, &header_map, "source_type").unwrap_or("ncr".to_string());
+        let source_type =
+            get_field(&record, &header_map, "source_type").unwrap_or("ncr".to_string());
         let source_ref = get_field(&record, &header_map, "source_ref").unwrap_or_default();
         let problem_statement = get_field(&record, &header_map, "problem_statement");
         let root_cause = get_field(&record, &header_map, "root_cause");
@@ -1617,11 +1901,7 @@ fn import_capas(
 }
 
 /// Import quotes from CSV
-fn import_quotes(
-    project: &Project,
-    file_path: &PathBuf,
-    args: &ImportArgs,
-) -> Result<ImportStats> {
+fn import_quotes(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
     let config = Config::load();
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
@@ -1650,7 +1930,12 @@ fn import_quotes(
         let record = match result {
             Ok(r) => r,
             Err(e) => {
-                eprintln!("{} Row {}: CSV parse error: {}", style("✗").red(), row_num, e);
+                eprintln!(
+                    "{} Row {}: CSV parse error: {}",
+                    style("✗").red(),
+                    row_num,
+                    e
+                );
                 stats.errors += 1;
                 if !args.skip_errors {
                     return Err(miette::miette!("CSV parse error at row {}: {}", row_num, e));
@@ -1661,10 +1946,17 @@ fn import_quotes(
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {
-            eprintln!("{} Row {}: Missing required field 'title'", style("✗").red(), row_num);
+            eprintln!(
+                "{} Row {}: Missing required field 'title'",
+                style("✗").red(),
+                row_num
+            );
             stats.errors += 1;
             if !args.skip_errors {
-                return Err(miette::miette!("Missing required field 'title' at row {}", row_num));
+                return Err(miette::miette!(
+                    "Missing required field 'title' at row {}",
+                    row_num
+                ));
             }
             continue;
         }
@@ -1672,12 +1964,11 @@ fn import_quotes(
         let supplier = get_field(&record, &header_map, "supplier").unwrap_or_default();
         let component = get_field(&record, &header_map, "component").unwrap_or_default();
         let currency = get_field(&record, &header_map, "currency").unwrap_or("USD".to_string());
-        let unit_price: Option<f64> = get_field(&record, &header_map, "unit_price")
-            .and_then(|s| s.parse().ok());
-        let lead_time_days: Option<u32> = get_field(&record, &header_map, "lead_time_days")
-            .and_then(|s| s.parse().ok());
-        let moq: Option<u32> = get_field(&record, &header_map, "moq")
-            .and_then(|s| s.parse().ok());
+        let unit_price: Option<f64> =
+            get_field(&record, &header_map, "unit_price").and_then(|s| s.parse().ok());
+        let lead_time_days: Option<u32> =
+            get_field(&record, &header_map, "lead_time_days").and_then(|s| s.parse().ok());
+        let moq: Option<u32> = get_field(&record, &header_map, "moq").and_then(|s| s.parse().ok());
         let description = get_field(&record, &header_map, "description");
         let tags = get_field(&record, &header_map, "tags");
 

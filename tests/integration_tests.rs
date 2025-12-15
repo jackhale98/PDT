@@ -15,11 +15,7 @@ fn tdt() -> Command {
 /// Helper to create a test project in a temp directory
 fn setup_test_project() -> TempDir {
     let tmp = TempDir::new().unwrap();
-    tdt()
-        .current_dir(tmp.path())
-        .arg("init")
-        .assert()
-        .success();
+    tdt().current_dir(tmp.path()).arg("init").assert().success();
     tmp
 }
 
@@ -27,7 +23,15 @@ fn setup_test_project() -> TempDir {
 fn create_test_requirement(tmp: &TempDir, title: &str, req_type: &str) -> String {
     let output = tdt()
         .current_dir(tmp.path())
-        .args(["req", "new", "--title", title, "--type", req_type, "--no-edit"])
+        .args([
+            "req",
+            "new",
+            "--title",
+            title,
+            "--type",
+            req_type,
+            "--no-edit",
+        ])
         .output()
         .unwrap();
 
@@ -46,7 +50,15 @@ fn create_test_requirement(tmp: &TempDir, title: &str, req_type: &str) -> String
 fn create_test_risk(tmp: &TempDir, title: &str, risk_type: &str) -> String {
     let output = tdt()
         .current_dir(tmp.path())
-        .args(["risk", "new", "--title", title, "--type", risk_type, "--no-edit"])
+        .args([
+            "risk",
+            "new",
+            "--title",
+            title,
+            "--type",
+            risk_type,
+            "--no-edit",
+        ])
         .output()
         .unwrap();
 
@@ -150,7 +162,15 @@ fn test_req_new_creates_file() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "new", "--title", "Test Requirement", "--type", "input", "--no-edit"])
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Test Requirement",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Created requirement"));
@@ -175,7 +195,15 @@ fn test_req_new_output_creates_in_outputs_dir() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "new", "--title", "Output Spec", "--type", "output", "--no-edit"])
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Output Spec",
+            "--type",
+            "output",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
@@ -378,7 +406,11 @@ fn test_req_list_count_only() {
         .clone();
 
     let count_str = String::from_utf8_lossy(&output);
-    assert!(count_str.trim() == "2", "Expected count '2', got '{}'", count_str.trim());
+    assert!(
+        count_str.trim() == "2",
+        "Expected count '2', got '{}'",
+        count_str.trim()
+    );
 }
 
 #[test]
@@ -411,9 +443,16 @@ fn test_req_list_sort_by_title() {
         .clone();
 
     let output_str = String::from_utf8_lossy(&output);
-    let apple_pos = output_str.find("Apple Requirement").expect("Apple Requirement not found");
-    let zebra_pos = output_str.find("Zebra Requirement").expect("Zebra Requirement not found");
-    assert!(apple_pos < zebra_pos, "Apple should come before Zebra when sorted by title");
+    let apple_pos = output_str
+        .find("Apple Requirement")
+        .expect("Apple Requirement not found");
+    let zebra_pos = output_str
+        .find("Zebra Requirement")
+        .expect("Zebra Requirement not found");
+    assert!(
+        apple_pos < zebra_pos,
+        "Apple should come before Zebra when sorted by title"
+    );
 }
 
 #[test]
@@ -432,9 +471,16 @@ fn test_req_list_sort_reverse() {
         .clone();
 
     let output_str = String::from_utf8_lossy(&output);
-    let apple_pos = output_str.find("Apple Requirement").expect("Apple Requirement not found");
-    let zebra_pos = output_str.find("Zebra Requirement").expect("Zebra Requirement not found");
-    assert!(zebra_pos < apple_pos, "Zebra should come before Apple when sorted by title reversed");
+    let apple_pos = output_str
+        .find("Apple Requirement")
+        .expect("Apple Requirement not found");
+    let zebra_pos = output_str
+        .find("Zebra Requirement")
+        .expect("Zebra Requirement not found");
+    assert!(
+        zebra_pos < apple_pos,
+        "Zebra should come before Apple when sorted by title reversed"
+    );
 }
 
 // ============================================================================
@@ -447,7 +493,15 @@ fn test_risk_new_creates_file() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["risk", "new", "--title", "Test Risk", "--type", "design", "--no-edit"])
+        .args([
+            "risk",
+            "new",
+            "--title",
+            "Test Risk",
+            "--type",
+            "design",
+            "--no-edit",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Created risk"));
@@ -467,16 +521,21 @@ fn test_risk_new_with_fmea_ratings() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "risk", "new",
-            "--title", "FMEA Risk",
-            "--severity", "8",
-            "--occurrence", "4",
-            "--detection", "3",
-            "--no-edit"
+            "risk",
+            "new",
+            "--title",
+            "FMEA Risk",
+            "--severity",
+            "8",
+            "--occurrence",
+            "4",
+            "--detection",
+            "3",
+            "--no-edit",
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("RPN: 96"));  // 8 * 4 * 3 = 96
+        .stdout(predicate::str::contains("RPN: 96")); // 8 * 4 * 3 = 96
 }
 
 #[test]
@@ -576,8 +635,12 @@ fn test_validate_invalid_schema() {
     let tmp = setup_test_project();
 
     // Create a file with valid YAML but invalid schema
-    let invalid_path = tmp.path().join("requirements/inputs/REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD.tdt.yaml");
-    fs::write(&invalid_path, r#"
+    let invalid_path = tmp
+        .path()
+        .join("requirements/inputs/REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD.tdt.yaml");
+    fs::write(
+        &invalid_path,
+        r#"
 id: REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD
 type: input
 title: "Test"
@@ -586,7 +649,9 @@ status: invalid_status
 priority: medium
 created: 2024-01-01T00:00:00Z
 author: test
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     // Error details go to stdout in our validation output
     tdt()
@@ -638,14 +703,30 @@ fn test_full_workflow() {
     // Create input requirement
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "new", "--title", "Temperature Range", "--type", "input", "--no-edit"])
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Temperature Range",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
     // Create output requirement
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "new", "--title", "Thermal Design", "--type", "output", "--no-edit"])
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Thermal Design",
+            "--type",
+            "output",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
@@ -693,9 +774,12 @@ fn create_test_component(tmp: &TempDir, part_number: &str, title: &str) -> Strin
     let output = tdt()
         .current_dir(tmp.path())
         .args([
-            "cmp", "new",
-            "--part-number", part_number,
-            "--title", title,
+            "cmp",
+            "new",
+            "--part-number",
+            part_number,
+            "--title",
+            title,
             "--no-edit",
         ])
         .output()
@@ -716,7 +800,15 @@ fn test_cmp_new_creates_file() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["cmp", "new", "--part-number", "PN-001", "--title", "Test Component", "--no-edit"])
+        .args([
+            "cmp",
+            "new",
+            "--part-number",
+            "PN-001",
+            "--title",
+            "Test Component",
+            "--no-edit",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Created component"));
@@ -740,10 +832,14 @@ fn test_cmp_new_with_make_buy() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "cmp", "new",
-            "--part-number", "PN-MAKE-001",
-            "--title", "In-house Part",
-            "--make-buy", "make",
+            "cmp",
+            "new",
+            "--part-number",
+            "PN-MAKE-001",
+            "--title",
+            "In-house Part",
+            "--make-buy",
+            "make",
             "--no-edit",
         ])
         .assert()
@@ -812,13 +908,33 @@ fn test_cmp_list_filter_by_make_buy() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["cmp", "new", "--part-number", "PN-MAKE", "--title", "Made Part", "--make-buy", "make", "--no-edit"])
+        .args([
+            "cmp",
+            "new",
+            "--part-number",
+            "PN-MAKE",
+            "--title",
+            "Made Part",
+            "--make-buy",
+            "make",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
     tdt()
         .current_dir(tmp.path())
-        .args(["cmp", "new", "--part-number", "PN-BUY", "--title", "Bought Part", "--make-buy", "buy", "--no-edit"])
+        .args([
+            "cmp",
+            "new",
+            "--part-number",
+            "PN-BUY",
+            "--title",
+            "Bought Part",
+            "--make-buy",
+            "buy",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
@@ -947,17 +1063,30 @@ fn test_quote_new_creates_file() {
     create_test_supplier(&tmp, "Quote Supplier");
 
     // Generate short IDs
-    tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
-    tdt().current_dir(tmp.path()).args(["sup", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["sup", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
         .args([
-            "quote", "new",
-            "--component", "CMP@1",
-            "--supplier", "SUP@1",
-            "--title", "Test Quote",
-            "--price", "10.50",
+            "quote",
+            "new",
+            "--component",
+            "CMP@1",
+            "--supplier",
+            "SUP@1",
+            "--title",
+            "Test Quote",
+            "--price",
+            "10.50",
             "--no-edit",
         ])
         .assert()
@@ -991,16 +1120,28 @@ fn test_quote_list_shows_quotes() {
     create_test_component(&tmp, "PN-Q1", "Component 1");
     create_test_supplier(&tmp, "Supplier 1");
 
-    tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
-    tdt().current_dir(tmp.path()).args(["sup", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["sup", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
         .args([
-            "quote", "new",
-            "--component", "CMP@1",
-            "--supplier", "SUP@1",
-            "--price", "25.00",
+            "quote",
+            "new",
+            "--component",
+            "CMP@1",
+            "--supplier",
+            "SUP@1",
+            "--price",
+            "25.00",
             "--no-edit",
         ])
         .assert()
@@ -1019,14 +1160,23 @@ fn test_quote_list_shows_quotes() {
 // ============================================================================
 
 /// Helper to create a test feature
-fn create_test_feature(tmp: &TempDir, component_short_id: &str, feature_type: &str, title: &str) -> String {
+fn create_test_feature(
+    tmp: &TempDir,
+    component_short_id: &str,
+    feature_type: &str,
+    title: &str,
+) -> String {
     let output = tdt()
         .current_dir(tmp.path())
         .args([
-            "feat", "new",
-            "--component", component_short_id,
-            "--feature-type", feature_type,
-            "--title", title,
+            "feat",
+            "new",
+            "--component",
+            component_short_id,
+            "--feature-type",
+            feature_type,
+            "--title",
+            title,
             "--no-edit",
         ])
         .output()
@@ -1046,15 +1196,23 @@ fn test_feat_new_creates_file() {
     let tmp = setup_test_project();
 
     create_test_component(&tmp, "PN-FEAT", "Feature Component");
-    tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
         .args([
-            "feat", "new",
-            "--component", "CMP@1",
-            "--feature-type", "internal",
-            "--title", "Mounting Hole",
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--feature-type",
+            "internal",
+            "--title",
+            "Mounting Hole",
             "--no-edit",
         ])
         .assert()
@@ -1090,7 +1248,11 @@ fn test_feat_list_shows_features() {
     let tmp = setup_test_project();
 
     create_test_component(&tmp, "PN-F", "Feature Component");
-    tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
 
     create_test_feature(&tmp, "CMP@1", "internal", "Hole Feature");
     create_test_feature(&tmp, "CMP@1", "external", "Pin Feature");
@@ -1110,9 +1272,17 @@ fn test_feat_show_by_short_id() {
     let tmp = setup_test_project();
 
     create_test_component(&tmp, "PN-FS", "Feature Show Component");
-    tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
     create_test_feature(&tmp, "CMP@1", "internal", "Test Slot");
-    tdt().current_dir(tmp.path()).args(["feat", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1133,19 +1303,31 @@ fn test_mate_new_creates_file() {
     // Create two components with features
     create_test_component(&tmp, "PN-HOLE", "Hole Component");
     create_test_component(&tmp, "PN-PIN", "Pin Component");
-    tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
 
     create_test_feature(&tmp, "CMP@1", "internal", "Mounting Hole");
     create_test_feature(&tmp, "CMP@2", "external", "Mounting Pin");
-    tdt().current_dir(tmp.path()).args(["feat", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
         .args([
-            "mate", "new",
-            "--feature-a", "FEAT@1",
-            "--feature-b", "FEAT@2",
-            "--title", "Pin-Hole Mate",
+            "mate",
+            "new",
+            "--feature-a",
+            "FEAT@1",
+            "--feature-b",
+            "FEAT@2",
+            "--title",
+            "Pin-Hole Mate",
             "--no-edit",
         ])
         .assert()
@@ -1178,19 +1360,31 @@ fn test_mate_list_shows_mates() {
 
     create_test_component(&tmp, "PN-M1", "Component 1");
     create_test_component(&tmp, "PN-M2", "Component 2");
-    tdt().current_dir(tmp.path()).args(["cmp", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
 
     create_test_feature(&tmp, "CMP@1", "internal", "Hole A");
     create_test_feature(&tmp, "CMP@2", "external", "Pin A");
-    tdt().current_dir(tmp.path()).args(["feat", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
         .args([
-            "mate", "new",
-            "--feature-a", "FEAT@1",
-            "--feature-b", "FEAT@2",
-            "--title", "Test Mate",
+            "mate",
+            "new",
+            "--feature-a",
+            "FEAT@1",
+            "--feature-b",
+            "FEAT@2",
+            "--title",
+            "Test Mate",
             "--no-edit",
         ])
         .assert()
@@ -1216,10 +1410,14 @@ fn test_tol_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "tol", "new",
-            "--title", "Gap Analysis",
-            "--target-name", "Air Gap",
-            "--target-nominal", "2.0",
+            "tol",
+            "new",
+            "--title",
+            "Gap Analysis",
+            "--target-name",
+            "Air Gap",
+            "--target-nominal",
+            "2.0",
             "--no-edit",
         ])
         .assert()
@@ -1286,7 +1484,11 @@ fn test_tol_show_by_short_id() {
         .assert()
         .success();
 
-    tdt().current_dir(tmp.path()).args(["tol", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1305,9 +1507,12 @@ fn create_test_protocol(tmp: &TempDir, title: &str, test_type: &str) -> String {
     let output = tdt()
         .current_dir(tmp.path())
         .args([
-            "test", "new",
-            "--title", title,
-            "--type", test_type,
+            "test",
+            "new",
+            "--title",
+            title,
+            "--type",
+            test_type,
             "--no-edit",
         ])
         .output()
@@ -1329,9 +1534,12 @@ fn test_test_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "test", "new",
-            "--title", "Temperature Test",
-            "--type", "verification",
+            "test",
+            "new",
+            "--title",
+            "Temperature Test",
+            "--type",
+            "verification",
             "--no-edit",
         ])
         .assert()
@@ -1356,9 +1564,12 @@ fn test_test_new_validation_type() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "test", "new",
-            "--title", "User Acceptance Test",
-            "--type", "validation",
+            "test",
+            "new",
+            "--title",
+            "User Acceptance Test",
+            "--type",
+            "validation",
             "--no-edit",
         ])
         .assert()
@@ -1405,7 +1616,11 @@ fn test_test_show_by_short_id() {
     let tmp = setup_test_project();
     create_test_protocol(&tmp, "Show Test", "verification");
 
-    tdt().current_dir(tmp.path()).args(["test", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["test", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1425,14 +1640,21 @@ fn test_rslt_new_creates_file() {
 
     // Create prerequisite test protocol
     create_test_protocol(&tmp, "Protocol for Result", "verification");
-    tdt().current_dir(tmp.path()).args(["test", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["test", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
         .args([
-            "rslt", "new",
-            "--test", "TEST@1",
-            "--verdict", "pass",
+            "rslt",
+            "new",
+            "--test",
+            "TEST@1",
+            "--verdict",
+            "pass",
             "--no-edit",
         ])
         .assert()
@@ -1464,11 +1686,23 @@ fn test_rslt_list_shows_results() {
     let tmp = setup_test_project();
 
     create_test_protocol(&tmp, "Test Protocol", "verification");
-    tdt().current_dir(tmp.path()).args(["test", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["test", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
-        .args(["rslt", "new", "--test", "TEST@1", "--verdict", "pass", "--no-edit"])
+        .args([
+            "rslt",
+            "new",
+            "--test",
+            "TEST@1",
+            "--verdict",
+            "pass",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
@@ -1491,9 +1725,12 @@ fn test_proc_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "proc", "new",
-            "--title", "CNC Milling",
-            "--type", "machining",
+            "proc",
+            "new",
+            "--title",
+            "CNC Milling",
+            "--type",
+            "machining",
             "--no-edit",
         ])
         .assert()
@@ -1559,7 +1796,11 @@ fn test_proc_show_by_short_id() {
         .assert()
         .success();
 
-    tdt().current_dir(tmp.path()).args(["proc", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["proc", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1580,9 +1821,12 @@ fn test_ctrl_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "ctrl", "new",
-            "--title", "Diameter Check",
-            "--type", "inspection",
+            "ctrl",
+            "new",
+            "--title",
+            "Diameter Check",
+            "--type",
+            "inspection",
             "--no-edit",
         ])
         .assert()
@@ -1648,7 +1892,11 @@ fn test_ctrl_show_by_short_id() {
         .assert()
         .success();
 
-    tdt().current_dir(tmp.path()).args(["ctrl", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["ctrl", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1669,10 +1917,14 @@ fn test_ncr_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "ncr", "new",
-            "--title", "Dimension Out of Spec",
-            "--type", "internal",
-            "--severity", "minor",
+            "ncr",
+            "new",
+            "--title",
+            "Dimension Out of Spec",
+            "--type",
+            "internal",
+            "--severity",
+            "minor",
             "--no-edit",
         ])
         .assert()
@@ -1738,7 +1990,11 @@ fn test_ncr_show_by_short_id() {
         .assert()
         .success();
 
-    tdt().current_dir(tmp.path()).args(["ncr", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["ncr", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1759,9 +2015,12 @@ fn test_capa_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "capa", "new",
-            "--title", "Improve Inspection Process",
-            "--type", "corrective",
+            "capa",
+            "new",
+            "--title",
+            "Improve Inspection Process",
+            "--type",
+            "corrective",
             "--no-edit",
         ])
         .assert()
@@ -1827,7 +2086,11 @@ fn test_capa_show_by_short_id() {
         .assert()
         .success();
 
-    tdt().current_dir(tmp.path()).args(["capa", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["capa", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1848,9 +2111,12 @@ fn test_work_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "work", "new",
-            "--title", "Lathe Setup Procedure",
-            "--doc-number", "WI-001",
+            "work",
+            "new",
+            "--title",
+            "Lathe Setup Procedure",
+            "--doc-number",
+            "WI-001",
             "--no-edit",
         ])
         .assert()
@@ -1916,7 +2182,11 @@ fn test_work_show_by_short_id() {
         .assert()
         .success();
 
-    tdt().current_dir(tmp.path()).args(["work", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["work", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -1937,9 +2207,12 @@ fn test_asm_new_creates_file() {
     tdt()
         .current_dir(tmp.path())
         .args([
-            "asm", "new",
-            "--part-number", "ASM-001",
-            "--title", "Main Assembly",
+            "asm",
+            "new",
+            "--part-number",
+            "ASM-001",
+            "--title",
+            "Main Assembly",
             "--no-edit",
         ])
         .assert()
@@ -1976,13 +2249,29 @@ fn test_asm_list_shows_assemblies() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["asm", "new", "--part-number", "ASM-001", "--title", "Assembly One", "--no-edit"])
+        .args([
+            "asm",
+            "new",
+            "--part-number",
+            "ASM-001",
+            "--title",
+            "Assembly One",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
     tdt()
         .current_dir(tmp.path())
-        .args(["asm", "new", "--part-number", "ASM-002", "--title", "Assembly Two", "--no-edit"])
+        .args([
+            "asm",
+            "new",
+            "--part-number",
+            "ASM-002",
+            "--title",
+            "Assembly Two",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
@@ -2002,11 +2291,23 @@ fn test_asm_show_by_short_id() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["asm", "new", "--part-number", "ASM-SHOW", "--title", "Show Assembly", "--no-edit"])
+        .args([
+            "asm",
+            "new",
+            "--part-number",
+            "ASM-SHOW",
+            "--title",
+            "Show Assembly",
+            "--no-edit",
+        ])
         .assert()
         .success();
 
-    tdt().current_dir(tmp.path()).args(["asm", "list"]).output().unwrap();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["asm", "list"])
+        .output()
+        .unwrap();
 
     tdt()
         .current_dir(tmp.path())
@@ -2157,7 +2458,8 @@ created: 2024-01-15T10:30:00Z
 author: external_user
 "#;
     fs::write(
-        tmp.path().join("requirements/inputs/REQ-01HQ5V2KRMJ0B9XYZ3NTWPGQ4E.tdt.yaml"),
+        tmp.path()
+            .join("requirements/inputs/REQ-01HQ5V2KRMJ0B9XYZ3NTWPGQ4E.tdt.yaml"),
         new_req_content,
     )
     .unwrap();
@@ -2253,8 +2555,16 @@ fn test_cache_clear_and_rebuild() {
     create_test_risk(&tmp, "Cache Test Risk", "design");
 
     // List to populate cache
-    tdt().current_dir(tmp.path()).args(["req", "list"]).assert().success();
-    tdt().current_dir(tmp.path()).args(["risk", "list"]).assert().success();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["risk", "list"])
+        .assert()
+        .success();
 
     // Clear cache
     tdt()
@@ -2338,7 +2648,8 @@ created: 2024-01-15T10:30:00Z
 author: test
 "#;
     fs::write(
-        tmp.path().join("requirements/inputs/REQ-01HQ5V3ABCD1234EFGH5678JKM.tdt.yaml"),
+        tmp.path()
+            .join("requirements/inputs/REQ-01HQ5V3ABCD1234EFGH5678JKM.tdt.yaml"),
         new_req_content,
     )
     .unwrap();
@@ -2379,7 +2690,11 @@ fn test_cache_query_raw_sql() {
     // Query the cache with SQL
     tdt()
         .current_dir(tmp.path())
-        .args(["cache", "query", "SELECT id, title FROM entities WHERE prefix = 'REQ'"])
+        .args([
+            "cache",
+            "query",
+            "SELECT id, title FROM entities WHERE prefix = 'REQ'",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Query Test Req"));

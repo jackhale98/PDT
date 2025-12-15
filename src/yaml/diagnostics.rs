@@ -117,7 +117,9 @@ fn generate_help(message: &str) -> Option<String> {
     }
 
     if msg_lower.contains("duplicate key") {
-        return Some("Each key can only appear once. Remove or rename the duplicate key.".to_string());
+        return Some(
+            "Each key can only appear once. Remove or rename the duplicate key.".to_string(),
+        );
     }
 
     if msg_lower.contains("expected block end") {
@@ -125,7 +127,9 @@ fn generate_help(message: &str) -> Option<String> {
     }
 
     if msg_lower.contains("mapping values are not allowed") {
-        return Some("You may be missing a space after ':' or have incorrect indentation.".to_string());
+        return Some(
+            "You may be missing a space after ':' or have incorrect indentation.".to_string(),
+        );
     }
 
     if msg_lower.contains("found unexpected ':'") {

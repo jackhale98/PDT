@@ -36,7 +36,10 @@ impl std::str::FromStr for MakeBuy {
         match s.to_lowercase().as_str() {
             "make" => Ok(MakeBuy::Make),
             "buy" => Ok(MakeBuy::Buy),
-            _ => Err(format!("Invalid make_buy value: {}. Use 'make' or 'buy'", s)),
+            _ => Err(format!(
+                "Invalid make_buy value: {}. Use 'make' or 'buy'",
+                s
+            )),
         }
     }
 }

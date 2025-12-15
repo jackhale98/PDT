@@ -10,11 +10,11 @@ use dialoguer::{theme::ColorfulTheme, Input};
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
-use crate::core::CachedFeature;
 use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::CachedFeature;
 use crate::core::Config;
 use crate::entities::feature::{Feature, FeatureType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
@@ -220,15 +220,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     };
 
     // Resolve component filter if provided
-    let component_filter = args.component.as_ref().map(|c| {
-        short_ids.resolve(c).unwrap_or_else(|| c.clone())
-    });
+    let component_filter = args
+        .component
+        .as_ref()
+        .map(|c| short_ids.resolve(c).unwrap_or_else(|| c.clone()));
 
     // Check if we can use the fast cache path:
     // - No recent filter (would need time-based SQL)
     // - Not JSON/YAML output (needs full entity serialization)
-    let can_use_cache = args.recent.is_none()
-        && !matches!(format, OutputFormat::Json | OutputFormat::Yaml);
+    let can_use_cache =
+        args.recent.is_none() && !matches!(format, OutputFormat::Json | OutputFormat::Yaml);
 
     if can_use_cache {
         if let Ok(cache) = EntityCache::open(&project) {
@@ -261,8 +262,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 ListColumn::Id => features.sort_by(|a, b| a.id.cmp(&b.id)),
                 ListColumn::Title => features.sort_by(|a, b| a.title.cmp(&b.title)),
                 ListColumn::Description => features.sort_by(|a, b| a.id.cmp(&b.id)), // No desc in cache
-                ListColumn::FeatureType => features.sort_by(|a, b| a.feature_type.cmp(&b.feature_type)),
-                ListColumn::Component => features.sort_by(|a, b| a.component_id.cmp(&b.component_id)),
+                ListColumn::FeatureType => {
+                    features.sort_by(|a, b| a.feature_type.cmp(&b.feature_type))
+                }
+                ListColumn::Component => {
+                    features.sort_by(|a, b| a.component_id.cmp(&b.component_id))
+                }
                 ListColumn::Status => features.sort_by(|a, b| a.status.cmp(&b.status)),
                 ListColumn::Author => features.sort_by(|a, b| a.author.cmp(&b.author)),
                 ListColumn::Created => features.sort_by(|a, b| a.created.cmp(&b.created)),
@@ -370,15 +375,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         ListColumn::Id => features.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
         ListColumn::Title => features.sort_by(|a, b| a.title.cmp(&b.title)),
         ListColumn::Description => features.sort_by(|a, b| {
-            a.description.as_deref().unwrap_or("").cmp(b.description.as_deref().unwrap_or(""))
+            a.description
+                .as_deref()
+                .unwrap_or("")
+                .cmp(b.description.as_deref().unwrap_or(""))
         }),
-        ListColumn::FeatureType => features.sort_by(|a, b| {
-            format!("{:?}", a.feature_type).cmp(&format!("{:?}", b.feature_type))
-        }),
+        ListColumn::FeatureType => features
+            .sort_by(|a, b| format!("{:?}", a.feature_type).cmp(&format!("{:?}", b.feature_type))),
         ListColumn::Component => features.sort_by(|a, b| a.component.cmp(&b.component)),
-        ListColumn::Status => features.sort_by(|a, b| {
-            format!("{:?}", a.status).cmp(&format!("{:?}", b.status))
-        }),
+        ListColumn::Status => {
+            features.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
+        }
         ListColumn::Author => features.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => features.sort_by(|a, b| a.created.cmp(&b.created)),
     }
@@ -434,9 +441,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             print!("{}", yaml);
         }
         OutputFormat::Csv => {
-            println!("short_id,id,component,part_number,component_title,feature_type,title,dims,status");
+            println!(
+                "short_id,id,component,part_number,component_title,feature_type,title,dims,status"
+            );
             for feat in &features {
-                let short_id = short_ids.get_short_id(&feat.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&feat.id.to_string())
+                    .unwrap_or_default();
                 let cmp_alias = short_ids.get_short_id(&feat.component).unwrap_or_default();
                 let (part_number, cmp_title) = component_info
                     .get(&feat.component)
@@ -475,41 +486,71 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 widths.push(width);
             }
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             for feat in &features {
-                let short_id = short_ids.get_short_id(&feat.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&feat.id.to_string())
+                    .unwrap_or_default();
                 let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
                 for (i, col) in args.columns.iter().enumerate() {
                     let width = widths[i + 1]; // +1 because first width is for SHORT column
                     let value = match col {
-                        ListColumn::Id => format!("{:<width$}", format_short_id(&feat.id), width = width),
-                        ListColumn::Title => format!("{:<width$}", truncate_str(&feat.title, width - 2), width = width),
+                        ListColumn::Id => {
+                            format!("{:<width$}", format_short_id(&feat.id), width = width)
+                        }
+                        ListColumn::Title => format!(
+                            "{:<width$}",
+                            truncate_str(&feat.title, width - 2),
+                            width = width
+                        ),
                         ListColumn::Description => {
                             let desc = feat.description.as_deref().unwrap_or("-");
                             format!("{:<width$}", truncate_str(desc, width - 2), width = width)
                         }
-                        ListColumn::FeatureType => format!("{:<width$}", feat.feature_type, width = width),
+                        ListColumn::FeatureType => {
+                            format!("{:<width$}", feat.feature_type, width = width)
+                        }
                         ListColumn::Component => {
                             // Show component alias, part number, and title
-                            let cmp_alias = short_ids.get_short_id(&feat.component).unwrap_or_else(|| "?".to_string());
+                            let cmp_alias = short_ids
+                                .get_short_id(&feat.component)
+                                .unwrap_or_else(|| "?".to_string());
                             let (part_number, cmp_title) = component_info
                                 .get(&feat.component)
                                 .map(|(pn, t)| (pn.as_str(), t.as_str()))
                                 .unwrap_or(("", ""));
                             let display = if !part_number.is_empty() {
-                                format!("{} ({}) {}", cmp_alias, part_number, truncate_str(cmp_title, 20))
+                                format!(
+                                    "{} ({}) {}",
+                                    cmp_alias,
+                                    part_number,
+                                    truncate_str(cmp_title, 20)
+                                )
                             } else if !cmp_title.is_empty() {
                                 format!("{} {}", cmp_alias, truncate_str(cmp_title, 25))
                             } else {
                                 cmp_alias
                             };
-                            format!("{:<width$}", truncate_str(&display, width - 2), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&display, width - 2),
+                                width = width
+                            )
                         }
                         ListColumn::Status => format!("{:<width$}", feat.status(), width = width),
-                        ListColumn::Author => format!("{:<width$}", truncate_str(&feat.author, width - 2), width = width),
-                        ListColumn::Created => format!("{:<width$}", feat.created.format("%Y-%m-%d"), width = width),
+                        ListColumn::Author => format!(
+                            "{:<width$}",
+                            truncate_str(&feat.author, width - 2),
+                            width = width
+                        ),
+                        ListColumn::Created => {
+                            format!("{:<width$}", feat.created.format("%Y-%m-%d"), width = width)
+                        }
                     };
                     row_parts.push(value);
                 }
@@ -532,7 +573,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Component | Type | Title | Dims | Status |");
             println!("|---|---|---|---|---|---|---|");
             for feat in &features {
-                let short_id = short_ids.get_short_id(&feat.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&feat.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -574,7 +617,9 @@ fn output_cached_features(
             println!("short_id,id,component,part_number,component_title,feature_type,title,status");
             for feat in features {
                 let short_id = short_ids.get_short_id(&feat.id).unwrap_or_default();
-                let cmp_alias = short_ids.get_short_id(&feat.component_id).unwrap_or_default();
+                let cmp_alias = short_ids
+                    .get_short_id(&feat.component_id)
+                    .unwrap_or_default();
                 let (part_number, cmp_title) = component_info
                     .get(&feat.component_id)
                     .map(|(pn, t)| (pn.as_str(), t.as_str()))
@@ -611,7 +656,10 @@ fn output_cached_features(
                 widths.push(width);
             }
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             for feat in features {
                 let short_id = short_ids.get_short_id(&feat.id).unwrap_or_default();
@@ -620,29 +668,56 @@ fn output_cached_features(
                 for (i, col) in args.columns.iter().enumerate() {
                     let width = widths[i + 1];
                     let value = match col {
-                        ListColumn::Id => format!("{:<width$}", truncate_str(&feat.id, width - 2), width = width),
-                        ListColumn::Title => format!("{:<width$}", truncate_str(&feat.title, width - 2), width = width),
+                        ListColumn::Id => format!(
+                            "{:<width$}",
+                            truncate_str(&feat.id, width - 2),
+                            width = width
+                        ),
+                        ListColumn::Title => format!(
+                            "{:<width$}",
+                            truncate_str(&feat.title, width - 2),
+                            width = width
+                        ),
                         ListColumn::Description => format!("{:<width$}", "-", width = width), // No desc in cache
-                        ListColumn::FeatureType => format!("{:<width$}", feat.feature_type, width = width),
+                        ListColumn::FeatureType => {
+                            format!("{:<width$}", feat.feature_type, width = width)
+                        }
                         ListColumn::Component => {
                             // Show component alias, part number, and title
-                            let cmp_alias = short_ids.get_short_id(&feat.component_id).unwrap_or_else(|| "?".to_string());
+                            let cmp_alias = short_ids
+                                .get_short_id(&feat.component_id)
+                                .unwrap_or_else(|| "?".to_string());
                             let (part_number, cmp_title) = component_info
                                 .get(&feat.component_id)
                                 .map(|(pn, t)| (pn.as_str(), t.as_str()))
                                 .unwrap_or(("", ""));
                             let display = if !part_number.is_empty() {
-                                format!("{} ({}) {}", cmp_alias, part_number, truncate_str(cmp_title, 20))
+                                format!(
+                                    "{} ({}) {}",
+                                    cmp_alias,
+                                    part_number,
+                                    truncate_str(cmp_title, 20)
+                                )
                             } else if !cmp_title.is_empty() {
                                 format!("{} {}", cmp_alias, truncate_str(cmp_title, 25))
                             } else {
                                 cmp_alias
                             };
-                            format!("{:<width$}", truncate_str(&display, width - 2), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&display, width - 2),
+                                width = width
+                            )
                         }
                         ListColumn::Status => format!("{:<width$}", feat.status, width = width),
-                        ListColumn::Author => format!("{:<width$}", truncate_str(&feat.author, width - 2), width = width),
-                        ListColumn::Created => format!("{:<width$}", feat.created.format("%Y-%m-%d"), width = width),
+                        ListColumn::Author => format!(
+                            "{:<width$}",
+                            truncate_str(&feat.author, width - 2),
+                            width = width
+                        ),
+                        ListColumn::Created => {
+                            format!("{:<width$}", feat.created.format("%Y-%m-%d"), width = width)
+                        }
                     };
                     row_parts.push(value);
                 }
@@ -692,7 +767,9 @@ fn run_new(args: NewArgs) -> Result<()> {
 
     // Resolve component ID
     let short_ids = ShortIdIndex::load(&project);
-    let component_id = short_ids.resolve(&args.component).unwrap_or_else(|| args.component.clone());
+    let component_id = short_ids
+        .resolve(&args.component)
+        .unwrap_or_else(|| args.component.clone());
 
     // Validate component exists
     let cmp_dir = project.root().join("bom/components");
@@ -772,7 +849,9 @@ fn run_new(args: NewArgs) -> Result<()> {
             .into_diagnostic()?;
         minus_tol = minus_str.parse().unwrap_or(0.05);
     } else {
-        title = args.title.ok_or_else(|| miette::miette!("Title is required (use --title or -i for interactive)"))?;
+        title = args.title.ok_or_else(|| {
+            miette::miette!("Title is required (use --title or -i for interactive)")
+        })?;
         feature_type = args.feature_type.to_string();
     }
 
@@ -793,7 +872,10 @@ fn run_new(args: NewArgs) -> Result<()> {
     // Replace default dimension values with user-provided ones (for interactive mode)
     if args.interactive {
         yaml_content = yaml_content
-            .replace("name: \"diameter\"", &format!("name: \"{}\"", dimension_name))
+            .replace(
+                "name: \"diameter\"",
+                &format!("name: \"{}\"", dimension_name),
+            )
             .replace("nominal: 10.0", &format!("nominal: {}", nominal))
             .replace("plus_tol: 0.1", &format!("plus_tol: {}", plus_tol))
             .replace("minus_tol: 0.05", &format!("minus_tol: {}", minus_tol));
@@ -865,7 +947,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No feature found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No feature found matching '{}'", args.id))?;
 
     // Read and parse feature
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -890,15 +973,16 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&feat.id.to_string()).cyan()
             );
+            println!("{}: {}", style("Title").bold(), style(&feat.title).yellow());
+            println!("{}: {}", style("Type").bold(), feat.feature_type);
+            let cmp_display = short_ids
+                .get_short_id(&feat.component)
+                .unwrap_or_else(|| feat.component.clone());
             println!(
                 "{}: {}",
-                style("Title").bold(),
-                style(&feat.title).yellow()
+                style("Component").bold(),
+                style(&cmp_display).cyan()
             );
-            println!("{}: {}", style("Type").bold(), feat.feature_type);
-            let cmp_display = short_ids.get_short_id(&feat.component)
-                .unwrap_or_else(|| feat.component.clone());
-            println!("{}: {}", style("Component").bold(), style(&cmp_display).cyan());
             println!("{}: {}", style("Status").bold(), feat.status);
             println!("{}", style("─".repeat(60)).dim());
 
@@ -919,7 +1003,12 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!();
                 println!("{}", style("GD&T Controls:").bold());
                 for gdt in &feat.gdt {
-                    println!("  • {:?} {} {}", gdt.symbol, gdt.value, gdt.datum_refs.join("-"));
+                    println!(
+                        "  • {:?} {} {}",
+                        gdt.symbol,
+                        gdt.value,
+                        gdt.datum_refs.join("-")
+                    );
                 }
             }
 
@@ -984,9 +1073,14 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No feature found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No feature found matching '{}'", args.id))?;
 
-    println!("Opening {} in {}...", style(path.display()).cyan(), style(config.editor()).yellow());
+    println!(
+        "Opening {} in {}...",
+        style(path.display()).cyan(),
+        style(config.editor()).yellow()
+    );
 
     config.run_editor(&path).into_diagnostic()?;
 

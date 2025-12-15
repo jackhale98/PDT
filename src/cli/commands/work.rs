@@ -258,7 +258,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     // Resolve process filter if provided
     let process_filter = if let Some(ref proc_id) = args.process {
-        Some(short_ids.resolve(proc_id).unwrap_or_else(|| proc_id.clone()))
+        Some(
+            short_ids
+                .resolve(proc_id)
+                .unwrap_or_else(|| proc_id.clone()),
+        )
     } else {
         None
     };
@@ -318,9 +322,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 .unwrap_or("")
                 .cmp(b.document_number.as_deref().unwrap_or(""))
         }),
-        ListColumn::Status => {
-            work_instructions.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
-        }
+        ListColumn::Status => work_instructions
+            .sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status))),
         ListColumn::Author => work_instructions.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => work_instructions.sort_by(|a, b| a.created.cmp(&b.created)),
     }
@@ -369,7 +372,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,doc_number,title,steps,duration,status");
             for work in &work_instructions {
-                let short_id = short_ids.get_short_id(&work.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&work.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{}",
                     short_id,
@@ -418,7 +423,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             for work in &work_instructions {
                 let mut row_parts = Vec::new();
@@ -434,7 +442,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                             format!("{:<width$}", title_truncated, width = width)
                         }
                         ListColumn::DocNumber => {
-                            let doc_num = truncate_str(work.document_number.as_deref().unwrap_or("-"), width - 2);
+                            let doc_num = truncate_str(
+                                work.document_number.as_deref().unwrap_or("-"),
+                                width - 2,
+                            );
                             format!("{:<width$}", doc_num, width = width)
                         }
                         ListColumn::Status => {
@@ -471,7 +482,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Doc # | Title | Steps | Time | Status |");
             println!("|---|---|---|---|---|---|---|");
             for work in &work_instructions {
-                let short_id = short_ids.get_short_id(&work.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&work.id.to_string())
+                    .unwrap_or_default();
                 let duration_str = work
                     .estimated_duration_minutes
                     .map_or("-".to_string(), |d| format!("{:.0}m", d));
@@ -559,7 +572,10 @@ fn output_cached_work_instructions(
             }
 
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             for entity in entities {
                 let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
@@ -576,7 +592,11 @@ fn output_cached_work_instructions(
                             format!("{:<width$}", style(&id_str).cyan(), width = width)
                         }
                         ListColumn::Title => {
-                            format!("{:<width$}", truncate_str(&entity.title, *width - 2), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&entity.title, *width - 2),
+                                width = width
+                            )
                         }
                         ListColumn::DocNumber => {
                             format!("{:<width$}", "-", width = width) // Not in cache
@@ -585,10 +605,18 @@ fn output_cached_work_instructions(
                             format!("{:<width$}", entity.status, width = width)
                         }
                         ListColumn::Author => {
-                            format!("{:<width$}", truncate_str(&entity.author, *width - 2), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&entity.author, *width - 2),
+                                width = width
+                            )
                         }
                         ListColumn::Created => {
-                            format!("{:<width$}", entity.created.format("%Y-%m-%d %H:%M"), width = width)
+                            format!(
+                                "{:<width$}",
+                                entity.created.format("%Y-%m-%d %H:%M"),
+                                width = width
+                            )
                         }
                     };
                     row_parts.push(value);
@@ -646,7 +674,9 @@ fn run_new(args: NewArgs) -> Result<()> {
             .map(String::from)
             .unwrap_or_else(|| "New Work Instruction".to_string());
     } else {
-        title = args.title.unwrap_or_else(|| "New Work Instruction".to_string());
+        title = args
+            .title
+            .unwrap_or_else(|| "New Work Instruction".to_string());
     }
 
     // Generate ID
@@ -738,8 +768,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No work instruction found matching '{}'", args.id))?;
+    let path = found_path
+        .ok_or_else(|| miette::miette!("No work instruction found matching '{}'", args.id))?;
 
     // Read and parse work instruction
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -764,11 +794,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&work.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&work.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&work.title).yellow());
             if let Some(ref doc) = work.document_number {
                 if !doc.is_empty() {
                     println!("{}: {}", style("Document #").bold(), doc);
@@ -780,7 +806,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Procedure Steps
             if !work.procedure.is_empty() {
                 println!();
-                println!("{} ({}):", style("Procedure Steps").bold(), work.procedure.len());
+                println!(
+                    "{} ({}):",
+                    style("Procedure Steps").bold(),
+                    work.procedure.len()
+                );
                 for step in &work.procedure {
                     print!("  {}. {}", step.step, step.action);
                     if let Some(ref caution) = step.caution {
@@ -793,7 +823,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Tools Required
             if !work.tools_required.is_empty() {
                 println!();
-                println!("{} ({}):", style("Tools Required").bold(), work.tools_required.len());
+                println!(
+                    "{} ({}):",
+                    style("Tools Required").bold(),
+                    work.tools_required.len()
+                );
                 for tool in &work.tools_required {
                     println!("  • {}", tool.name);
                 }
@@ -802,7 +836,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Materials Required
             if !work.materials_required.is_empty() {
                 println!();
-                println!("{} ({}):", style("Materials Required").bold(), work.materials_required.len());
+                println!(
+                    "{} ({}):",
+                    style("Materials Required").bold(),
+                    work.materials_required.len()
+                );
                 for mat in &work.materials_required {
                     println!("  • {}", mat.name);
                 }
@@ -869,8 +907,8 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No work instruction found matching '{}'", args.id))?;
+    let path = found_path
+        .ok_or_else(|| miette::miette!("No work instruction found matching '{}'", args.id))?;
 
     println!(
         "Opening {} in {}...",

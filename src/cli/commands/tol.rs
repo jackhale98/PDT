@@ -395,14 +395,38 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     a_result.cmp(&b_result)
                 }
                 ListColumn::Cpk => {
-                    let a_cpk = a.analysis_results.rss.as_ref().map(|r| r.cpk).unwrap_or(-999.0);
-                    let b_cpk = b.analysis_results.rss.as_ref().map(|r| r.cpk).unwrap_or(-999.0);
-                    b_cpk.partial_cmp(&a_cpk).unwrap_or(std::cmp::Ordering::Equal) // Higher Cpk first
+                    let a_cpk = a
+                        .analysis_results
+                        .rss
+                        .as_ref()
+                        .map(|r| r.cpk)
+                        .unwrap_or(-999.0);
+                    let b_cpk = b
+                        .analysis_results
+                        .rss
+                        .as_ref()
+                        .map(|r| r.cpk)
+                        .unwrap_or(-999.0);
+                    b_cpk
+                        .partial_cmp(&a_cpk)
+                        .unwrap_or(std::cmp::Ordering::Equal) // Higher Cpk first
                 }
                 ListColumn::Yield => {
-                    let a_yield = a.analysis_results.monte_carlo.as_ref().map(|m| m.yield_percent).unwrap_or(-999.0);
-                    let b_yield = b.analysis_results.monte_carlo.as_ref().map(|m| m.yield_percent).unwrap_or(-999.0);
-                    b_yield.partial_cmp(&a_yield).unwrap_or(std::cmp::Ordering::Equal) // Higher yield first
+                    let a_yield = a
+                        .analysis_results
+                        .monte_carlo
+                        .as_ref()
+                        .map(|m| m.yield_percent)
+                        .unwrap_or(-999.0);
+                    let b_yield = b
+                        .analysis_results
+                        .monte_carlo
+                        .as_ref()
+                        .map(|m| m.yield_percent)
+                        .unwrap_or(-999.0);
+                    b_yield
+                        .partial_cmp(&a_yield)
+                        .unwrap_or(std::cmp::Ordering::Equal) // Higher yield first
                 }
                 ListColumn::Critical => b.target.critical.cmp(&a.target.critical), // Critical first
                 ListColumn::Author => a.author.cmp(&b.author),
@@ -456,7 +480,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,title,target,wc_result,cpk,disposition,status");
             for s in &stackups {
-                let short_id = short_ids.get_short_id(&s.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&s.id.to_string())
+                    .unwrap_or_default();
                 let wc_result = s
                     .analysis_results
                     .worst_case
@@ -505,7 +531,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             for s in &stackups {
                 let mut row_parts = Vec::new();
@@ -514,11 +543,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     let width = widths[i];
                     let value = match col {
                         ListColumn::Id => {
-                            let short_id = short_ids.get_short_id(&s.id.to_string()).unwrap_or_default();
+                            let short_id = short_ids
+                                .get_short_id(&s.id.to_string())
+                                .unwrap_or_default();
                             format!("{:<width$}", style(&short_id).cyan(), width = width)
                         }
                         ListColumn::Title => {
-                            format!("{:<width$}", truncate_str(&s.title, width - 2), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&s.title, width - 2),
+                                width = width
+                            )
                         }
                         ListColumn::Result => {
                             let wc_result = s
@@ -536,12 +571,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                             format!("{:<width$}", wc_styled, width = width)
                         }
                         ListColumn::Cpk => {
-                            let cpk = s
-                                .analysis_results
-                                .rss
-                                .as_ref()
-                                .map(|rss| rss.cpk);
-                            let cpk_str = cpk.map(|c| format!("{:.2}", c)).unwrap_or_else(|| "-".to_string());
+                            let cpk = s.analysis_results.rss.as_ref().map(|rss| rss.cpk);
+                            let cpk_str = cpk
+                                .map(|c| format!("{:.2}", c))
+                                .unwrap_or_else(|| "-".to_string());
                             let cpk_styled = match cpk {
                                 Some(c) if c >= 1.33 => style(cpk_str).green(),
                                 Some(c) if c >= 1.0 => style(cpk_str).yellow(),
@@ -556,9 +589,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                                 .monte_carlo
                                 .as_ref()
                                 .map(|mc| mc.yield_percent);
-                            let yield_str = mc_yield.map(|y| format!("{:.1}%", y)).unwrap_or_else(|| "-".to_string());
+                            let yield_str = mc_yield
+                                .map(|y| format!("{:.1}%", y))
+                                .unwrap_or_else(|| "-".to_string());
                             let yield_styled = match mc_yield {
-                                Some(y) if y >= 99.73 => style(yield_str).green(),  // 3-sigma
+                                Some(y) if y >= 99.73 => style(yield_str).green(), // 3-sigma
                                 Some(y) if y >= 95.0 => style(yield_str).yellow(),
                                 Some(_) => style(yield_str).red(),
                                 None => style(yield_str).dim(),
@@ -581,7 +616,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                             format!("{:<width$}", crit_styled, width = width)
                         }
                         ListColumn::Author => {
-                            format!("{:<width$}", truncate_str(&s.author, width - 2), width = width)
+                            format!(
+                                "{:<width$}",
+                                truncate_str(&s.author, width - 2),
+                                width = width
+                            )
                         }
                         ListColumn::Created => {
                             format!("{:<width$}", s.created.format("%Y-%m-%d"), width = width)
@@ -609,7 +648,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Title | Target | W/C | Cpk | Status |");
             println!("|---|---|---|---|---|---|---|");
             for s in &stackups {
-                let short_id = short_ids.get_short_id(&s.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&s.id.to_string())
+                    .unwrap_or_default();
                 let wc_result = s
                     .analysis_results
                     .worst_case
@@ -800,7 +841,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Target
             println!();
             println!("{}", style("Target:").bold());
-            println!("  {}: {} {} (+{} / -{})",
+            println!(
+                "  {}: {} {} (+{} / -{})",
                 style(&stackup.target.name).cyan(),
                 stackup.target.nominal,
                 stackup.target.units,
@@ -811,21 +853,40 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Contributors
             if !stackup.contributors.is_empty() {
                 println!();
-                println!("{} ({}):", style("Contributors").bold(), stackup.contributors.len());
+                println!(
+                    "{} ({}):",
+                    style("Contributors").bold(),
+                    stackup.contributors.len()
+                );
                 for c in &stackup.contributors {
-                    let dir = if c.direction == crate::entities::stackup::Direction::Positive { "+" } else { "-" };
+                    let dir = if c.direction == crate::entities::stackup::Direction::Positive {
+                        "+"
+                    } else {
+                        "-"
+                    };
                     // Use tolerance as reference for precision
                     let ref_precision = c.plus_tol.max(c.minus_tol).max(0.001);
                     let avg_tol = smart_round((c.plus_tol + c.minus_tol) / 2.0, ref_precision);
-                    println!("  {} {} {} ±{}", dir, style(&c.name).cyan(), c.nominal, avg_tol);
+                    println!(
+                        "  {} {} {} ±{}",
+                        dir,
+                        style(&c.name).cyan(),
+                        c.nominal,
+                        avg_tol
+                    );
                 }
             }
 
             // Analysis Results
             let results = &stackup.analysis_results;
-            if results.worst_case.is_some() || results.rss.is_some() || results.monte_carlo.is_some() {
+            if results.worst_case.is_some()
+                || results.rss.is_some()
+                || results.monte_carlo.is_some()
+            {
                 // Use target tolerance band as reference for precision
-                let ref_precision = (stackup.target.upper_limit - stackup.target.lower_limit).abs().max(0.001);
+                let ref_precision = (stackup.target.upper_limit - stackup.target.lower_limit)
+                    .abs()
+                    .max(0.001);
 
                 println!();
                 println!("{}", style("Analysis Results:").bold());
@@ -833,16 +894,24 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                     let result_color = match wc.result {
                         crate::entities::stackup::AnalysisResult::Pass => style("PASS").green(),
                         crate::entities::stackup::AnalysisResult::Fail => style("FAIL").red(),
-                        crate::entities::stackup::AnalysisResult::Marginal => style("MARGINAL").yellow(),
+                        crate::entities::stackup::AnalysisResult::Marginal => {
+                            style("MARGINAL").yellow()
+                        }
                     };
                     let margin_rounded = smart_round(wc.margin, ref_precision);
-                    println!("  Worst Case: {} (margin: {})", result_color, margin_rounded);
+                    println!(
+                        "  Worst Case: {} (margin: {})",
+                        result_color, margin_rounded
+                    );
                 }
                 if let Some(ref rss) = results.rss {
                     println!("  RSS: Cpk={:.2}, Yield={:.1}%", rss.cpk, rss.yield_percent);
                 }
                 if let Some(ref mc) = results.monte_carlo {
-                    println!("  Monte Carlo: {} iter, Yield={:.1}%", mc.iterations, mc.yield_percent);
+                    println!(
+                        "  Monte Carlo: {} iter, Yield={:.1}%",
+                        mc.iterations, mc.yield_percent
+                    );
                 }
             }
 
@@ -976,7 +1045,9 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
     );
 
     // Use target tolerance band as reference for precision
-    let ref_precision = (stackup.target.upper_limit - stackup.target.lower_limit).abs().max(0.001);
+    let ref_precision = (stackup.target.upper_limit - stackup.target.lower_limit)
+        .abs()
+        .max(0.001);
 
     // Show results summary
     println!();
@@ -990,7 +1061,9 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
 
     if let Some(ref wc) = stackup.analysis_results.worst_case {
         let result_style = match wc.result {
-            crate::entities::stackup::AnalysisResult::Pass => style(format!("{}", wc.result)).green(),
+            crate::entities::stackup::AnalysisResult::Pass => {
+                style(format!("{}", wc.result)).green()
+            }
             crate::entities::stackup::AnalysisResult::Marginal => {
                 style(format!("{}", wc.result)).yellow()
             }
@@ -1063,7 +1136,8 @@ fn run_add(args: AddArgs) -> Result<()> {
 
             if path.extension().map_or(false, |e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_stackup_id) || filename.starts_with(&resolved_stackup_id)
+                if filename.contains(&resolved_stackup_id)
+                    || filename.starts_with(&resolved_stackup_id)
                 {
                     found_path = Some(path);
                     break;
@@ -1146,10 +1220,7 @@ fn run_add(args: AddArgs) -> Result<()> {
                 })?
         } else {
             feature.dimensions.first().ok_or_else(|| {
-                miette::miette!(
-                    "Feature {} has no dimensions defined",
-                    feature.id
-                )
+                miette::miette!("Feature {} has no dimensions defined", feature.id)
             })?
         };
 
@@ -1180,7 +1251,10 @@ fn run_add(args: AddArgs) -> Result<()> {
                         let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                         if filename.contains(&feature.component) {
                             if let Ok(content) = fs::read_to_string(&path) {
-                                if let Ok(cmp) = serde_yml::from_str::<crate::entities::component::Component>(&content) {
+                                if let Ok(cmp) = serde_yml::from_str::<
+                                    crate::entities::component::Component,
+                                >(&content)
+                                {
                                     name = Some(cmp.title);
                                     break;
                                 }
@@ -1210,7 +1284,10 @@ fn run_add(args: AddArgs) -> Result<()> {
             source: if feature.drawing.number.is_empty() {
                 None
             } else {
-                Some(format!("{} Rev {}", feature.drawing.number, feature.drawing.revision))
+                Some(format!(
+                    "{} Rev {}",
+                    feature.drawing.number, feature.drawing.revision
+                ))
             },
         };
 
@@ -1283,7 +1360,8 @@ fn run_remove(args: RemoveArgs) -> Result<()> {
 
             if path.extension().map_or(false, |e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_stackup_id) || filename.starts_with(&resolved_stackup_id)
+                if filename.contains(&resolved_stackup_id)
+                    || filename.starts_with(&resolved_stackup_id)
                 {
                     found_path = Some(path);
                     break;

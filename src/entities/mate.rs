@@ -128,13 +128,17 @@ impl FitAnalysis {
         } else if !dim_a.internal && dim_b.internal {
             (dim_b, dim_a)
         } else if dim_a.internal && dim_b.internal {
-            return Err(miette!("Mate requires one internal and one external feature (both are internal)"));
+            return Err(miette!(
+                "Mate requires one internal and one external feature (both are internal)"
+            ));
         } else {
-            return Err(miette!("Mate requires one internal and one external feature (both are external)"));
+            return Err(miette!(
+                "Mate requires one internal and one external feature (both are external)"
+            ));
         };
 
         // Hole limits (internal feature)
-        let hole_max = hole_dim.nominal + hole_dim.plus_tol;  // LMC
+        let hole_max = hole_dim.nominal + hole_dim.plus_tol; // LMC
         let hole_min = hole_dim.nominal - hole_dim.minus_tol; // MMC
 
         // Shaft limits (external feature)
@@ -388,7 +392,11 @@ impl Mate {
 
     /// Calculate fit analysis from two Dimension structs
     /// Auto-detects which is hole vs shaft based on the `internal` field
-    pub fn calculate_fit_from_dimensions(&mut self, dim_a: &Dimension, dim_b: &Dimension) -> Result<()> {
+    pub fn calculate_fit_from_dimensions(
+        &mut self,
+        dim_a: &Dimension,
+        dim_b: &Dimension,
+    ) -> Result<()> {
         self.fit_analysis = Some(FitAnalysis::from_dimensions(dim_a, dim_b)?);
         Ok(())
     }
@@ -403,7 +411,9 @@ impl Mate {
         match &self.fit_analysis {
             Some(analysis) => format!(
                 "{} ({:.4} to {:.4})",
-                analysis.fit_result, analysis.worst_case_min_clearance, analysis.worst_case_max_clearance
+                analysis.fit_result,
+                analysis.worst_case_min_clearance,
+                analysis.worst_case_max_clearance
             ),
             None => "Not calculated".to_string(),
         }
@@ -418,7 +428,13 @@ mod tests {
     fn test_mate_creation() {
         let feat_a = EntityId::new(EntityPrefix::Feat);
         let feat_b = EntityId::new(EntityPrefix::Feat);
-        let mate = Mate::new("Pin-Hole Mate", feat_a.clone(), feat_b.clone(), MateType::ClearanceFit, "Author");
+        let mate = Mate::new(
+            "Pin-Hole Mate",
+            feat_a.clone(),
+            feat_b.clone(),
+            MateType::ClearanceFit,
+            "Author",
+        );
         assert_eq!(mate.title, "Pin-Hole Mate");
         assert_eq!(mate.feature_a.id, feat_a);
         assert_eq!(mate.feature_b.id, feat_b);
@@ -469,7 +485,13 @@ mod tests {
     fn test_entity_trait_implementation() {
         let feat_a = EntityId::new(EntityPrefix::Feat);
         let feat_b = EntityId::new(EntityPrefix::Feat);
-        let mate = Mate::new("Test Mate", feat_a, feat_b, MateType::ClearanceFit, "Author");
+        let mate = Mate::new(
+            "Test Mate",
+            feat_a,
+            feat_b,
+            MateType::ClearanceFit,
+            "Author",
+        );
         assert!(mate.id().to_string().starts_with("MATE-"));
         assert_eq!(mate.title(), "Test Mate");
         assert_eq!(mate.author(), "Author");
@@ -481,7 +503,13 @@ mod tests {
     fn test_mate_roundtrip() {
         let feat_a = EntityId::new(EntityPrefix::Feat);
         let feat_b = EntityId::new(EntityPrefix::Feat);
-        let mut mate = Mate::new("Pin-Hole Mate", feat_a.clone(), feat_b.clone(), MateType::ClearanceFit, "Author");
+        let mut mate = Mate::new(
+            "Pin-Hole Mate",
+            feat_a.clone(),
+            feat_b.clone(),
+            MateType::ClearanceFit,
+            "Author",
+        );
         mate.description = Some("Locating pin engagement".to_string());
         // Hole: 10.0 +0.1/-0.0 => 10.0 to 10.1
         // Shaft: 9.8 +0.05/-0.05 => 9.75 to 9.85
@@ -497,7 +525,10 @@ mod tests {
         assert_eq!(parsed.feature_a.id, feat_a);
         assert_eq!(parsed.feature_b.id, feat_b);
         assert!(parsed.fit_analysis.is_some());
-        assert_eq!(parsed.fit_analysis.as_ref().unwrap().fit_result, FitResult::Clearance);
+        assert_eq!(
+            parsed.fit_analysis.as_ref().unwrap().fit_result,
+            FitResult::Clearance
+        );
     }
 
     #[test]
@@ -592,7 +623,10 @@ mod tests {
 
         let result = FitAnalysis::from_dimensions(&dim1, &dim2);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("both are internal"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("both are internal"));
     }
 
     #[test]
@@ -621,6 +655,9 @@ mod tests {
 
         let result = FitAnalysis::from_dimensions(&dim1, &dim2);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("both are external"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("both are external"));
     }
 }

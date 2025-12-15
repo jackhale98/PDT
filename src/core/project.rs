@@ -15,8 +15,7 @@ pub struct Project {
 impl Project {
     /// Find project root by walking up from the current directory
     pub fn discover() -> Result<Self, ProjectError> {
-        let current = std::env::current_dir()
-            .map_err(|e| ProjectError::IoError(e.to_string()))?;
+        let current = std::env::current_dir().map_err(|e| ProjectError::IoError(e.to_string()))?;
         Self::discover_from(&current)
     }
 
@@ -42,9 +41,7 @@ impl Project {
 
     /// Create a new project structure at the given path
     pub fn init(path: &Path) -> Result<Self, ProjectError> {
-        let root = path
-            .canonicalize()
-            .unwrap_or_else(|_| path.to_path_buf());
+        let root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         let tdt_dir = root.join(".tdt");
         if tdt_dir.exists() {
@@ -95,9 +92,7 @@ impl Project {
 
     /// Force initialization even if .tdt/ exists
     pub fn init_force(path: &Path) -> Result<Self, ProjectError> {
-        let root = path
-            .canonicalize()
-            .unwrap_or_else(|_| path.to_path_buf());
+        let root = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
         let tdt_dir = root.join(".tdt");
 
@@ -192,9 +187,7 @@ impl Project {
     /// Get the path for a new entity file
     pub fn entity_path(&self, prefix: EntityPrefix, id: &EntityId) -> PathBuf {
         let subdir = Self::entity_directory(prefix);
-        self.root
-            .join(subdir)
-            .join(format!("{}.tdt.yaml", id))
+        self.root.join(subdir).join(format!("{}.tdt.yaml", id))
     }
 
     /// Get the directory for a given entity prefix
@@ -263,11 +256,7 @@ impl Project {
             .into_iter()
             .filter_map(|e| e.ok())
             .filter(|e| e.file_type().is_file())
-            .filter(|e| {
-                e.path()
-                    .to_string_lossy()
-                    .ends_with(".tdt.yaml")
-            })
+            .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
             .map(|e| e.path().to_path_buf())
     }
 }

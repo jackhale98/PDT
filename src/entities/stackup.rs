@@ -607,7 +607,8 @@ impl Stackup {
                         let sigma = contrib.tolerance_band() / 6.0;
                         let u1: f64 = rng.random();
                         let u2: f64 = rng.random();
-                        let z = (-2.0_f64 * u1.ln()).sqrt() * (2.0_f64 * std::f64::consts::PI * u2).cos();
+                        let z = (-2.0_f64 * u1.ln()).sqrt()
+                            * (2.0_f64 * std::f64::consts::PI * u2).cos();
                         mean + sigma * z
                     }
                     Distribution::Uniform => {
@@ -938,8 +939,8 @@ mod tests {
                 component_name: None,
             }),
             direction: Direction::Positive,
-            nominal: 9.5,  // Wrong value
-            plus_tol: 0.2, // Wrong value
+            nominal: 9.5,   // Wrong value
+            plus_tol: 0.2,  // Wrong value
             minus_tol: 0.1, // Wrong value
             distribution: Distribution::Normal,
             source: None,

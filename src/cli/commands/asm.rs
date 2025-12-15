@@ -327,7 +327,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort
     let mut assemblies = assemblies;
     match args.sort {
-        ListColumn::Short | ListColumn::Id => assemblies.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
+        ListColumn::Short | ListColumn::Id => {
+            assemblies.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string()))
+        }
         ListColumn::PartNumber => assemblies.sort_by(|a, b| a.part_number.cmp(&b.part_number)),
         ListColumn::Title => assemblies.sort_by(|a, b| a.title.cmp(&b.title)),
         ListColumn::Status => {
@@ -387,7 +389,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,part_number,revision,title,bom_items,status");
             for asm in &assemblies {
-                let short_id = short_ids.get_short_id(&asm.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&asm.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{}",
                     short_id,
@@ -446,7 +450,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 print!("{:<width$}", part, width = header_widths[i]);
             }
             println!();
-            println!("{}", "-".repeat(header_widths.iter().sum::<usize>() + args.columns.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(header_widths.iter().sum::<usize>() + args.columns.len() - 1)
+            );
 
             // Print rows
             for asm in &assemblies {
@@ -457,26 +464,44 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     let width = header_widths[i];
                     match col {
                         ListColumn::Short => {
-                            let short_id = short_ids.get_short_id(&asm.id.to_string()).unwrap_or_else(|| "?".to_string());
+                            let short_id = short_ids
+                                .get_short_id(&asm.id.to_string())
+                                .unwrap_or_else(|| "?".to_string());
                             print!("{:<width$}", short_id, width = width);
                         }
                         ListColumn::Id => {
                             print!("{:<width$}", format_short_id(&asm.id), width = width);
                         }
                         ListColumn::PartNumber => {
-                            print!("{:<width$}", truncate_str(&asm.part_number, width - 2), width = width);
+                            print!(
+                                "{:<width$}",
+                                truncate_str(&asm.part_number, width - 2),
+                                width = width
+                            );
                         }
                         ListColumn::Title => {
-                            print!("{:<width$}", truncate_str(&asm.title, width - 2), width = width);
+                            print!(
+                                "{:<width$}",
+                                truncate_str(&asm.title, width - 2),
+                                width = width
+                            );
                         }
                         ListColumn::Status => {
                             print!("{:<width$}", asm.status, width = width);
                         }
                         ListColumn::Author => {
-                            print!("{:<width$}", truncate_str(&asm.author, width - 2), width = width);
+                            print!(
+                                "{:<width$}",
+                                truncate_str(&asm.author, width - 2),
+                                width = width
+                            );
                         }
                         ListColumn::Created => {
-                            print!("{:<width$}", asm.created.format("%Y-%m-%d %H:%M"), width = width);
+                            print!(
+                                "{:<width$}",
+                                asm.created.format("%Y-%m-%d %H:%M"),
+                                width = width
+                            );
                         }
                     }
                 }
@@ -484,10 +509,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             println!();
-            println!(
-                "{} assembly(s) found.",
-                style(assemblies.len()).cyan()
-            );
+            println!("{} assembly(s) found.", style(assemblies.len()).cyan());
         }
         OutputFormat::Id => {
             for asm in &assemblies {
@@ -498,7 +520,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Part # | Title | BOM Items | Status |");
             println!("|---|---|---|---|---|---|");
             for asm in &assemblies {
-                let short_id = short_ids.get_short_id(&asm.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&asm.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -669,7 +693,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No assembly found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No assembly found matching '{}'", args.id))?;
 
     // Read and parse assembly
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -694,11 +719,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&asm.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&asm.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&asm.title).yellow());
             if !asm.part_number.is_empty() {
                 println!("{}: {}", style("Part Number").bold(), asm.part_number);
             }
@@ -715,7 +736,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!();
                 println!("{}", style("Bill of Materials:").bold());
                 for item in &asm.bom {
-                    let cmp_display = short_ids.get_short_id(&item.component_id)
+                    let cmp_display = short_ids
+                        .get_short_id(&item.component_id)
                         .unwrap_or_else(|| item.component_id.clone());
                     println!("  • {} x{}", style(&cmp_display).cyan(), item.quantity);
                 }
@@ -726,8 +748,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!();
                 println!("{}", style("Subassemblies:").bold());
                 for sub in &asm.subassemblies {
-                    let sub_display = short_ids.get_short_id(sub)
-                        .unwrap_or_else(|| sub.clone());
+                    let sub_display = short_ids.get_short_id(sub).unwrap_or_else(|| sub.clone());
                     println!("  • {}", style(&sub_display).cyan());
                 }
             }
@@ -804,9 +825,14 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No assembly found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No assembly found matching '{}'", args.id))?;
 
-    println!("Opening {} in {}...", style(path.display()).cyan(), style(config.editor()).yellow());
+    println!(
+        "Opening {} in {}...",
+        style(path.display()).cyan(),
+        style(config.editor()).yellow()
+    );
 
     config.run_editor(&path).into_diagnostic()?;
 
@@ -844,11 +870,13 @@ fn run_bom(args: BomArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let assembly = found_asm.ok_or_else(|| miette::miette!("No assembly found matching '{}'", args.id))?;
+    let assembly =
+        found_asm.ok_or_else(|| miette::miette!("No assembly found matching '{}'", args.id))?;
 
     // Load component index for resolving names
     let cmp_dir = project.root().join("bom/components");
-    let mut components: std::collections::HashMap<String, Component> = std::collections::HashMap::new();
+    let mut components: std::collections::HashMap<String, Component> =
+        std::collections::HashMap::new();
 
     if cmp_dir.exists() {
         for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
@@ -1041,7 +1069,10 @@ fn run_add_component(args: AddComponentArgs) -> Result<()> {
                 let entry_path = entry.path();
 
                 if entry_path.extension().map_or(false, |e| e == "yaml") {
-                    let filename = entry_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                    let filename = entry_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("");
                     if filename.contains(&cmp_id) || filename.starts_with(&cmp_id) {
                         let content = fs::read_to_string(&entry_path).into_diagnostic()?;
                         if let Ok(cmp) = serde_yml::from_str::<Component>(&content) {
@@ -1060,7 +1091,11 @@ fn run_add_component(args: AddComponentArgs) -> Result<()> {
             .unwrap_or_else(|| cmp_id.clone());
 
         // Check if component already exists in BOM
-        if let Some(existing) = assembly.bom.iter_mut().find(|item| item.component_id == full_cmp_id) {
+        if let Some(existing) = assembly
+            .bom
+            .iter_mut()
+            .find(|item| item.component_id == full_cmp_id)
+        {
             // Update existing entry
             existing.quantity += qty;
             if single_component_mode {
@@ -1084,8 +1119,16 @@ fn run_add_component(args: AddComponentArgs) -> Result<()> {
             let bom_item = BomItem {
                 component_id: full_cmp_id.clone(),
                 quantity: qty,
-                reference_designators: if single_component_mode { args.refs.clone() } else { Vec::new() },
-                notes: if single_component_mode { args.notes.clone() } else { None },
+                reference_designators: if single_component_mode {
+                    args.refs.clone()
+                } else {
+                    Vec::new()
+                },
+                notes: if single_component_mode {
+                    args.notes.clone()
+                } else {
+                    None
+                },
             };
             assembly.bom.push(bom_item);
             added_count += 1;
@@ -1189,17 +1232,15 @@ fn run_remove_component(args: RemoveComponentArgs) -> Result<()> {
         }
     }
 
-    let mut assembly = assembly.ok_or_else(|| {
-        miette::miette!(
-            "Assembly '{}' not found",
-            args.assembly
-        )
-    })?;
+    let mut assembly =
+        assembly.ok_or_else(|| miette::miette!("Assembly '{}' not found", args.assembly))?;
     let path = found_path.unwrap();
 
     // Find and remove the component
     let original_len = assembly.bom.len();
-    assembly.bom.retain(|item| !item.component_id.contains(&cmp_id));
+    assembly
+        .bom
+        .retain(|item| !item.component_id.contains(&cmp_id));
 
     if assembly.bom.len() == original_len {
         return Err(miette::miette!(
@@ -1219,10 +1260,7 @@ fn run_remove_component(args: RemoveComponentArgs) -> Result<()> {
         style(&args.component).cyan(),
         style(&args.assembly).yellow()
     );
-    println!(
-        "   BOM now has {} line items",
-        assembly.bom.len()
-    );
+    println!("   BOM now has {} line items", assembly.bom.len());
 
     Ok(())
 }
@@ -1234,32 +1272,35 @@ fn run_cost(args: CostArgs) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve assembly ID
-    let resolved_id = short_ids.resolve(&args.assembly).unwrap_or_else(|| args.assembly.clone());
+    let resolved_id = short_ids
+        .resolve(&args.assembly)
+        .unwrap_or_else(|| args.assembly.clone());
 
     // Load assembly
     let assembly = find_assembly(&project, &resolved_id)?;
 
     // Load all components, assemblies, and quotes for lookup
     let components = load_all_components(&project);
-    let component_map: std::collections::HashMap<String, &Component> = components.iter()
-        .map(|c| (c.id.to_string(), c))
-        .collect();
+    let component_map: std::collections::HashMap<String, &Component> =
+        components.iter().map(|c| (c.id.to_string(), c)).collect();
 
     let assemblies = load_all_assemblies(&project);
-    let assembly_map: std::collections::HashMap<String, &Assembly> = assemblies.iter()
-        .map(|a| (a.id.to_string(), a))
-        .collect();
+    let assembly_map: std::collections::HashMap<String, &Assembly> =
+        assemblies.iter().map(|a| (a.id.to_string(), a)).collect();
 
     let quotes = load_all_quotes(&project);
-    let quote_map: std::collections::HashMap<String, &Quote> = quotes.iter()
-        .map(|q| (q.id.to_string(), q))
-        .collect();
+    let quote_map: std::collections::HashMap<String, &Quote> =
+        quotes.iter().map(|q| (q.id.to_string(), q)).collect();
 
     // Build a map of component -> quotes for that component (for warning about unselected quotes)
-    let mut component_quotes: std::collections::HashMap<String, Vec<&Quote>> = std::collections::HashMap::new();
+    let mut component_quotes: std::collections::HashMap<String, Vec<&Quote>> =
+        std::collections::HashMap::new();
     for quote in &quotes {
         if let Some(ref cmp_id) = quote.component {
-            component_quotes.entry(cmp_id.clone()).or_default().push(quote);
+            component_quotes
+                .entry(cmp_id.clone())
+                .or_default()
+                .push(quote);
         }
     }
 
@@ -1301,17 +1342,38 @@ fn run_cost(args: CostArgs) -> Result<()> {
 
                 let line_cost = unit_price * item.quantity as f64;
                 total += line_cost;
-                breakdown.push((item_id, cmp.title.clone(), item.quantity, unit_price, line_cost, price_source));
+                breakdown.push((
+                    item_id,
+                    cmp.title.clone(),
+                    item.quantity,
+                    unit_price,
+                    line_cost,
+                    price_source,
+                ));
             } else if let Some(sub_asm) = assembly_map.get(&item_id) {
                 if !visited.contains(&item_id) {
                     visited.insert(item_id.clone());
                     let sub_cost = calculate_bom_cost(
-                        &sub_asm.bom, component_map, assembly_map, quote_map, component_quotes,
-                        breakdown, unselected_warnings, visited, production_qty
+                        &sub_asm.bom,
+                        component_map,
+                        assembly_map,
+                        quote_map,
+                        component_quotes,
+                        breakdown,
+                        unselected_warnings,
+                        visited,
+                        production_qty,
                     );
                     let line_cost = sub_cost * item.quantity as f64;
                     total += line_cost;
-                    breakdown.push((item_id.clone(), sub_asm.title.clone(), item.quantity, sub_cost, line_cost, "sub-asm".to_string()));
+                    breakdown.push((
+                        item_id.clone(),
+                        sub_asm.title.clone(),
+                        item.quantity,
+                        sub_cost,
+                        line_cost,
+                        "sub-asm".to_string(),
+                    ));
                     visited.remove(&item_id);
                 }
             }
@@ -1341,9 +1403,15 @@ fn run_cost(args: CostArgs) -> Result<()> {
             if let Some(quotes) = component_quotes.get(&cmp.id.to_string()) {
                 if !quotes.is_empty() {
                     // Only warn once per component
-                    let already_warned = unselected_warnings.iter().any(|(id, _, _)| id == &cmp.id.to_string());
+                    let already_warned = unselected_warnings
+                        .iter()
+                        .any(|(id, _, _)| id == &cmp.id.to_string());
                     if !already_warned {
-                        unselected_warnings.push((cmp.id.to_string(), cmp.title.clone(), quotes.len()));
+                        unselected_warnings.push((
+                            cmp.id.to_string(),
+                            cmp.title.clone(),
+                            quotes.len(),
+                        ));
                     }
                 }
             }
@@ -1353,7 +1421,9 @@ fn run_cost(args: CostArgs) -> Result<()> {
         // Check if there are quotes available but none selected (and no unit_cost)
         if let Some(quotes) = component_quotes.get(&cmp.id.to_string()) {
             if !quotes.is_empty() {
-                let already_warned = unselected_warnings.iter().any(|(id, _, _)| id == &cmp.id.to_string());
+                let already_warned = unselected_warnings
+                    .iter()
+                    .any(|(id, _, _)| id == &cmp.id.to_string());
                 if !already_warned {
                     unselected_warnings.push((cmp.id.to_string(), cmp.title.clone(), quotes.len()));
                 }
@@ -1364,15 +1434,30 @@ fn run_cost(args: CostArgs) -> Result<()> {
     }
 
     let total_cost = calculate_bom_cost(
-        &assembly.bom, &component_map, &assembly_map, &quote_map, &component_quotes,
-        &mut breakdown, &mut unselected_quote_warnings, &mut visited, production_qty
+        &assembly.bom,
+        &component_map,
+        &assembly_map,
+        &quote_map,
+        &component_quotes,
+        &mut breakdown,
+        &mut unselected_quote_warnings,
+        &mut visited,
+        production_qty,
     );
 
     // Output
-    println!("{} {}", style("Assembly:").bold(), style(&assembly.title).cyan());
+    println!(
+        "{} {}",
+        style("Assembly:").bold(),
+        style(&assembly.title).cyan()
+    );
     println!("{} {}", style("Part Number:").bold(), assembly.part_number);
     if production_qty > 1 {
-        println!("{} {}", style("Production Qty:").bold(), style(production_qty).yellow());
+        println!(
+            "{} {}",
+            style("Production Qty:").bold(),
+            style(production_qty).yellow()
+        );
     }
     println!();
 
@@ -1388,7 +1473,9 @@ fn run_cost(args: CostArgs) -> Result<()> {
         );
         println!("{}", "-".repeat(75));
         for (id, title, qty, unit_price, line_cost, source) in &breakdown {
-            let id_short = short_ids.get_short_id(id).unwrap_or_else(|| truncate_str(id, 8));
+            let id_short = short_ids
+                .get_short_id(id)
+                .unwrap_or_else(|| truncate_str(id, 8));
             if *line_cost > 0.0 || *unit_price > 0.0 {
                 println!(
                     "{:<10} {:<26} {:<5} ${:<9.2} ${:<9.2} {}",
@@ -1424,7 +1511,9 @@ fn run_cost(args: CostArgs) -> Result<()> {
             style("Note:").yellow().bold()
         );
         for (id, title, count) in &unselected_quote_warnings {
-            let id_short = short_ids.get_short_id(id).unwrap_or_else(|| truncate_str(id, 10));
+            let id_short = short_ids
+                .get_short_id(id)
+                .unwrap_or_else(|| truncate_str(id, 10));
             println!(
                 "   {} {} ({} quote{}) - use: tdt cmp set-quote {} <quote-id>",
                 style("•").dim(),
@@ -1455,7 +1544,9 @@ fn load_all_quotes(project: &Project) -> Vec<crate::entities::quote::Quote> {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(quote) = crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path()) {
+            if let Ok(quote) =
+                crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path())
+            {
                 quotes.push(quote);
             }
         }
@@ -1469,21 +1560,21 @@ fn run_mass(args: MassArgs) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve assembly ID
-    let resolved_id = short_ids.resolve(&args.assembly).unwrap_or_else(|| args.assembly.clone());
+    let resolved_id = short_ids
+        .resolve(&args.assembly)
+        .unwrap_or_else(|| args.assembly.clone());
 
     // Load assembly
     let assembly = find_assembly(&project, &resolved_id)?;
 
     // Load all components and assemblies for lookup
     let components = load_all_components(&project);
-    let component_map: std::collections::HashMap<String, &Component> = components.iter()
-        .map(|c| (c.id.to_string(), c))
-        .collect();
+    let component_map: std::collections::HashMap<String, &Component> =
+        components.iter().map(|c| (c.id.to_string(), c)).collect();
 
     let assemblies = load_all_assemblies(&project);
-    let assembly_map: std::collections::HashMap<String, &Assembly> = assemblies.iter()
-        .map(|a| (a.id.to_string(), a))
-        .collect();
+    let assembly_map: std::collections::HashMap<String, &Assembly> =
+        assemblies.iter().map(|a| (a.id.to_string(), a)).collect();
 
     // Calculate mass recursively
     let mut breakdown: Vec<(String, String, u32, f64)> = Vec::new(); // (id, title, qty, mass)
@@ -1508,11 +1599,20 @@ fn run_mass(args: MassArgs) -> Result<()> {
                 if !visited.contains(&item_id) {
                     visited.insert(item_id.clone());
                     let sub_mass = calculate_bom_mass(
-                        &sub_asm.bom, component_map, assembly_map, breakdown, visited
+                        &sub_asm.bom,
+                        component_map,
+                        assembly_map,
+                        breakdown,
+                        visited,
                     );
                     let line_mass = sub_mass * item.quantity as f64;
                     total += line_mass;
-                    breakdown.push((item_id.clone(), sub_asm.title.clone(), item.quantity, line_mass));
+                    breakdown.push((
+                        item_id.clone(),
+                        sub_asm.title.clone(),
+                        item.quantity,
+                        line_mass,
+                    ));
                     visited.remove(&item_id);
                 }
             }
@@ -1521,26 +1621,56 @@ fn run_mass(args: MassArgs) -> Result<()> {
     }
 
     let total_mass = calculate_bom_mass(
-        &assembly.bom, &component_map, &assembly_map, &mut breakdown, &mut visited
+        &assembly.bom,
+        &component_map,
+        &assembly_map,
+        &mut breakdown,
+        &mut visited,
     );
 
     // Output
-    println!("{} {}", style("Assembly:").bold(), style(&assembly.title).cyan());
-    println!("{} {}\n", style("Part Number:").bold(), assembly.part_number);
+    println!(
+        "{} {}",
+        style("Assembly:").bold(),
+        style(&assembly.title).cyan()
+    );
+    println!(
+        "{} {}\n",
+        style("Part Number:").bold(),
+        assembly.part_number
+    );
 
     if args.breakdown && !breakdown.is_empty() {
-        println!("{:<12} {:<30} {:<6} {:<12}", style("ID").bold(), style("TITLE").bold(), style("QTY").bold(), style("MASS (kg)").bold());
+        println!(
+            "{:<12} {:<30} {:<6} {:<12}",
+            style("ID").bold(),
+            style("TITLE").bold(),
+            style("QTY").bold(),
+            style("MASS (kg)").bold()
+        );
         println!("{}", "-".repeat(65));
         for (id, title, qty, mass) in &breakdown {
-            let id_short = short_ids.get_short_id(id).unwrap_or_else(|| truncate_str(id, 10));
+            let id_short = short_ids
+                .get_short_id(id)
+                .unwrap_or_else(|| truncate_str(id, 10));
             if *mass > 0.0 {
-                println!("{:<12} {:<30} {:<6} {:.3}", id_short, truncate_str(title, 28), qty, mass);
+                println!(
+                    "{:<12} {:<30} {:<6} {:.3}",
+                    id_short,
+                    truncate_str(title, 28),
+                    qty,
+                    mass
+                );
             }
         }
         println!("{}", "-".repeat(65));
     }
 
-    println!("{} {:.3} kg", style("Total Mass:").green().bold(), total_mass);
+    println!(
+        "{} {:.3} kg",
+        style("Total Mass:").green().bold(),
+        total_mass
+    );
 
     Ok(())
 }

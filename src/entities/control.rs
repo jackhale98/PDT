@@ -385,10 +385,7 @@ mod tests {
 
     #[test]
     fn test_control_type_from_str() {
-        assert_eq!(
-            "spc".parse::<ControlType>().unwrap(),
-            ControlType::Spc
-        );
+        assert_eq!("spc".parse::<ControlType>().unwrap(), ControlType::Spc);
         assert_eq!(
             "poka_yoke".parse::<ControlType>().unwrap(),
             ControlType::PokaYoke

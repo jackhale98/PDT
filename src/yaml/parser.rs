@@ -6,9 +6,8 @@ use crate::yaml::diagnostics::{YamlError, YamlSyntaxError};
 
 /// Parse YAML content into a typed value with nice error messages
 pub fn parse_yaml<T: DeserializeOwned>(content: &str, filename: &str) -> Result<T, YamlError> {
-    serde_yml::from_str(content).map_err(|e| {
-        YamlError::Syntax(YamlSyntaxError::from_serde_error(&e, content, filename))
-    })
+    serde_yml::from_str(content)
+        .map_err(|e| YamlError::Syntax(YamlSyntaxError::from_serde_error(&e, content, filename)))
 }
 
 /// Parse YAML from a file path

@@ -42,7 +42,6 @@ pub struct EntityCache {
     project_root: PathBuf,
 }
 
-
 impl EntityCache {
     /// Open or create cache for a project
     ///
@@ -60,7 +59,8 @@ impl EntityCache {
         let conn = Connection::open(&cache_path).into_diagnostic()?;
 
         // Enable WAL mode for better concurrent access
-        conn.execute_batch("PRAGMA journal_mode=WAL;").into_diagnostic()?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")
+            .into_diagnostic()?;
 
         let mut cache = Self {
             conn,
@@ -242,7 +242,8 @@ impl EntityCache {
 
         let needs_init = !cache_path.exists();
         let conn = Connection::open(&cache_path).into_diagnostic()?;
-        conn.execute_batch("PRAGMA journal_mode=WAL;").into_diagnostic()?;
+        conn.execute_batch("PRAGMA journal_mode=WAL;")
+            .into_diagnostic()?;
 
         let mut cache = Self {
             conn,
@@ -398,9 +399,11 @@ impl EntityCache {
         // Total count
         dist.total = self
             .conn
-            .query_row("SELECT COUNT(*) FROM entities WHERE prefix = 'RISK'", [], |row| {
-                row.get::<_, i64>(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM entities WHERE prefix = 'RISK'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
             .unwrap_or(0) as usize;
 
         // By risk level
@@ -451,9 +454,11 @@ impl EntityCache {
         // Total requirements
         cov.total_requirements = self
             .conn
-            .query_row("SELECT COUNT(*) FROM entities WHERE prefix = 'REQ'", [], |row| {
-                row.get::<_, i64>(0)
-            })
+            .query_row(
+                "SELECT COUNT(*) FROM entities WHERE prefix = 'REQ'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
             .unwrap_or(0) as usize;
 
         // Requirements with tests (have a 'verifies' link to them)
@@ -521,9 +526,10 @@ impl EntityCache {
 
     /// Get all outgoing links from an entity (what it links TO)
     pub fn get_links_from(&self, source_id: &str) -> Vec<CachedLink> {
-        let mut stmt = match self.conn.prepare(
-            "SELECT source_id, target_id, link_type FROM links WHERE source_id = ?1",
-        ) {
+        let mut stmt = match self
+            .conn
+            .prepare("SELECT source_id, target_id, link_type FROM links WHERE source_id = ?1")
+        {
             Ok(s) => s,
             Err(_) => return vec![],
         };
@@ -544,9 +550,10 @@ impl EntityCache {
 
     /// Get all incoming links to an entity (what links TO it)
     pub fn get_links_to(&self, target_id: &str) -> Vec<CachedLink> {
-        let mut stmt = match self.conn.prepare(
-            "SELECT source_id, target_id, link_type FROM links WHERE target_id = ?1",
-        ) {
+        let mut stmt = match self
+            .conn
+            .prepare("SELECT source_id, target_id, link_type FROM links WHERE target_id = ?1")
+        {
             Ok(s) => s,
             Err(_) => return vec![],
         };
@@ -567,9 +574,10 @@ impl EntityCache {
 
     /// Get links of a specific type from an entity
     pub fn get_links_from_of_type(&self, source_id: &str, link_type: &str) -> Vec<String> {
-        let mut stmt = match self.conn.prepare(
-            "SELECT target_id FROM links WHERE source_id = ?1 AND link_type = ?2",
-        ) {
+        let mut stmt = match self
+            .conn
+            .prepare("SELECT target_id FROM links WHERE source_id = ?1 AND link_type = ?2")
+        {
             Ok(s) => s,
             Err(_) => return vec![],
         };
@@ -584,9 +592,10 @@ impl EntityCache {
 
     /// Get links of a specific type to an entity
     pub fn get_links_to_of_type(&self, target_id: &str, link_type: &str) -> Vec<String> {
-        let mut stmt = match self.conn.prepare(
-            "SELECT source_id FROM links WHERE target_id = ?1 AND link_type = ?2",
-        ) {
+        let mut stmt = match self
+            .conn
+            .prepare("SELECT source_id FROM links WHERE target_id = ?1 AND link_type = ?2")
+        {
             Ok(s) => s,
             Err(_) => return vec![],
         };
@@ -682,7 +691,12 @@ impl EntityCache {
         let rows = match stmt.query_map([], |row| {
             let tags_str: Option<String> = row.get(10)?;
             let tags = tags_str
-                .map(|s| s.split(',').filter(|t| !t.is_empty()).map(String::from).collect())
+                .map(|s| {
+                    s.split(',')
+                        .filter(|t| !t.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
                 .unwrap_or_default();
             Ok(CachedEntity {
                 id: row.get(0)?,
@@ -735,10 +749,9 @@ impl EntityCache {
     pub fn get_linked_entity_ids(&self) -> std::collections::HashSet<String> {
         let mut result = std::collections::HashSet::new();
 
-        if let Ok(mut stmt) = self
-            .conn
-            .prepare("SELECT DISTINCT source_id FROM links UNION SELECT DISTINCT target_id FROM links")
-        {
+        if let Ok(mut stmt) = self.conn.prepare(
+            "SELECT DISTINCT source_id FROM links UNION SELECT DISTINCT target_id FROM links",
+        ) {
             if let Ok(rows) = stmt.query_map([], |row| row.get::<_, String>(0)) {
                 for row in rows.flatten() {
                     result.insert(row);
@@ -768,7 +781,9 @@ impl EntityCache {
                 .prepare("SELECT prefix, COUNT(*) FROM entities GROUP BY prefix")
                 .into_diagnostic()?;
             let rows = stmt
-                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, usize>(1)?)))
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, usize>(1)?))
+                })
                 .into_diagnostic()?;
 
             for row in rows {

@@ -48,7 +48,9 @@ impl std::str::FromStr for FeatureType {
             "internal" => Ok(FeatureType::Internal),
             "external" => Ok(FeatureType::External),
             // Legacy mappings for backward compatibility
-            "slot" | "pocket" | "counterbore" | "countersink" | "thread" => Ok(FeatureType::Internal),
+            "slot" | "pocket" | "counterbore" | "countersink" | "thread" => {
+                Ok(FeatureType::Internal)
+            }
             "boss" => Ok(FeatureType::External),
             "planar_surface" | "edge" | "other" => Ok(FeatureType::Internal),
             _ => Err(format!(
@@ -351,7 +353,14 @@ impl Feature {
     }
 
     /// Add a dimension to this feature
-    pub fn add_dimension(&mut self, name: impl Into<String>, nominal: f64, plus_tol: f64, minus_tol: f64, internal: bool) {
+    pub fn add_dimension(
+        &mut self,
+        name: impl Into<String>,
+        nominal: f64,
+        plus_tol: f64,
+        minus_tol: f64,
+        internal: bool,
+    ) {
         self.dimensions.push(Dimension {
             name: name.into(),
             nominal,
@@ -380,7 +389,12 @@ mod tests {
 
     #[test]
     fn test_feature_creation() {
-        let feat = Feature::new("CMP-123", FeatureType::Internal, "Mounting Hole A", "Test Author");
+        let feat = Feature::new(
+            "CMP-123",
+            FeatureType::Internal,
+            "Mounting Hole A",
+            "Test Author",
+        );
         assert_eq!(feat.component, "CMP-123");
         assert_eq!(feat.feature_type, FeatureType::Internal);
         assert_eq!(feat.title, "Mounting Hole A");
@@ -401,7 +415,7 @@ mod tests {
             distribution: Distribution::default(),
         };
 
-        assert!((dim.mmc() - 10.1).abs() < 1e-10);  // largest
+        assert!((dim.mmc() - 10.1).abs() < 1e-10); // largest
         assert!((dim.lmc() - 9.95).abs() < 1e-10); // smallest
         assert!((dim.tolerance_band() - 0.15).abs() < 1e-10);
     }
@@ -419,7 +433,7 @@ mod tests {
             distribution: Distribution::default(),
         };
 
-        assert!((dim.mmc() - 9.95).abs() < 1e-10);  // smallest (MMC for hole)
+        assert!((dim.mmc() - 9.95).abs() < 1e-10); // smallest (MMC for hole)
         assert!((dim.lmc() - 10.1).abs() < 1e-10); // largest (LMC for hole)
         assert!((dim.tolerance_band() - 0.15).abs() < 1e-10);
     }

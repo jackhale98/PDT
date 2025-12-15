@@ -289,7 +289,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     // Resolve process filter if provided
     let process_filter = if let Some(ref proc_id) = args.process {
-        Some(short_ids.resolve(proc_id).unwrap_or_else(|| proc_id.clone()))
+        Some(
+            short_ids
+                .resolve(proc_id)
+                .unwrap_or_else(|| proc_id.clone()),
+        )
     } else {
         None
     };
@@ -333,7 +337,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         })
         .filter(|c| {
             if let Some(ref author_filter) = args.author {
-                c.author.to_lowercase().contains(&author_filter.to_lowercase())
+                c.author
+                    .to_lowercase()
+                    .contains(&author_filter.to_lowercase())
             } else {
                 true
             }
@@ -371,9 +377,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     match args.sort {
         ListColumn::Id => controls.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
         ListColumn::Title => controls.sort_by(|a, b| a.title.cmp(&b.title)),
-        ListColumn::ControlType => controls.sort_by(|a, b| {
-            format!("{:?}", a.control_type).cmp(&format!("{:?}", b.control_type))
-        }),
+        ListColumn::ControlType => controls
+            .sort_by(|a, b| format!("{:?}", a.control_type).cmp(&format!("{:?}", b.control_type))),
         ListColumn::Status => {
             controls.sort_by(|a, b| format!("{:?}", a.status).cmp(&format!("{:?}", b.status)))
         }
@@ -419,7 +424,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,title,type,characteristic,critical,status");
             for ctrl in &controls {
-                let short_id = short_ids.get_short_id(&ctrl.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&ctrl.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{}",
                     short_id,
@@ -427,7 +434,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     escape_csv(&ctrl.title),
                     ctrl.control_type,
                     escape_csv(&ctrl.characteristic.name),
-                    if ctrl.characteristic.critical { "Y" } else { "N" },
+                    if ctrl.characteristic.critical {
+                        "Y"
+                    } else {
+                        "N"
+                    },
                     ctrl.status
                 );
             }
@@ -451,10 +462,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             for ctrl in &controls {
-                let short_id = short_ids.get_short_id(&ctrl.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&ctrl.id.to_string())
+                    .unwrap_or_default();
                 let mut row_parts = Vec::new();
 
                 for (col, &width) in args.columns.iter().zip(&widths) {
@@ -467,21 +483,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                             };
                             style(truncate_str(&id_str, width)).cyan().to_string()
                         }
-                        ListColumn::Title => {
-                            truncate_str(&ctrl.title, width)
-                        }
+                        ListColumn::Title => truncate_str(&ctrl.title, width),
                         ListColumn::ControlType => {
                             format!("{}", ctrl.control_type)
                         }
                         ListColumn::Status => {
                             format!("{}", ctrl.status)
                         }
-                        ListColumn::Author => {
-                            truncate_str(&ctrl.author, width)
-                        }
-                        ListColumn::Created => {
-                            ctrl.created.format("%Y-%m-%d %H:%M").to_string()
-                        }
+                        ListColumn::Author => truncate_str(&ctrl.author, width),
+                        ListColumn::Created => ctrl.created.format("%Y-%m-%d %H:%M").to_string(),
                     };
                     row_parts.push(format!("{:<width$}", value, width = width));
                 }
@@ -505,8 +515,14 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Title | Type | Characteristic | CTQ | Status |");
             println!("|---|---|---|---|---|---|---|");
             for ctrl in &controls {
-                let short_id = short_ids.get_short_id(&ctrl.id.to_string()).unwrap_or_default();
-                let ctq = if ctrl.characteristic.critical { "Yes" } else { "" };
+                let short_id = short_ids
+                    .get_short_id(&ctrl.id.to_string())
+                    .unwrap_or_default();
+                let ctq = if ctrl.characteristic.critical {
+                    "Yes"
+                } else {
+                    ""
+                };
                 println!(
                     "| {} | {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -575,7 +591,10 @@ fn output_cached_controls(
             }
 
             println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1));
+            println!(
+                "{}",
+                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
+            );
 
             for entity in entities {
                 let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
@@ -771,7 +790,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No control found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No control found matching '{}'", args.id))?;
 
     // Read and parse control
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -796,11 +816,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&ctrl.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&ctrl.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&ctrl.title).yellow());
             println!("{}: {}", style("Control Type").bold(), ctrl.control_type);
             println!("{}: {}", style("Status").bold(), ctrl.status);
             println!("{}", style("─".repeat(60)).dim());
@@ -905,7 +921,8 @@ fn run_edit(args: EditArgs) -> Result<()> {
         }
     }
 
-    let path = found_path.ok_or_else(|| miette::miette!("No control found matching '{}'", args.id))?;
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No control found matching '{}'", args.id))?;
 
     println!(
         "Opening {} in {}...",

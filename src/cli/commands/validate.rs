@@ -92,9 +92,7 @@ fn format_path_with_alias(
     // Try to get short ID alias
     let alias = content
         .and_then(|c| extract_entity_id(c))
-        .and_then(|id| {
-            cache.as_ref().and_then(|c| c.get_short_id(&id))
-        });
+        .and_then(|id| cache.as_ref().and_then(|c| c.get_short_id(&id)));
 
     match alias {
         Some(short_id) => format!("{} ({})", path.display(), style(&short_id).cyan()),
@@ -159,9 +157,10 @@ pub fn run(args: ValidateArgs) -> Result<()> {
     };
 
     // Filter by entity type if specified
-    let entity_filter: Option<EntityPrefix> = args.entity_type.as_ref().and_then(|t| {
-        t.to_uppercase().parse().ok()
-    });
+    let entity_filter: Option<EntityPrefix> = args
+        .entity_type
+        .as_ref()
+        .and_then(|t| t.to_uppercase().parse().ok());
 
     println!(
         "{} Validating {} file(s)...\n",
@@ -176,8 +175,9 @@ pub fn run(args: ValidateArgs) -> Result<()> {
         }
 
         // Determine entity type from path
-        let prefix = EntityPrefix::from_filename(&path.file_name().unwrap_or_default().to_string_lossy())
-            .or_else(|| EntityPrefix::from_path(path));
+        let prefix =
+            EntityPrefix::from_filename(&path.file_name().unwrap_or_default().to_string_lossy())
+                .or_else(|| EntityPrefix::from_path(path));
 
         // Skip if filtering by entity type and this doesn't match
         if let Some(filter) = entity_filter {
@@ -193,12 +193,7 @@ pub fn run(args: ValidateArgs) -> Result<()> {
             Ok(c) => c,
             Err(e) => {
                 if !args.summary {
-                    println!(
-                        "{} {} - {}",
-                        style("✗").red(),
-                        path.display(),
-                        e
-                    );
+                    println!("{} {} - {}", style("✗").red(), path.display(), e);
                 }
                 stats.files_failed += 1;
                 stats.total_errors += 1;
@@ -315,49 +310,26 @@ pub fn run(args: ValidateArgs) -> Result<()> {
     // Print summary
     println!();
     println!("{}", style("─".repeat(60)).dim());
-    println!(
-        "{}",
-        style("Validation Summary").bold()
-    );
+    println!("{}", style("Validation Summary").bold());
     println!("{}", style("─".repeat(60)).dim());
-    println!(
-        "  Files checked:  {}",
-        style(stats.files_checked).cyan()
-    );
-    println!(
-        "  Files passed:   {}",
-        style(stats.files_passed).green()
-    );
-    println!(
-        "  Files failed:   {}",
-        style(stats.files_failed).red()
-    );
-    println!(
-        "  Total errors:   {}",
-        style(stats.total_errors).red()
-    );
+    println!("  Files checked:  {}", style(stats.files_checked).cyan());
+    println!("  Files passed:   {}", style(stats.files_passed).green());
+    println!("  Files failed:   {}", style(stats.files_failed).red());
+    println!("  Total errors:   {}", style(stats.total_errors).red());
 
     if stats.total_warnings > 0 {
-        println!(
-            "  Total warnings: {}",
-            style(stats.total_warnings).yellow()
-        );
+        println!("  Total warnings: {}", style(stats.total_warnings).yellow());
     }
 
     if stats.files_fixed > 0 {
-        println!(
-            "  Files fixed:    {}",
-            style(stats.files_fixed).cyan()
-        );
+        println!("  Files fixed:    {}", style(stats.files_fixed).cyan());
     }
 
     println!();
 
     if had_error {
         if stats.files_failed == 1 {
-            Err(miette::miette!(
-                "Validation failed: 1 file has errors"
-            ))
+            Err(miette::miette!("Validation failed: 1 file has errors"))
         } else {
             Err(miette::miette!(
                 "Validation failed: {} files have errors",
@@ -365,10 +337,7 @@ pub fn run(args: ValidateArgs) -> Result<()> {
             ))
         }
     } else {
-        println!(
-            "{} All files passed validation!",
-            style("✓").green().bold()
-        );
+        println!("{} All files passed validation!", style("✓").green().bold());
         Ok(())
     }
 }
@@ -634,9 +603,15 @@ fn check_mate_values(
     // Check that features form a valid mate (one internal, one external)
     if dim_a.internal == dim_b.internal {
         if dim_a.internal {
-            issues.push("Both features are internal - mate requires one internal and one external".to_string());
+            issues.push(
+                "Both features are internal - mate requires one internal and one external"
+                    .to_string(),
+            );
         } else {
-            issues.push("Both features are external - mate requires one internal and one external".to_string());
+            issues.push(
+                "Both features are external - mate requires one internal and one external"
+                    .to_string(),
+            );
         }
         return Ok(issues);
     }
@@ -652,8 +627,10 @@ fn check_mate_values(
 
     // Compare with stored analysis
     if let Some(actual) = &mate.fit_analysis {
-        let min_diff = (actual.worst_case_min_clearance - expected_analysis.worst_case_min_clearance).abs();
-        let max_diff = (actual.worst_case_max_clearance - expected_analysis.worst_case_max_clearance).abs();
+        let min_diff =
+            (actual.worst_case_min_clearance - expected_analysis.worst_case_min_clearance).abs();
+        let max_diff =
+            (actual.worst_case_max_clearance - expected_analysis.worst_case_max_clearance).abs();
 
         if min_diff > 1e-6 || max_diff > 1e-6 || actual.fit_result != expected_analysis.fit_result {
             if fix {
@@ -851,7 +828,11 @@ risk_level: high
         let path = PathBuf::from("/tmp/test.yaml");
         let issues = check_risk_calculations(content.trim(), &path, false, &mut stats).unwrap();
 
-        assert!(issues.is_empty(), "No issues expected for correct RPN: {:?}", issues);
+        assert!(
+            issues.is_empty(),
+            "No issues expected for correct RPN: {:?}",
+            issues
+        );
     }
 
     #[test]
@@ -1034,7 +1015,11 @@ text: This is a test requirement.
 "#;
 
         let result = validator.validate(content.trim(), "test.yaml", EntityPrefix::Req);
-        assert!(result.is_ok(), "Valid requirement should pass: {:?}", result);
+        assert!(
+            result.is_ok(),
+            "Valid requirement should pass: {:?}",
+            result
+        );
     }
 
     #[test]

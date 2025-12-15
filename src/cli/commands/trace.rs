@@ -150,17 +150,18 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Parse source/target type filters
-    let source_filter: Option<EntityPrefix> = args.source_type.as_ref().and_then(|t| {
-        t.to_uppercase().parse().ok()
-    });
-    let target_filter: Option<EntityPrefix> = args.target_type.as_ref().and_then(|t| {
-        t.to_uppercase().parse().ok()
-    });
+    let source_filter: Option<EntityPrefix> = args
+        .source_type
+        .as_ref()
+        .and_then(|t| t.to_uppercase().parse().ok());
+    let target_filter: Option<EntityPrefix> = args
+        .target_type
+        .as_ref()
+        .and_then(|t| t.to_uppercase().parse().ok());
 
     // Build a map of entity IDs to prefixes for target filtering
-    let id_to_prefix: HashMap<String, EntityPrefix> = entities.iter()
-        .map(|e| (e.id.clone(), e.prefix))
-        .collect();
+    let id_to_prefix: HashMap<String, EntityPrefix> =
+        entities.iter().map(|e| (e.id.clone(), e.prefix)).collect();
 
     // Determine format - prefer args.output, fallback to global
     let use_dot = args.output == "dot";
@@ -244,7 +245,10 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                         }
                     }
                 }
-                println!("  \"{}\" -> \"{}\" [label=\"{}\"];", entity.id, target, link_type);
+                println!(
+                    "  \"{}\" -> \"{}\" [label=\"{}\"];",
+                    entity.id, target, link_type
+                );
             }
         }
         println!("}}");
@@ -268,7 +272,14 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                         }
                     }
                 }
-                println!("{},{},{},{},{}", entity.id, entity.prefix, escape_csv(&entity.title), link_type, target);
+                println!(
+                    "{},{},{},{},{}",
+                    entity.id,
+                    entity.prefix,
+                    escape_csv(&entity.title),
+                    link_type,
+                    target
+                );
             }
         }
     } else {
@@ -293,7 +304,8 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 
             // Use alias (REQ@1) if --aliases flag set, otherwise truncated full ID
             let source_display = if let Some(ref idx) = short_ids {
-                idx.get_short_id(&entity.id).unwrap_or_else(|| format_short_id_str(&entity.id))
+                idx.get_short_id(&entity.id)
+                    .unwrap_or_else(|| format_short_id_str(&entity.id))
             } else {
                 format_short_id_str(&entity.id)
             };
@@ -312,7 +324,8 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
                 has_links = true;
                 // Use alias for target too
                 let target_display = if let Some(ref idx) = short_ids {
-                    idx.get_short_id(target).unwrap_or_else(|| format_short_id_str(target))
+                    idx.get_short_id(target)
+                        .unwrap_or_else(|| format_short_id_str(target))
                 } else {
                     format_short_id_str(target)
                 };
@@ -335,7 +348,11 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 /// Requirements Verification Matrix - shows requirements as source with what verifies them
-fn run_rvm(entities: &[GenericEntity], short_ids: Option<&ShortIdIndex>, _global: &GlobalOpts) -> Result<()> {
+fn run_rvm(
+    entities: &[GenericEntity],
+    short_ids: Option<&ShortIdIndex>,
+    _global: &GlobalOpts,
+) -> Result<()> {
     // Build reverse lookup: target_id -> Vec<(source_id, link_type)>
     // This shows what entities point TO each entity
     let mut incoming_links: HashMap<String, Vec<(String, String)>> = HashMap::new();
@@ -349,7 +366,8 @@ fn run_rvm(entities: &[GenericEntity], short_ids: Option<&ShortIdIndex>, _global
     }
 
     // Get all requirements
-    let requirements: Vec<&GenericEntity> = entities.iter()
+    let requirements: Vec<&GenericEntity> = entities
+        .iter()
         .filter(|e| e.prefix == EntityPrefix::Req)
         .collect();
 
@@ -376,7 +394,8 @@ fn run_rvm(entities: &[GenericEntity], short_ids: Option<&ShortIdIndex>, _global
         total_count += 1;
 
         let req_display = if let Some(idx) = short_ids {
-            idx.get_short_id(&req.id).unwrap_or_else(|| format_short_id_str(&req.id))
+            idx.get_short_id(&req.id)
+                .unwrap_or_else(|| format_short_id_str(&req.id))
         } else {
             format_short_id_str(&req.id)
         };
@@ -384,13 +403,16 @@ fn run_rvm(entities: &[GenericEntity], short_ids: Option<&ShortIdIndex>, _global
         let title = truncate_str(&req.title, 30);
 
         // Find all entities that verify this requirement
-        let verifiers: Vec<String> = incoming_links.get(&req.id)
+        let verifiers: Vec<String> = incoming_links
+            .get(&req.id)
             .map(|links| {
-                links.iter()
+                links
+                    .iter()
                     .filter(|(_, link_type)| link_type == "verifies")
                     .map(|(source_id, _)| {
                         if let Some(idx) = short_ids {
-                            idx.get_short_id(source_id).unwrap_or_else(|| format_short_id_str(source_id))
+                            idx.get_short_id(source_id)
+                                .unwrap_or_else(|| format_short_id_str(source_id))
                         } else {
                             format_short_id_str(source_id)
                         }
@@ -444,16 +466,24 @@ fn run_from(args: FromArgs) -> Result<()> {
         let _ = short_ids.save(&project);
     }
 
-    let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
 
     // Find the starting entity
-    let source = entities.iter()
-        .find(|e| e.id.starts_with(&resolved_id) || e.title.to_lowercase().contains(&resolved_id.to_lowercase()))
+    let source = entities
+        .iter()
+        .find(|e| {
+            e.id.starts_with(&resolved_id)
+                || e.title.to_lowercase().contains(&resolved_id.to_lowercase())
+        })
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
     // Display source with alias unless --ids is set
     let source_display = if !args.ids {
-        short_ids.get_short_id(&source.id).unwrap_or_else(|| source.id.clone())
+        short_ids
+            .get_short_id(&source.id)
+            .unwrap_or_else(|| source.id.clone())
     } else {
         source.id.clone()
     };
@@ -467,7 +497,8 @@ fn run_from(args: FromArgs) -> Result<()> {
     println!();
 
     // Build ID to title map for display
-    let id_to_title: HashMap<String, String> = entities.iter()
+    let id_to_title: HashMap<String, String> = entities
+        .iter()
         .map(|e| (e.id.clone(), e.title.clone()))
         .collect();
 
@@ -501,11 +532,16 @@ fn run_from(args: FromArgs) -> Result<()> {
         if depth > 0 {
             let indent = "  ".repeat(depth);
             let id_display = if !args.ids {
-                short_ids.get_short_id(&id).unwrap_or_else(|| format_short_id_str(&id))
+                short_ids
+                    .get_short_id(&id)
+                    .unwrap_or_else(|| format_short_id_str(&id))
             } else {
                 id.clone()
             };
-            let title = id_to_title.get(&id).map(|t| truncate_str(t, 40)).unwrap_or_default();
+            let title = id_to_title
+                .get(&id)
+                .map(|t| truncate_str(t, 40))
+                .unwrap_or_default();
             println!("{}← {} - {}", indent, style(&id_display).cyan(), title);
         }
 
@@ -538,16 +574,24 @@ fn run_to(args: ToArgs) -> Result<()> {
         let _ = short_ids.save(&project);
     }
 
-    let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
 
     // Find the target entity
-    let target = entities.iter()
-        .find(|e| e.id.starts_with(&resolved_id) || e.title.to_lowercase().contains(&resolved_id.to_lowercase()))
+    let target = entities
+        .iter()
+        .find(|e| {
+            e.id.starts_with(&resolved_id)
+                || e.title.to_lowercase().contains(&resolved_id.to_lowercase())
+        })
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
     // Display target with alias unless --ids is set
     let target_display = if !args.ids {
-        short_ids.get_short_id(&target.id).unwrap_or_else(|| target.id.clone())
+        short_ids
+            .get_short_id(&target.id)
+            .unwrap_or_else(|| target.id.clone())
     } else {
         target.id.clone()
     };
@@ -561,7 +605,8 @@ fn run_to(args: ToArgs) -> Result<()> {
     println!();
 
     // Build ID to title map for display
-    let id_to_title: HashMap<String, String> = entities.iter()
+    let id_to_title: HashMap<String, String> = entities
+        .iter()
         .map(|e| (e.id.clone(), e.title.clone()))
         .collect();
 
@@ -592,11 +637,16 @@ fn run_to(args: ToArgs) -> Result<()> {
         if depth > 0 {
             let indent = "  ".repeat(depth);
             let id_display = if !args.ids {
-                short_ids.get_short_id(&id).unwrap_or_else(|| format_short_id_str(&id))
+                short_ids
+                    .get_short_id(&id)
+                    .unwrap_or_else(|| format_short_id_str(&id))
             } else {
                 id.clone()
             };
-            let title = id_to_title.get(&id).map(|t| truncate_str(t, 40)).unwrap_or_default();
+            let title = id_to_title
+                .get(&id)
+                .map(|t| truncate_str(t, 40))
+                .unwrap_or_default();
             println!("{}→ {} - {}", indent, style(&id_display).cyan(), title);
         }
 
@@ -735,10 +785,7 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
 
             println!();
             if orphans.is_empty() {
-                println!(
-                    "{} No orphaned entities found!",
-                    style("✓").green().bold()
-                );
+                println!("{} No orphaned entities found!", style("✓").green().bold());
             } else {
                 println!(
                     "Found {} orphaned entity(ies)",
@@ -765,7 +812,8 @@ fn run_coverage(args: CoverageArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Filter by type if specified
-    let filtered: Vec<&Requirement> = reqs.iter()
+    let filtered: Vec<&Requirement> = reqs
+        .iter()
         .filter(|r| {
             if let Some(ref t) = args.r#type {
                 r.req_type.to_string().to_lowercase() == t.to_lowercase()
@@ -781,8 +829,8 @@ fn run_coverage(args: CoverageArgs, global: &GlobalOpts) -> Result<()> {
 
     for req in &filtered {
         // Check both: req.links.verified_by AND tests that verify this req
-        let has_verification = !req.links.verified_by.is_empty()
-            || verified_by_tests.contains(&req.id.to_string());
+        let has_verification =
+            !req.links.verified_by.is_empty() || verified_by_tests.contains(&req.id.to_string());
         if has_verification {
             covered += 1;
         } else {
@@ -974,12 +1022,14 @@ fn load_generic_entity(path: &PathBuf, prefix: EntityPrefix) -> Result<GenericEn
     let content = std::fs::read_to_string(path).into_diagnostic()?;
     let value: serde_yml::Value = serde_yml::from_str(&content).into_diagnostic()?;
 
-    let id = value.get("id")
+    let id = value
+        .get("id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| miette::miette!("Missing id in {:?}", path))?
         .to_string();
 
-    let title = value.get("title")
+    let title = value
+        .get("title")
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
@@ -1011,13 +1061,13 @@ fn load_generic_entity(path: &PathBuf, prefix: EntityPrefix) -> Result<GenericEn
     // Also extract top-level reference fields that act as links
     // These are fields that contain entity IDs but aren't in the links section
     let reference_fields = [
-        "supplier",    // Quote -> Supplier
-        "component",   // Quote -> Component, NCR -> Component
-        "assembly",    // Quote -> Assembly
-        "process",     // Control -> Process, WorkInstruction -> Process, NCR -> Process
-        "feature",     // Control -> Feature
-        "control",     // NCR -> Control
-        "capa",        // NCR -> CAPA
+        "supplier",  // Quote -> Supplier
+        "component", // Quote -> Component, NCR -> Component
+        "assembly",  // Quote -> Assembly
+        "process",   // Control -> Process, WorkInstruction -> Process, NCR -> Process
+        "feature",   // Control -> Feature
+        "control",   // NCR -> Control
+        "capa",      // NCR -> CAPA
     ];
 
     for field in reference_fields {

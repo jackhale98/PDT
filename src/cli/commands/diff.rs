@@ -38,7 +38,9 @@ pub fn run(args: DiffArgs) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve the entity ID
-    let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
 
     // Find the entity file
     let entity_file = find_entity_file(&project, &resolved_id)?;
@@ -71,9 +73,16 @@ pub fn run(args: DiffArgs) -> Result<()> {
     git_args.push(entity_file.to_string_lossy().to_string());
 
     // Print header
-    let display_id = short_ids.get_short_id(&resolved_id).unwrap_or_else(|| resolved_id.clone());
+    let display_id = short_ids
+        .get_short_id(&resolved_id)
+        .unwrap_or_else(|| resolved_id.clone());
     let rev_desc = args.revision.as_deref().unwrap_or("working copy");
-    println!("{} {} ({})\n", style("Diff for:").bold(), style(&display_id).cyan(), rev_desc);
+    println!(
+        "{} {} ({})\n",
+        style("Diff for:").bold(),
+        style(&display_id).cyan(),
+        rev_desc
+    );
 
     // Execute git command
     let output = Command::new("git")
@@ -130,7 +139,9 @@ fn find_entity_file(project: &Project, id: &str) -> Result<std::path::PathBuf> {
                     .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
                 {
                     if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                        if content.contains(&format!("id: {}", id)) || content.contains(&format!("id: \"{}\"", id)) {
+                        if content.contains(&format!("id: {}", id))
+                            || content.contains(&format!("id: \"{}\"", id))
+                        {
                             return Ok(entry.path().to_path_buf());
                         }
                     }

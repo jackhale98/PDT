@@ -121,14 +121,15 @@ impl Config {
 
     /// Run the editor on a file, properly handling commands with arguments
     /// (e.g., "emacsclient -nw" or "code --wait")
-    pub fn run_editor(&self, file_path: &std::path::Path) -> std::io::Result<std::process::ExitStatus> {
+    pub fn run_editor(
+        &self,
+        file_path: &std::path::Path,
+    ) -> std::io::Result<std::process::ExitStatus> {
         let editor = self.editor();
         let parts: Vec<&str> = editor.split_whitespace().collect();
 
         if parts.is_empty() {
-            return std::process::Command::new("vi")
-                .arg(file_path)
-                .status();
+            return std::process::Command::new("vi").arg(file_path).status();
         }
 
         let cmd = parts[0];

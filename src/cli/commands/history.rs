@@ -38,7 +38,9 @@ pub fn run(args: HistoryArgs) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve the entity ID
-    let resolved_id = short_ids.resolve(&args.id).unwrap_or_else(|| args.id.clone());
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
 
     // Find the entity file
     let entity_file = find_entity_file(&project, &resolved_id)?;
@@ -72,8 +74,14 @@ pub fn run(args: HistoryArgs) -> Result<()> {
     git_args.push(entity_file.to_string_lossy().to_string());
 
     // Print header
-    let display_id = short_ids.get_short_id(&resolved_id).unwrap_or_else(|| resolved_id.clone());
-    println!("{} {}\n", style("History for:").bold(), style(&display_id).cyan());
+    let display_id = short_ids
+        .get_short_id(&resolved_id)
+        .unwrap_or_else(|| resolved_id.clone());
+    println!(
+        "{} {}\n",
+        style("History for:").bold(),
+        style(&display_id).cyan()
+    );
 
     // Execute git command
     let output = Command::new("git")
@@ -93,7 +101,10 @@ pub fn run(args: HistoryArgs) -> Result<()> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     if stdout.trim().is_empty() {
-        println!("{}", style("No history found (file may not be tracked yet).").yellow());
+        println!(
+            "{}",
+            style("No history found (file may not be tracked yet).").yellow()
+        );
     } else {
         print!("{}", stdout);
     }
@@ -134,7 +145,9 @@ fn find_entity_file(project: &Project, id: &str) -> Result<std::path::PathBuf> {
                     .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
                 {
                     if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                        if content.contains(&format!("id: {}", id)) || content.contains(&format!("id: \"{}\"", id)) {
+                        if content.contains(&format!("id: {}", id))
+                            || content.contains(&format!("id: \"{}\"", id))
+                        {
                             return Ok(entry.path().to_path_buf());
                         }
                     }

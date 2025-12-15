@@ -12,7 +12,9 @@ use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
-use crate::entities::ncr::{Disposition, DispositionDecision, Ncr, NcrCategory, NcrSeverity, NcrStatus, NcrType};
+use crate::entities::ncr::{
+    Disposition, DispositionDecision, Ncr, NcrCategory, NcrSeverity, NcrStatus, NcrType,
+};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
@@ -568,7 +570,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,title,type,severity,category,ncr_status");
             for ncr in &ncrs {
-                let short_id = short_ids.get_short_id(&ncr.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&ncr.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{}",
                     short_id,
@@ -606,11 +610,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 print!("{:<width$} ", style(header).bold(), width = widths[i]);
             }
             println!();
-            println!("{}", "-".repeat(8 + widths.iter().sum::<usize>() + widths.len() * 1));
+            println!(
+                "{}",
+                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len() * 1)
+            );
 
             // Print rows
             for ncr in &ncrs {
-                let short_id = short_ids.get_short_id(&ncr.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&ncr.id.to_string())
+                    .unwrap_or_default();
                 print!("{:<8} ", style(&short_id).cyan());
 
                 for (i, (_, col)) in headers.iter().enumerate() {
@@ -620,7 +629,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                         ListColumn::NcrType => ncr.ncr_type.to_string(),
                         ListColumn::Severity => {
                             let severity_styled = match ncr.severity {
-                                NcrSeverity::Critical => style(ncr.severity.to_string()).red().bold(),
+                                NcrSeverity::Critical => {
+                                    style(ncr.severity.to_string()).red().bold()
+                                }
                                 NcrSeverity::Major => style(ncr.severity.to_string()).yellow(),
                                 NcrSeverity::Minor => style(ncr.severity.to_string()).white(),
                             };
@@ -652,7 +663,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Title | Type | Severity | Category | Status |");
             println!("|---|---|---|---|---|---|---|");
             for ncr in &ncrs {
-                let short_id = short_ids.get_short_id(&ncr.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&ncr.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -819,16 +832,16 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&ncr.id.to_string()).cyan()
             );
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&ncr.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&ncr.title).yellow());
             println!("{}: {}", style("NCR Type").bold(), ncr.ncr_type);
             let severity_style = match ncr.severity {
-                crate::entities::ncr::NcrSeverity::Critical => style(ncr.severity.to_string()).red().bold(),
+                crate::entities::ncr::NcrSeverity::Critical => {
+                    style(ncr.severity.to_string()).red().bold()
+                }
                 crate::entities::ncr::NcrSeverity::Major => style(ncr.severity.to_string()).red(),
-                crate::entities::ncr::NcrSeverity::Minor => style(ncr.severity.to_string()).yellow(),
+                crate::entities::ncr::NcrSeverity::Minor => {
+                    style(ncr.severity.to_string()).yellow()
+                }
             };
             println!("{}: {}", style("Severity").bold(), severity_style);
             println!("{}: {}", style("NCR Status").bold(), ncr.ncr_status);
@@ -876,7 +889,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Containment
             if !ncr.containment.is_empty() {
                 println!();
-                println!("{} ({}):", style("Containment Actions").bold(), ncr.containment.len());
+                println!(
+                    "{} ({}):",
+                    style("Containment Actions").bold(),
+                    ncr.containment.len()
+                );
                 for action in &ncr.containment {
                     println!("  • {} [{:?}]", action.action, action.status);
                 }
@@ -1022,9 +1039,7 @@ fn output_cached_ncrs(
                     let cell = match col {
                         ListColumn::Id => truncate_str(&ncr.id, widths[i] - 2),
                         ListColumn::Title => truncate_str(&ncr.title, widths[i] - 2),
-                        ListColumn::NcrType => {
-                            ncr.ncr_type.as_deref().unwrap_or("").to_string()
-                        }
+                        ListColumn::NcrType => ncr.ncr_type.as_deref().unwrap_or("").to_string(),
                         ListColumn::Severity => {
                             let severity = ncr.severity.as_deref().unwrap_or("");
                             let severity_styled = match severity {
@@ -1035,9 +1050,7 @@ fn output_cached_ncrs(
                             print!("{:<width$} ", severity_styled, width = widths[i]);
                             continue;
                         }
-                        ListColumn::Status => {
-                            ncr.ncr_status.as_deref().unwrap_or("").to_string()
-                        }
+                        ListColumn::Status => ncr.ncr_status.as_deref().unwrap_or("").to_string(),
                         ListColumn::Author => truncate_str(&ncr.author, widths[i] - 2),
                         ListColumn::Created => ncr.created.format("%Y-%m-%d %H:%M").to_string(),
                     };
@@ -1120,15 +1133,13 @@ fn run_close(args: CloseArgs, global: &GlobalOpts) -> Result<()> {
     let mut ncr: Ncr = serde_yml::from_str(&content).into_diagnostic()?;
 
     // Get display ID for user messages
-    let display_id = short_ids.get_short_id(&ncr.id.to_string())
+    let display_id = short_ids
+        .get_short_id(&ncr.id.to_string())
         .unwrap_or_else(|| format_short_id(&ncr.id));
 
     // Validate status allows closing
     if ncr.ncr_status == NcrStatus::Closed {
-        return Err(miette::miette!(
-            "NCR {} is already closed",
-            display_id
-        ));
+        return Err(miette::miette!("NCR {} is already closed", display_id));
     }
 
     // Convert CLI disposition to entity enum
@@ -1140,9 +1151,10 @@ fn run_close(args: CloseArgs, global: &GlobalOpts) -> Result<()> {
     };
 
     // Resolve CAPA link if provided
-    let capa_ref = args.capa.as_ref().map(|c| {
-        short_ids.resolve(c).unwrap_or_else(|| c.clone())
-    });
+    let capa_ref = args
+        .capa
+        .as_ref()
+        .map(|c| short_ids.resolve(c).unwrap_or_else(|| c.clone()));
 
     // Show current state and confirmation
     if !args.yes {
@@ -1153,7 +1165,10 @@ fn run_close(args: CloseArgs, global: &GlobalOpts) -> Result<()> {
         println!("Current Status: {}", ncr.ncr_status);
         println!("Severity: {}", ncr.severity);
         println!();
-        println!("Disposition: {}", style(format!("{:?}", args.disposition)).yellow());
+        println!(
+            "Disposition: {}",
+            style(format!("{:?}", args.disposition)).yellow()
+        );
         if let Some(ref rationale) = args.rationale {
             println!("Rationale: {}", rationale);
         }
@@ -1211,7 +1226,10 @@ fn run_close(args: CloseArgs, global: &GlobalOpts) -> Result<()> {
                 "disposition": disposition_decision.to_string(),
                 "capa": capa_ref,
             });
-            println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).unwrap_or_default()
+            );
         }
         OutputFormat::Yaml => {
             let result = serde_json::json!({
@@ -1223,10 +1241,19 @@ fn run_close(args: CloseArgs, global: &GlobalOpts) -> Result<()> {
         }
         _ => {
             println!();
-            println!("{} NCR {} closed", style("✓").green(), style(&display_id).cyan());
-            println!("  Disposition: {}", style(format!("{:?}", args.disposition)).yellow());
+            println!(
+                "{} NCR {} closed",
+                style("✓").green(),
+                style(&display_id).cyan()
+            );
+            println!(
+                "  Disposition: {}",
+                style(format!("{:?}", args.disposition)).yellow()
+            );
             if let Some(ref capa_id) = capa_ref {
-                let capa_display = short_ids.get_short_id(capa_id).unwrap_or_else(|| capa_id.clone());
+                let capa_display = short_ids
+                    .get_short_id(capa_id)
+                    .unwrap_or_else(|| capa_id.clone());
                 println!("  Linked CAPA: {}", style(&capa_display).cyan());
             }
         }

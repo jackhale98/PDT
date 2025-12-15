@@ -44,11 +44,21 @@ struct FieldInfo {
 #[derive(Debug)]
 #[allow(dead_code)]
 enum FieldType {
-    String { min_length: Option<u64>, max_length: Option<u64> },
-    Enum { values: Vec<String> },
-    Integer { minimum: Option<i64>, maximum: Option<i64> },
+    String {
+        min_length: Option<u64>,
+        max_length: Option<u64>,
+    },
+    Enum {
+        values: Vec<String>,
+    },
+    Integer {
+        minimum: Option<i64>,
+        maximum: Option<i64>,
+    },
     Boolean,
-    Array { item_type: Box<FieldType> },
+    Array {
+        item_type: Box<FieldType>,
+    },
     Skip, // For fields we handle automatically (id, created, author, etc.)
 }
 
@@ -63,8 +73,9 @@ impl SchemaWizard {
 
     /// Run the wizard for a specific entity type
     pub fn run(&self, prefix: EntityPrefix) -> Result<WizardResult> {
-        let schema_str = self.registry.get(prefix)
-            .ok_or_else(|| miette::miette!("No schema found for entity type: {}", prefix.as_str()))?;
+        let schema_str = self.registry.get(prefix).ok_or_else(|| {
+            miette::miette!("No schema found for entity type: {}", prefix.as_str())
+        })?;
         let schema: Value = serde_json::from_str(schema_str).into_diagnostic()?;
 
         println!();
@@ -120,34 +131,73 @@ impl SchemaWizard {
             // This covers requirements, risks, tests, and results
             let field_order = [
                 // Common fields
-                "type", "test_type", "test_level", "test_method",
-                "title", "priority",
-                "category", "tags",
+                "type",
+                "test_type",
+                "test_level",
+                "test_method",
+                "title",
+                "priority",
+                "category",
+                "tags",
                 // Requirement fields
-                "text", "rationale", "acceptance_criteria",
+                "text",
+                "rationale",
+                "acceptance_criteria",
                 // Risk FMEA fields (in logical order)
-                "description", "failure_mode", "cause", "effect",
-                "severity", "occurrence", "detection",
+                "description",
+                "failure_mode",
+                "cause",
+                "effect",
+                "severity",
+                "occurrence",
+                "detection",
                 // Test fields
-                "objective", "preconditions", "equipment", "procedure",
-                "sample_size", "environment", "estimated_duration",
+                "objective",
+                "preconditions",
+                "equipment",
+                "procedure",
+                "sample_size",
+                "environment",
+                "estimated_duration",
                 // Result fields
-                "test_id", "verdict", "verdict_rationale",
-                "executed_date", "executed_by",
-                "sample_info", "equipment_used", "step_results",
-                "deviations", "failures", "attachments",
-                "duration", "notes",
+                "test_id",
+                "verdict",
+                "verdict_rationale",
+                "executed_date",
+                "executed_by",
+                "sample_info",
+                "equipment_used",
+                "step_results",
+                "deviations",
+                "failures",
+                "attachments",
+                "duration",
+                "notes",
             ];
 
             // Fields to skip entirely (auto-managed or calculated)
             let skip_fields = [
-                "id", "created", "author", "revision", "source", "links", "status",
+                "id",
+                "created",
+                "author",
+                "revision",
+                "source",
+                "links",
+                "status",
                 // Calculated fields that should not be prompted
-                "rpn", "risk_level", "initial_risk", "mitigations",
+                "rpn",
+                "risk_level",
+                "initial_risk",
+                "mitigations",
                 // Test result fields handled separately
-                "test_revision", "reviewed_by", "reviewed_date",
+                "test_revision",
+                "reviewed_by",
+                "reviewed_date",
                 // Feature fields - component is provided via -c, dimensions are complex nested objects
-                "component", "dimensions", "gdt", "drawing",
+                "component",
+                "dimensions",
+                "gdt",
+                "drawing",
             ];
 
             // First add fields in preferred order
@@ -156,7 +206,9 @@ impl SchemaWizard {
                     continue;
                 }
                 if let Some(prop_schema) = props.get(*name) {
-                    if let Some(field) = self.parse_field(*name, prop_schema, required.contains(&name.to_string())) {
+                    if let Some(field) =
+                        self.parse_field(*name, prop_schema, required.contains(&name.to_string()))
+                    {
                         fields.push(field);
                     }
                 }
@@ -166,7 +218,9 @@ impl SchemaWizard {
             // Collect and sort remaining fields for consistent ordering
             let mut remaining: Vec<_> = props
                 .iter()
-                .filter(|(name, _)| !field_order.contains(&name.as_str()) && !skip_fields.contains(&name.as_str()))
+                .filter(|(name, _)| {
+                    !field_order.contains(&name.as_str()) && !skip_fields.contains(&name.as_str())
+                })
                 .collect();
             remaining.sort_by(|(a, _), (b, _)| a.cmp(b));
 
@@ -194,7 +248,10 @@ impl SchemaWizard {
             });
         }
 
-        let description = schema.get("description").and_then(|d| d.as_str()).map(String::from);
+        let description = schema
+            .get("description")
+            .and_then(|d| d.as_str())
+            .map(String::from);
         let default = schema.get("default").cloned();
 
         let field_type = if let Some(enum_values) = schema.get("enum").and_then(|e| e.as_array()) {
@@ -217,14 +274,25 @@ impl SchemaWizard {
                 Some("boolean") => FieldType::Boolean,
                 Some("array") => {
                     let item_schema = schema.get("items").unwrap_or(&Value::Null);
-                    let item_type = if let Some(item_enum) = item_schema.get("enum").and_then(|e| e.as_array()) {
+                    let item_type = if let Some(item_enum) =
+                        item_schema.get("enum").and_then(|e| e.as_array())
+                    {
                         FieldType::Enum {
-                            values: item_enum.iter().filter_map(|v| v.as_str()).map(String::from).collect(),
+                            values: item_enum
+                                .iter()
+                                .filter_map(|v| v.as_str())
+                                .map(String::from)
+                                .collect(),
                         }
                     } else {
-                        FieldType::String { min_length: None, max_length: None }
+                        FieldType::String {
+                            min_length: None,
+                            max_length: None,
+                        }
                     };
-                    FieldType::Array { item_type: Box::new(item_type) }
+                    FieldType::Array {
+                        item_type: Box::new(item_type),
+                    }
                 }
                 _ => return None, // Skip complex types we don't handle
             }
@@ -247,7 +315,8 @@ impl SchemaWizard {
             FieldType::Skip => Ok(None),
 
             FieldType::Enum { values } => {
-                let default_idx = field.default
+                let default_idx = field
+                    .default
                     .as_ref()
                     .and_then(|d| d.as_str())
                     .and_then(|d| values.iter().position(|v| v == d))
@@ -264,7 +333,8 @@ impl SchemaWizard {
             }
 
             FieldType::String { .. } => {
-                let default_str = field.default
+                let default_str = field
+                    .default
                     .as_ref()
                     .and_then(|d| d.as_str())
                     .unwrap_or("");
@@ -297,10 +367,7 @@ impl SchemaWizard {
             }
 
             FieldType::Integer { .. } => {
-                let default_val = field.default
-                    .as_ref()
-                    .and_then(|d| d.as_i64())
-                    .unwrap_or(0);
+                let default_val = field.default.as_ref().and_then(|d| d.as_i64()).unwrap_or(0);
 
                 let value: String = Input::with_theme(&self.theme)
                     .with_prompt(&prompt)
@@ -313,7 +380,8 @@ impl SchemaWizard {
             }
 
             FieldType::Boolean => {
-                let default_val = field.default
+                let default_val = field
+                    .default
                     .as_ref()
                     .and_then(|d| d.as_bool())
                     .unwrap_or(false);

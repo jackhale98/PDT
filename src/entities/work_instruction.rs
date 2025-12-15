@@ -266,7 +266,10 @@ mod tests {
 
     #[test]
     fn test_entity_trait_implementation() {
-        let work = WorkInstruction::new("Test Work Instruction".to_string(), "test_author".to_string());
+        let work = WorkInstruction::new(
+            "Test Work Instruction".to_string(),
+            "test_author".to_string(),
+        );
 
         assert_eq!(WorkInstruction::PREFIX, "WORK");
         assert_eq!(work.title(), "Test Work Instruction");

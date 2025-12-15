@@ -156,7 +156,6 @@ impl std::fmt::Display for ListColumn {
 pub struct ListArgs {
     // ========== FILTERING OPTIONS ==========
     // These let users filter without needing awk/grep
-
     /// Filter by type
     #[arg(long, short = 't', default_value = "all")]
     pub r#type: ReqTypeFilter,
@@ -187,7 +186,6 @@ pub struct ListArgs {
 
     // ========== COMMON FILTER SHORTCUTS ==========
     // Pre-built filters for common queries
-
     /// Show only unlinked requirements (no satisfied_by or verified_by)
     #[arg(long)]
     pub orphans: bool,
@@ -201,7 +199,6 @@ pub struct ListArgs {
     pub recent: Option<u32>,
 
     // ========== VERIFICATION STATUS FILTERS ==========
-
     /// Show unverified requirements (no verified_by links)
     #[arg(long)]
     pub unverified: bool,
@@ -219,7 +216,6 @@ pub struct ListArgs {
     pub passing: bool,
 
     // ========== OUTPUT CONTROL ==========
-
     /// Columns to display (can specify multiple)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
         ListColumn::Id,
@@ -329,11 +325,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let needs_full_entities = needs_full_output || needs_complex_filters;
 
     // Pre-load test results if we need verification status filters
-    let results: Vec<crate::entities::result::Result> = if args.untested || args.failed || args.passing {
-        load_all_results(&project)
-    } else {
-        Vec::new()
-    };
+    let results: Vec<crate::entities::result::Result> =
+        if args.untested || args.failed || args.passing {
+            load_all_results(&project)
+        } else {
+            Vec::new()
+        };
 
     // Fast path: use cache directly for simple list outputs without complex filters
     if !needs_full_entities {
@@ -369,8 +366,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             type_filter,
             args.category.as_deref(),
             args.author.as_deref(),
-            None,  // No search
-            None,  // No limit yet
+            None, // No search
+            None, // No limit yet
         );
 
         // Apply post-filters for Active status and Urgent priority
@@ -380,11 +377,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 _ => true,
             };
             let priority_match = match args.priority {
-                PriorityFilter::Urgent => r.priority.as_deref() == Some("high") || r.priority.as_deref() == Some("critical"),
+                PriorityFilter::Urgent => {
+                    r.priority.as_deref() == Some("high")
+                        || r.priority.as_deref() == Some("critical")
+                }
                 _ => true,
             };
             let tag_match = args.tag.as_ref().map_or(true, |tag| {
-                r.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase())
+                r.tags
+                    .iter()
+                    .any(|t| t.to_lowercase() == tag.to_lowercase())
             });
             let recent_match = args.recent.map_or(true, |days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
@@ -425,7 +427,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     Some("low") => 3,
                     _ => 4,
                 };
-                cached_reqs.sort_by(|a, b| priority_order(a.priority.as_deref()).cmp(&priority_order(b.priority.as_deref())));
+                cached_reqs.sort_by(|a, b| {
+                    priority_order(a.priority.as_deref())
+                        .cmp(&priority_order(b.priority.as_deref()))
+                });
             }
             ListColumn::Category => cached_reqs.sort_by(|a, b| a.category.cmp(&b.category)),
             ListColumn::Author => cached_reqs.sort_by(|a, b| a.author.cmp(&b.author)),
@@ -515,18 +520,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             PriorityFilter::Medium => req.priority == Priority::Medium,
             PriorityFilter::High => req.priority == Priority::High,
             PriorityFilter::Critical => req.priority == Priority::Critical,
-            PriorityFilter::Urgent => req.priority == Priority::High || req.priority == Priority::Critical,
+            PriorityFilter::Urgent => {
+                req.priority == Priority::High || req.priority == Priority::Critical
+            }
             PriorityFilter::All => true,
         };
 
         // Category filter (for full entity mode)
         let category_match = args.category.as_ref().map_or(true, |cat| {
-            req.category.as_ref().map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+            req.category
+                .as_ref()
+                .map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
         });
 
         // Tag filter
         let tag_match = args.tag.as_ref().map_or(true, |tag| {
-            req.tags.iter().any(|t| t.to_lowercase() == tag.to_lowercase())
+            req.tags
+                .iter()
+                .any(|t| t.to_lowercase() == tag.to_lowercase())
         });
 
         // Author filter (for full entity mode)
@@ -578,9 +589,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 false // No tests linked, not "untested" - it's unverified
             } else {
                 // Check if any linked test has a result
-                !test_ids.iter().any(|tid| {
-                    results.iter().any(|r| &r.test_id == *tid)
-                })
+                !test_ids
+                    .iter()
+                    .any(|tid| results.iter().any(|r| &r.test_id == *tid))
             }
         } else {
             true
@@ -613,10 +624,20 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             true
         };
 
-        type_match && status_match && priority_match && category_match
-            && tag_match && author_match && search_match && orphans_match
-            && needs_review_match && recent_match && unverified_match
-            && untested_match && failed_match && passing_match
+        type_match
+            && status_match
+            && priority_match
+            && category_match
+            && tag_match
+            && author_match
+            && search_match
+            && orphans_match
+            && needs_review_match
+            && recent_match
+            && unverified_match
+            && untested_match
+            && failed_match
+            && passing_match
     });
 
     // Handle count-only mode
@@ -641,7 +662,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort by specified column
     match args.sort {
         ListColumn::Id => reqs.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
-        ListColumn::Type => reqs.sort_by(|a, b| a.req_type.to_string().cmp(&b.req_type.to_string())),
+        ListColumn::Type => {
+            reqs.sort_by(|a, b| a.req_type.to_string().cmp(&b.req_type.to_string()))
+        }
         ListColumn::Title => reqs.sort_by(|a, b| a.title.cmp(&b.title)),
         ListColumn::Status => reqs.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string())),
         ListColumn::Priority => {
@@ -655,7 +678,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             reqs.sort_by(|a, b| priority_order(&a.priority).cmp(&priority_order(&b.priority)));
         }
         ListColumn::Category => reqs.sort_by(|a, b| {
-            a.category.as_deref().unwrap_or("").cmp(b.category.as_deref().unwrap_or(""))
+            a.category
+                .as_deref()
+                .unwrap_or("")
+                .cmp(b.category.as_deref().unwrap_or(""))
         }),
         ListColumn::Author => reqs.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => reqs.sort_by(|a, b| a.created.cmp(&b.created)),
@@ -695,7 +721,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Csv => {
             println!("short_id,id,type,title,status,priority,category,author,created");
             for req in &reqs {
-                let short_id = short_ids.get_short_id(&req.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&req.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "{},{},{},{},{},{},{},{},{}",
                     short_id,
@@ -731,7 +759,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", "-".repeat(90));
 
             for req in &reqs {
-                let short_id = short_ids.get_short_id(&req.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&req.id.to_string())
+                    .unwrap_or_default();
                 let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
 
                 for col in &args.columns {
@@ -741,10 +771,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                         ListColumn::Title => format!("{:<34}", truncate_str(&req.title, 32)),
                         ListColumn::Status => format!("{:<10}", req.status),
                         ListColumn::Priority => format!("{:<10}", req.priority),
-                        ListColumn::Category => format!("{:<16}", truncate_str(req.category.as_deref().unwrap_or(""), 14)),
+                        ListColumn::Category => format!(
+                            "{:<16}",
+                            truncate_str(req.category.as_deref().unwrap_or(""), 14)
+                        ),
                         ListColumn::Author => format!("{:<16}", truncate_str(&req.author, 14)),
                         ListColumn::Created => format!("{:<12}", req.created.format("%Y-%m-%d")),
-                        ListColumn::Tags => format!("{:<20}", truncate_str(&req.tags.join(", "), 18)),
+                        ListColumn::Tags => {
+                            format!("{:<20}", truncate_str(&req.tags.join(", "), 18))
+                        }
                     };
                     row_parts.push(value);
                 }
@@ -767,7 +802,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| Short | ID | Type | Title | Status | Priority |");
             println!("|---|---|---|---|---|---|");
             for req in &reqs {
-                let short_id = short_ids.get_short_id(&req.id.to_string()).unwrap_or_default();
+                let short_id = short_ids
+                    .get_short_id(&req.id.to_string())
+                    .unwrap_or_default();
                 println!(
                     "| {} | {} | {} | {} | {} | {} |",
                     short_id,
@@ -838,14 +875,23 @@ fn output_cached_requirements(
                 for col in &args.columns {
                     let value = match col {
                         ListColumn::Id => format!("{:<16}", truncate_str(&req.id, 14)),
-                        ListColumn::Type => format!("{:<8}", req.req_type.as_deref().unwrap_or("input")),
+                        ListColumn::Type => {
+                            format!("{:<8}", req.req_type.as_deref().unwrap_or("input"))
+                        }
                         ListColumn::Title => format!("{:<34}", truncate_str(&req.title, 32)),
                         ListColumn::Status => format!("{:<10}", req.status),
-                        ListColumn::Priority => format!("{:<10}", req.priority.as_deref().unwrap_or("medium")),
-                        ListColumn::Category => format!("{:<16}", truncate_str(req.category.as_deref().unwrap_or(""), 14)),
+                        ListColumn::Priority => {
+                            format!("{:<10}", req.priority.as_deref().unwrap_or("medium"))
+                        }
+                        ListColumn::Category => format!(
+                            "{:<16}",
+                            truncate_str(req.category.as_deref().unwrap_or(""), 14)
+                        ),
                         ListColumn::Author => format!("{:<16}", truncate_str(&req.author, 14)),
                         ListColumn::Created => format!("{:<12}", req.created.format("%Y-%m-%d")),
-                        ListColumn::Tags => format!("{:<20}", truncate_str(&req.tags.join(", "), 18)),
+                        ListColumn::Tags => {
+                            format!("{:<20}", truncate_str(&req.tags.join(", "), 18))
+                        }
                     };
                     row_parts.push(value);
                 }
@@ -928,7 +974,12 @@ fn run_new(args: NewArgs) -> Result<()> {
             .values
             .get("tags")
             .and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(String::from).collect())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(String::from)
+                    .collect()
+            })
             .unwrap_or_default();
 
         (req_type, title, priority, category, tags)
@@ -1020,11 +1071,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style(&req.id.to_string()).cyan()
             );
             println!("{}: {}", style("Type").bold(), req.req_type);
-            println!(
-                "{}: {}",
-                style("Title").bold(),
-                style(&req.title).yellow()
-            );
+            println!("{}: {}", style("Title").bold(), style(&req.title).yellow());
             println!("{}: {}", style("Status").bold(), req.status);
             println!("{}: {}", style("Priority").bold(), req.priority);
             if let Some(ref cat) = req.category {
@@ -1093,10 +1140,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
         .join(format!("requirements/{}/{}.tdt.yaml", req_type, req.id));
 
     if !file_path.exists() {
-        return Err(miette::miette!(
-            "File not found: {}",
-            file_path.display()
-        ));
+        return Err(miette::miette!("File not found: {}", file_path.display()));
     }
 
     println!(
@@ -1114,7 +1158,9 @@ fn run_edit(args: EditArgs) -> Result<()> {
 fn find_requirement(project: &Project, id_query: &str) -> Result<Requirement> {
     // First, try to resolve short ID (@N) to full ID
     let short_ids = ShortIdIndex::load(project);
-    let resolved_query = short_ids.resolve(id_query).unwrap_or_else(|| id_query.to_string());
+    let resolved_query = short_ids
+        .resolve(id_query)
+        .unwrap_or_else(|| id_query.to_string());
 
     let mut matches: Vec<(Requirement, std::path::PathBuf)> = Vec::new();
 
@@ -1138,8 +1184,14 @@ fn find_requirement(project: &Project, id_query: &str) -> Result<Requirement> {
                     matches.push((req, entry.path().to_path_buf()));
                 }
                 // Also check title for fuzzy match (only if not a short ID lookup)
-                else if !id_query.starts_with('@') && !id_query.chars().all(|c| c.is_ascii_digit()) {
-                    if req.title.to_lowercase().contains(&resolved_query.to_lowercase()) {
+                else if !id_query.starts_with('@')
+                    && !id_query.chars().all(|c| c.is_ascii_digit())
+                {
+                    if req
+                        .title
+                        .to_lowercase()
+                        .contains(&resolved_query.to_lowercase())
+                    {
                         matches.push((req, entry.path().to_path_buf()));
                     }
                 }
@@ -1154,16 +1206,9 @@ fn find_requirement(project: &Project, id_query: &str) -> Result<Requirement> {
         )),
         1 => Ok(matches.remove(0).0),
         _ => {
-            println!(
-                "{} Multiple matches found:",
-                style("!").yellow()
-            );
+            println!("{} Multiple matches found:", style("!").yellow());
             for (req, _path) in &matches {
-                println!(
-                    "  {} - {}",
-                    format_short_id(&req.id),
-                    req.title
-                );
+                println!("  {} - {}", format_short_id(&req.id), req.title);
             }
             Err(miette::miette!(
                 "Ambiguous query '{}'. Please be more specific.",
@@ -1186,7 +1231,9 @@ fn load_all_results(project: &Project) -> Vec<crate::entities::result::Result> {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(result) = crate::yaml::parse_yaml_file::<crate::entities::result::Result>(entry.path()) {
+            if let Ok(result) =
+                crate::yaml::parse_yaml_file::<crate::entities::result::Result>(entry.path())
+            {
                 results.push(result);
             }
         }
@@ -1201,7 +1248,9 @@ fn load_all_results(project: &Project) -> Vec<crate::entities::result::Result> {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(result) = crate::yaml::parse_yaml_file::<crate::entities::result::Result>(entry.path()) {
+            if let Ok(result) =
+                crate::yaml::parse_yaml_file::<crate::entities::result::Result>(entry.path())
+            {
                 results.push(result);
             }
         }

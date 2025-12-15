@@ -8,7 +8,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use crate::cli::helpers::{truncate_str, format_date_local};
+use crate::cli::helpers::{format_date_local, truncate_str};
 use crate::cli::GlobalOpts;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
@@ -120,9 +120,7 @@ fn run_rvm(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     let results = load_all_results(&project);
 
     // Build test lookup by ID
-    let test_map: HashMap<String, &Test> = tests.iter()
-        .map(|t| (t.id.to_string(), t))
-        .collect();
+    let test_map: HashMap<String, &Test> = tests.iter().map(|t| (t.id.to_string(), t)).collect();
 
     // Build reverse lookup: which tests verify each requirement (from test.links.verifies)
     let mut tests_verifying_req: HashMap<String, Vec<String>> = HashMap::new();
@@ -157,25 +155,29 @@ fn run_rvm(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
         test_title: String,
         result_id: String,
         verdict: String,
-        is_verified: bool,  // true verification = test passed
+        is_verified: bool, // true verification = test passed
     }
     let mut rows: Vec<RvmRow> = Vec::new();
 
-    let mut verified_count = 0;  // Has linked tests that passed
-    let mut partial_count = 0;   // Has linked tests but not all passed
+    let mut verified_count = 0; // Has linked tests that passed
+    let mut partial_count = 0; // Has linked tests but not all passed
     let mut unverified_count = 0; // No linked tests
     let mut passed_count = 0;
     let mut failed_count = 0;
 
     for req in &requirements {
-        let req_short = short_ids.get_short_id(&req.id.to_string()).unwrap_or_else(|| req.id.to_string());
+        let req_short = short_ids
+            .get_short_id(&req.id.to_string())
+            .unwrap_or_else(|| req.id.to_string());
         let req_title = req.title.clone();
         let req_id_str = req.id.to_string();
 
         // Merge links from both directions:
         // 1. req.links.verified_by (tests listed in requirement)
         // 2. test.links.verifies (tests that point to this requirement)
-        let mut all_test_ids: std::collections::HashSet<String> = req.links.verified_by
+        let mut all_test_ids: std::collections::HashSet<String> = req
+            .links
+            .verified_by
             .iter()
             .map(|id| id.to_string())
             .collect();
@@ -207,43 +209,52 @@ fn run_rvm(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
             let mut any_executed = false;
 
             for test_id_str in all_test_ids {
-                let test_short = short_ids.get_short_id(&test_id_str).unwrap_or_else(|| test_id_str.clone());
+                let test_short = short_ids
+                    .get_short_id(&test_id_str)
+                    .unwrap_or_else(|| test_id_str.clone());
 
-                let (test_title, result_id, verdict, test_passed) = if let Some(test) = test_map.get(&test_id_str) {
-                    let title = test.title.clone();
-                    if let Some(result) = latest_results.get(&test_id_str) {
-                        any_executed = true;
-                        let result_short = short_ids.get_short_id(&result.id.to_string())
-                            .unwrap_or_else(|| result.id.to_string());
-                        let (verdict_str, passed) = match result.verdict {
-                            Verdict::Pass => {
-                                passed_count += 1;
-                                ("✓ Pass".to_string(), true)
-                            }
-                            Verdict::Fail => {
-                                failed_count += 1;
-                                all_passed = false;
-                                ("✗ Fail".to_string(), false)
-                            }
-                            Verdict::Conditional => {
-                                all_passed = false;
-                                ("⚠ Conditional".to_string(), false)
-                            }
-                            Verdict::Incomplete => {
-                                all_passed = false;
-                                ("… Incomplete".to_string(), false)
-                            }
-                            Verdict::NotApplicable => ("N/A".to_string(), true),
-                        };
-                        (title, result_short, verdict_str, passed)
+                let (test_title, result_id, verdict, test_passed) =
+                    if let Some(test) = test_map.get(&test_id_str) {
+                        let title = test.title.clone();
+                        if let Some(result) = latest_results.get(&test_id_str) {
+                            any_executed = true;
+                            let result_short = short_ids
+                                .get_short_id(&result.id.to_string())
+                                .unwrap_or_else(|| result.id.to_string());
+                            let (verdict_str, passed) = match result.verdict {
+                                Verdict::Pass => {
+                                    passed_count += 1;
+                                    ("✓ Pass".to_string(), true)
+                                }
+                                Verdict::Fail => {
+                                    failed_count += 1;
+                                    all_passed = false;
+                                    ("✗ Fail".to_string(), false)
+                                }
+                                Verdict::Conditional => {
+                                    all_passed = false;
+                                    ("⚠ Conditional".to_string(), false)
+                                }
+                                Verdict::Incomplete => {
+                                    all_passed = false;
+                                    ("… Incomplete".to_string(), false)
+                                }
+                                Verdict::NotApplicable => ("N/A".to_string(), true),
+                            };
+                            (title, result_short, verdict_str, passed)
+                        } else {
+                            all_passed = false;
+                            (title, "-".to_string(), "(not executed)".to_string(), false)
+                        }
                     } else {
                         all_passed = false;
-                        (title, "-".to_string(), "(not executed)".to_string(), false)
-                    }
-                } else {
-                    all_passed = false;
-                    ("(test not found)".to_string(), "-".to_string(), "-".to_string(), false)
-                };
+                        (
+                            "(test not found)".to_string(),
+                            "-".to_string(),
+                            "-".to_string(),
+                            false,
+                        )
+                    };
 
                 if !args.unverified_only {
                     rows.push(RvmRow {
@@ -306,9 +317,18 @@ fn run_rvm(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     // Separator
     output.push_str(&format!(
         "|{:-<w1$}|{:-<w2$}|{:-<w3$}|{:-<w4$}|{:-<w5$}|{:-<w6$}|\n",
-        "", "", "", "", "", "",
-        w1 = w_req_id + 2, w2 = w_req_title + 2, w3 = w_test_id + 2,
-        w4 = w_test_title + 2, w5 = w_result + 2, w6 = w_verdict + 2
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        w1 = w_req_id + 2,
+        w2 = w_req_title + 2,
+        w3 = w_test_id + 2,
+        w4 = w_test_title + 2,
+        w5 = w_result + 2,
+        w6 = w_verdict + 2
     ));
 
     // Data rows
@@ -329,11 +349,24 @@ fn run_rvm(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     // Summary
     output.push_str("\n## Summary\n\n");
     let total = requirements.len();
-    let coverage = if total > 0 { (verified_count as f64 / total as f64) * 100.0 } else { 0.0 };
+    let coverage = if total > 0 {
+        (verified_count as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    };
     output.push_str(&format!("- **Total Requirements:** {}\n", total));
-    output.push_str(&format!("- **Verified (all tests pass):** {} ({:.1}%)\n", verified_count, coverage));
-    output.push_str(&format!("- **Partial (some tests fail):** {}\n", partial_count));
-    output.push_str(&format!("- **Unverified (no tests or not executed):** {}\n", unverified_count));
+    output.push_str(&format!(
+        "- **Verified (all tests pass):** {} ({:.1}%)\n",
+        verified_count, coverage
+    ));
+    output.push_str(&format!(
+        "- **Partial (some tests fail):** {}\n",
+        partial_count
+    ));
+    output.push_str(&format!(
+        "- **Unverified (no tests or not executed):** {}\n",
+        unverified_count
+    ));
     output.push_str(&format!("- **Tests Passed:** {}\n", passed_count));
     output.push_str(&format!("- **Tests Failed:** {}\n", failed_count));
 
@@ -382,8 +415,11 @@ fn run_fmea(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
     let mut by_level: HashMap<String, usize> = HashMap::new();
 
     for risk in &risks {
-        let risk_short = short_ids.get_short_id(&risk.id.to_string()).unwrap_or_else(|| risk.id.to_string());
-        let failure_mode = truncate_str(risk.failure_mode.as_deref().unwrap_or("-"), 20).to_string();
+        let risk_short = short_ids
+            .get_short_id(&risk.id.to_string())
+            .unwrap_or_else(|| risk.id.to_string());
+        let failure_mode =
+            truncate_str(risk.failure_mode.as_deref().unwrap_or("-"), 20).to_string();
         let cause = truncate_str(risk.cause.as_deref().unwrap_or("-"), 15).to_string();
         let effect = truncate_str(risk.effect.as_deref().unwrap_or("-"), 15).to_string();
         let s = risk.severity.map_or("-".to_string(), |v| v.to_string());
@@ -479,12 +515,27 @@ fn run_fmea(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
     output.push_str("\n## Summary\n\n");
     output.push_str(&format!("- **Total Risks:** {}\n", risks.len()));
     if !risks.is_empty() {
-        output.push_str(&format!("- **Average RPN:** {:.1}\n", total_rpn as f64 / risks.len() as f64));
+        output.push_str(&format!(
+            "- **Average RPN:** {:.1}\n",
+            total_rpn as f64 / risks.len() as f64
+        ));
     }
-    output.push_str(&format!("- **Critical:** {}\n", by_level.get("critical").unwrap_or(&0)));
-    output.push_str(&format!("- **High:** {}\n", by_level.get("high").unwrap_or(&0)));
-    output.push_str(&format!("- **Medium:** {}\n", by_level.get("medium").unwrap_or(&0)));
-    output.push_str(&format!("- **Low:** {}\n", by_level.get("low").unwrap_or(&0)));
+    output.push_str(&format!(
+        "- **Critical:** {}\n",
+        by_level.get("critical").unwrap_or(&0)
+    ));
+    output.push_str(&format!(
+        "- **High:** {}\n",
+        by_level.get("high").unwrap_or(&0)
+    ));
+    output.push_str(&format!(
+        "- **Medium:** {}\n",
+        by_level.get("medium").unwrap_or(&0)
+    ));
+    output.push_str(&format!(
+        "- **Low:** {}\n",
+        by_level.get("low").unwrap_or(&0)
+    ));
 
     let unmitigated = risks.iter().filter(|r| r.mitigations.is_empty()).count();
     output.push_str(&format!("- **Unmitigated:** {}\n", unmitigated));
@@ -500,28 +551,26 @@ fn run_bom(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Resolve assembly ID
-    let resolved_id = short_ids.resolve(&args.assembly_id).unwrap_or_else(|| args.assembly_id.clone());
+    let resolved_id = short_ids
+        .resolve(&args.assembly_id)
+        .unwrap_or_else(|| args.assembly_id.clone());
 
     // Load assembly
     let assembly = load_assembly(&project, &resolved_id)?;
 
     // Load all components for lookup
     let components = load_all_components(&project);
-    let component_map: HashMap<String, &Component> = components.iter()
-        .map(|c| (c.id.to_string(), c))
-        .collect();
+    let component_map: HashMap<String, &Component> =
+        components.iter().map(|c| (c.id.to_string(), c)).collect();
 
     // Load all assemblies for subassembly lookup
     let assemblies = load_all_assemblies(&project);
-    let assembly_map: HashMap<String, &crate::entities::assembly::Assembly> = assemblies.iter()
-        .map(|a| (a.id.to_string(), a))
-        .collect();
+    let assembly_map: HashMap<String, &crate::entities::assembly::Assembly> =
+        assemblies.iter().map(|a| (a.id.to_string(), a)).collect();
 
     // Load quotes for price lookup (used when --with-cost)
     let quotes = load_all_quotes(&project);
-    let quote_map: HashMap<String, &Quote> = quotes.iter()
-        .map(|q| (q.id.to_string(), q))
-        .collect();
+    let quote_map: HashMap<String, &Quote> = quotes.iter().map(|q| (q.id.to_string(), q)).collect();
 
     // Generate indented BOM
     let mut output = String::new();
@@ -555,7 +604,9 @@ fn run_bom(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
             let branch = if is_last { "└─ " } else { "├─ " };
 
             let item_id = item.component_id.to_string();
-            let item_short = short_ids.get_short_id(&item_id).unwrap_or_else(|| item_id.clone());
+            let item_short = short_ids
+                .get_short_id(&item_id)
+                .unwrap_or_else(|| item_id.clone());
 
             // Check if it's a component or subassembly
             if let Some(cmp) = component_map.get(&item_id) {
@@ -612,9 +663,18 @@ fn run_bom(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
 
                     visited.insert(item_id.clone());
                     print_bom_item(
-                        output, component_map, assembly_map, quote_map, short_ids,
-                        &asm.bom, indent + 1, total_cost, total_mass,
-                        with_cost, with_mass, visited
+                        output,
+                        component_map,
+                        assembly_map,
+                        quote_map,
+                        short_ids,
+                        &asm.bom,
+                        indent + 1,
+                        total_cost,
+                        total_mass,
+                        with_cost,
+                        with_mass,
+                        visited,
                     );
                     visited.remove(&item_id);
                 }
@@ -630,9 +690,18 @@ fn run_bom(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
     let mut visited = std::collections::HashSet::new();
     visited.insert(assembly.id.to_string());
     print_bom_item(
-        &mut output, &component_map, &assembly_map, &quote_map, &short_ids,
-        &assembly.bom, 0, &mut total_cost, &mut total_mass,
-        args.with_cost, args.with_mass, &mut visited
+        &mut output,
+        &component_map,
+        &assembly_map,
+        &quote_map,
+        &short_ids,
+        &assembly.bom,
+        0,
+        &mut total_cost,
+        &mut total_mass,
+        args.with_cost,
+        args.with_mass,
+        &mut visited,
     );
 
     output.push_str("```\n");
@@ -724,7 +793,9 @@ fn run_test_status(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
         output.push_str("| Test ID | Title | Execution Date |\n");
         output.push_str("|---------|-------|----------------|\n");
         for (test, result) in &recent_failures {
-            let test_short = short_ids.get_short_id(&test.id.to_string()).unwrap_or_else(|| test.id.to_string());
+            let test_short = short_ids
+                .get_short_id(&test.id.to_string())
+                .unwrap_or_else(|| test.id.to_string());
             output.push_str(&format!(
                 "| {} | {} | {} |\n",
                 test_short,
@@ -745,13 +816,15 @@ fn run_open_issues(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
 
     // Load NCRs
     let ncrs = load_all_ncrs(&project);
-    let open_ncrs: Vec<_> = ncrs.iter()
+    let open_ncrs: Vec<_> = ncrs
+        .iter()
         .filter(|n| n.ncr_status != crate::entities::ncr::NcrStatus::Closed)
         .collect();
 
     // Load CAPAs
     let capas = load_all_capas(&project);
-    let open_capas: Vec<_> = capas.iter()
+    let open_capas: Vec<_> = capas
+        .iter()
         .filter(|c| c.capa_status != crate::entities::capa::CapaStatus::Closed)
         .collect();
 
@@ -770,9 +843,11 @@ fn run_open_issues(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let failed_tests: Vec<_> = tests.iter()
+    let failed_tests: Vec<_> = tests
+        .iter()
         .filter(|t| {
-            latest_results.get(&t.id.to_string())
+            latest_results
+                .get(&t.id.to_string())
                 .map_or(false, |r| r.verdict == Verdict::Fail)
         })
         .collect();
@@ -795,7 +870,9 @@ fn run_open_issues(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
         output.push_str("| ID | Title | Severity | Status |\n");
         output.push_str("|----|-------|----------|--------|\n");
         for ncr in &open_ncrs {
-            let ncr_short = short_ids.get_short_id(&ncr.id.to_string()).unwrap_or_else(|| ncr.id.to_string());
+            let ncr_short = short_ids
+                .get_short_id(&ncr.id.to_string())
+                .unwrap_or_else(|| ncr.id.to_string());
             output.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
                 ncr_short,
@@ -812,7 +889,9 @@ fn run_open_issues(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
         output.push_str("| ID | Title | Type | Status |\n");
         output.push_str("|----|-------|------|--------|\n");
         for capa in &open_capas {
-            let capa_short = short_ids.get_short_id(&capa.id.to_string()).unwrap_or_else(|| capa.id.to_string());
+            let capa_short = short_ids
+                .get_short_id(&capa.id.to_string())
+                .unwrap_or_else(|| capa.id.to_string());
             output.push_str(&format!(
                 "| {} | {} | {} | {} |\n",
                 capa_short,
@@ -829,7 +908,9 @@ fn run_open_issues(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
         output.push_str("| ID | Title | Type |\n");
         output.push_str("|----|-------|------|\n");
         for test in &failed_tests {
-            let test_short = short_ids.get_short_id(&test.id.to_string()).unwrap_or_else(|| test.id.to_string());
+            let test_short = short_ids
+                .get_short_id(&test.id.to_string())
+                .unwrap_or_else(|| test.id.to_string());
             output.push_str(&format!(
                 "| {} | {} | {} |\n",
                 test_short,
@@ -850,7 +931,11 @@ fn write_output(content: &str, output_path: Option<PathBuf>) -> Result<()> {
         let file = File::create(&path).into_diagnostic()?;
         let mut writer = BufWriter::new(file);
         writer.write_all(content.as_bytes()).into_diagnostic()?;
-        println!("{} Report written to {}", style("✓").green(), style(path.display()).cyan());
+        println!(
+            "{} Report written to {}",
+            style("✓").green(),
+            style(path.display()).cyan()
+        );
     } else {
         print!("{}", content);
     }
@@ -976,7 +1061,9 @@ fn load_all_assemblies(project: &Project) -> Vec<crate::entities::assembly::Asse
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(asm) = crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path()) {
+            if let Ok(asm) =
+                crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path())
+            {
                 assemblies.push(asm);
             }
         }
@@ -1018,7 +1105,9 @@ fn load_assembly(project: &Project, id: &str) -> Result<crate::entities::assembl
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(asm) = crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path()) {
+            if let Ok(asm) =
+                crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path())
+            {
                 if asm.id.to_string() == id || asm.id.to_string().starts_with(id) {
                     return Ok(asm);
                 }
@@ -1040,7 +1129,8 @@ fn load_all_ncrs(project: &Project) -> Vec<crate::entities::ncr::Ncr> {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(ncr) = crate::yaml::parse_yaml_file::<crate::entities::ncr::Ncr>(entry.path()) {
+            if let Ok(ncr) = crate::yaml::parse_yaml_file::<crate::entities::ncr::Ncr>(entry.path())
+            {
                 ncrs.push(ncr);
             }
         }
@@ -1060,7 +1150,9 @@ fn load_all_capas(project: &Project) -> Vec<crate::entities::capa::Capa> {
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
-            if let Ok(capa) = crate::yaml::parse_yaml_file::<crate::entities::capa::Capa>(entry.path()) {
+            if let Ok(capa) =
+                crate::yaml::parse_yaml_file::<crate::entities::capa::Capa>(entry.path())
+            {
                 capas.push(capa);
             }
         }

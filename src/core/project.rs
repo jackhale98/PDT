@@ -135,7 +135,7 @@ impl Project {
 
     fn default_gitignore() -> &'static str {
         r#"
-# TDT - Tessera Development Toolkit
+# TDT - Tessera Design Toolkit
 # Local cache database (user-specific, auto-rebuilt from entity files)
 .tdt/cache.db
 .tdt/cache.db-journal

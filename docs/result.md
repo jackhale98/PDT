@@ -127,7 +127,7 @@ Results are execution records of test protocols. They capture the outcome of run
 
 ```yaml
 # Result: Temperature Cycling Test - Run 1
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: RSLT-01HC2JB7SMQX7RS1Y0GFKBHPTG
 test_id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF

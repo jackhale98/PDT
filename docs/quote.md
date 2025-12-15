@@ -82,7 +82,7 @@ Quotes must reference either a component OR an assembly (not both):
 
 ```yaml
 # Quote: Acme Corp Quote for Widget Bracket
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: QUOT-01HC2JB7SMQX7RS1Y0GFKBHPTD
 title: "Acme Corp Quote"
@@ -140,7 +140,7 @@ entity_revision: 1
 
 ```yaml
 # Quote: Contract Manufacturing Quote for Main Assembly
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: QUOT-01HC2JB7SMQX7RS1Y0GFKBHPTE
 title: "Contract Mfg Quote - Main Assembly"

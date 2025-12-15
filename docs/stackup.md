@@ -106,7 +106,7 @@ contributors:
 
 ```yaml
 # Stackup: Gap Analysis
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: TOL-01HC2JB7SMQX7RS1Y0GFKBHPTH
 title: "Gap Analysis"

@@ -65,7 +65,7 @@ Assemblies represent collections of components and sub-assemblies in your Bill o
 
 ```yaml
 # Assembly: Main Assembly
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: ASM-01HC2JB7SMQX7RS1Y0GFKBHPTE
 part_number: "ASM-001"

@@ -109,7 +109,7 @@ The `distribution` field specifies the statistical distribution used when this f
 
 ```yaml
 # Feature: Mounting Hole A
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTE
 component: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD

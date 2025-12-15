@@ -55,7 +55,7 @@ Requirements are the foundation of product development in TDT. They capture desi
 
 ```yaml
 # Requirement: Operating Temperature Range
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD
 type: input

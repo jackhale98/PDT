@@ -70,7 +70,7 @@ Components represent individual parts in your Bill of Materials (BOM). They can 
 
 ```yaml
 # Component: Widget Bracket
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD
 part_number: "PN-001"

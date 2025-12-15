@@ -74,10 +74,12 @@ LINK TYPES:
   Reciprocal links are added by default. Use --no-reciprocal to skip.
 
 EXAMPLES:
-  tdt link add REQ@1 TEST@1 verified_by       # Links both directions automatically
-  tdt link add REQ@1 REQ@2 derives_from       # Requirement decomposition (both ways)
-  tdt link add RISK@1 CMP@1 affects           # Risk affects component (both ways)
-  tdt link add CAPA@1 PROC@1 processes_modified --no-reciprocal  # One-way only
+  tdt link add REQ@1 TEST@1                   # Auto-infers 'verified_by' (both directions)
+  tdt link add RISK@1 CMP@1                   # Auto-infers 'affects' (both directions)
+  tdt link add TEST@1 REQ@1                   # Auto-infers 'verifies' (both directions)
+  tdt link add REQ@1 TEST@1 verified_by       # Explicit link type
+  tdt link add REQ@1 REQ@2 derives_from       # Requirement decomposition
+  tdt link add CAPA@1 PROC@1 --no-reciprocal  # One-way only
 ")]
 pub struct AddLinkArgs {
     /// Source entity ID (or partial ID)
@@ -86,13 +88,17 @@ pub struct AddLinkArgs {
     /// Target entity ID (or partial ID)
     pub target: String,
 
-    /// Link type (see LINK TYPES below for valid options)
+    /// Link type (optional - auto-inferred if not specified)
     ///
-    /// Example: tdt link add REQ@1 TEST@1 verified_by
+    /// If omitted, TDT will infer the most appropriate link type based on
+    /// the source and target entity types. For example:
+    ///   REQ → TEST  infers  verified_by
+    ///   RISK → CMP  infers  affects
+    ///   TEST → REQ  infers  verifies
     #[arg(value_name = "LINK_TYPE")]
     pub link_type_pos: Option<String>,
 
-    /// Link type (alternative to positional arg)
+    /// Link type (alternative to positional arg, also optional)
     #[arg(long = "link-type", short = 't')]
     pub link_type_flag: Option<String>,
 
@@ -159,18 +165,31 @@ pub fn run(cmd: LinkCommands) -> Result<()> {
 fn run_add(args: AddLinkArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
-    // Determine link type from positional arg or -t flag
-    let link_type_input = args.link_type_pos
-        .or(args.link_type_flag)
-        .ok_or_else(|| miette::miette!(
-            "Link type required. Usage:\n  tdt link add REQ@1 TEST@1 verified_by\n  tdt link add REQ@1 TEST@1 -t verified_by"
-        ))?;
-
     // Find source entity (works with any entity type)
     let source = find_entity(&project, &args.source)?;
 
     // Validate target exists
     let target = find_entity(&project, &args.target)?;
+
+    // Determine link type from positional arg, -t flag, or auto-infer
+    let (link_type_input, was_inferred) = match args.link_type_pos.or(args.link_type_flag) {
+        Some(lt) => (lt, false),
+        None => {
+            // Auto-infer link type based on source and target entity types
+            match infer_link_type(source.id.prefix(), target.id.prefix()) {
+                Some(inferred) => (inferred, true),
+                None => {
+                    return Err(miette::miette!(
+                        "Cannot infer link type for {} → {}. Please specify explicitly:\n  tdt link add {} {} <link_type>\n\nUse 'tdt link add --help' for available link types.",
+                        source.id.prefix(),
+                        target.id.prefix(),
+                        args.source,
+                        args.target
+                    ));
+                }
+            }
+        }
+    };
 
     // Parse link type
     let link_type = link_type_input.to_lowercase();
@@ -184,13 +203,24 @@ fn run_add(args: AddLinkArgs) -> Result<()> {
     // Write back
     fs::write(&source.path, &updated_content).into_diagnostic()?;
 
-    println!(
-        "{} Added link: {} --[{}]--> {}",
-        style("✓").green(),
-        format_short_id(&source.id),
-        style(&link_type).cyan(),
-        format_short_id(&target.id)
-    );
+    if was_inferred {
+        println!(
+            "{} Added link: {} --[{}]--> {} {}",
+            style("✓").green(),
+            format_short_id(&source.id),
+            style(&link_type).cyan(),
+            format_short_id(&target.id),
+            style("(auto-inferred)").dim()
+        );
+    } else {
+        println!(
+            "{} Added link: {} --[{}]--> {}",
+            style("✓").green(),
+            format_short_id(&source.id),
+            style(&link_type).cyan(),
+            format_short_id(&target.id)
+        );
+    }
 
     if args.reciprocal && !args.no_reciprocal {
         // Determine reciprocal link type and add it
@@ -799,6 +829,71 @@ fn add_reciprocal_link(
     fs::write(&target_path, &updated_content).into_diagnostic()?;
 
     Ok(Some(recip_type))
+}
+
+/// Infer the most appropriate link type based on source and target entity types
+///
+/// This enables users to run `tdt link add REQ@1 TEST@1` without specifying the link type,
+/// as the system will automatically determine that REQ → TEST should use "verified_by".
+fn infer_link_type(source_prefix: EntityPrefix, target_prefix: EntityPrefix) -> Option<String> {
+    match (source_prefix, target_prefix) {
+        // Requirements linking to verification entities
+        (EntityPrefix::Req, EntityPrefix::Test) => Some("verified_by".to_string()),
+        (EntityPrefix::Req, EntityPrefix::Ctrl) => Some("verified_by".to_string()),
+
+        // Requirements linking to other requirements (decomposition)
+        (EntityPrefix::Req, EntityPrefix::Req) => Some("derives_from".to_string()),
+
+        // Requirements allocated to features
+        (EntityPrefix::Req, EntityPrefix::Feat) => Some("allocated_to".to_string()),
+
+        // Requirements linking to risks
+        (EntityPrefix::Req, EntityPrefix::Risk) => Some("related_to".to_string()),
+
+        // Verification entities linking to requirements
+        (EntityPrefix::Test, EntityPrefix::Req) => Some("verifies".to_string()),
+        (EntityPrefix::Ctrl, EntityPrefix::Req) => Some("verifies".to_string()),
+
+        // Risks affecting entities
+        (EntityPrefix::Risk, EntityPrefix::Feat) => Some("affects".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Cmp) => Some("affects".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Asm) => Some("affects".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Proc) => Some("affects".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Test) => Some("verified_by".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Req) => Some("related_to".to_string()),
+
+        // Entities referencing risks
+        (EntityPrefix::Feat, EntityPrefix::Risk) => Some("risks".to_string()),
+        (EntityPrefix::Cmp, EntityPrefix::Risk) => Some("risks".to_string()),
+        (EntityPrefix::Asm, EntityPrefix::Risk) => Some("risks".to_string()),
+        (EntityPrefix::Proc, EntityPrefix::Risk) => Some("risks".to_string()),
+
+        // Features to requirements (allocation back-link)
+        (EntityPrefix::Feat, EntityPrefix::Req) => Some("allocated_from".to_string()),
+
+        // Results and NCRs
+        (EntityPrefix::Rslt, EntityPrefix::Ncr) => Some("created_ncr".to_string()),
+        (EntityPrefix::Ncr, EntityPrefix::Rslt) => Some("from_result".to_string()),
+        (EntityPrefix::Ncr, EntityPrefix::Capa) => Some("capa".to_string()),
+
+        // CAPAs
+        (EntityPrefix::Capa, EntityPrefix::Ncr) => Some("ncrs".to_string()),
+        (EntityPrefix::Capa, EntityPrefix::Proc) => Some("processes_modified".to_string()),
+        (EntityPrefix::Capa, EntityPrefix::Ctrl) => Some("controls_added".to_string()),
+
+        // Process/Control back-links to CAPA
+        (EntityPrefix::Proc, EntityPrefix::Capa) => Some("modified_by_capa".to_string()),
+        (EntityPrefix::Ctrl, EntityPrefix::Capa) => Some("added_by_capa".to_string()),
+
+        // Component supersession (default to replaces)
+        (EntityPrefix::Cmp, EntityPrefix::Cmp) => Some("replaces".to_string()),
+
+        // Default to related_to for same-type entities (except CMP)
+        (a, b) if a == b => Some("related_to".to_string()),
+
+        // No inference available for other combinations
+        _ => None,
+    }
 }
 
 /// Get the reciprocal link type for a given forward link type and target entity prefix

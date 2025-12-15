@@ -96,7 +96,7 @@ Suppliers represent approved vendors for components and assemblies. They store c
 
 ```yaml
 # Supplier: Acme Manufacturing Corp
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: SUP-01HC2JB7SMQX7RS1Y0GFKBHPTA
 name: "Acme Manufacturing Corp"

@@ -118,7 +118,7 @@ Choose the appropriate verification method:
 
 ```yaml
 # Test: Temperature Cycling Test
-# Created by TDT - Plain-text Product Development Toolkit
+# Created by TDT - Tessera Design Toolkit
 
 id: TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF
 type: verification

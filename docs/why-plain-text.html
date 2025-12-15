@@ -869,13 +869,14 @@
             <span class="code-lang">terminal</span>
           </div>
           <pre><code><span class="comment">$ tdt baseline create v1.0-design-freeze</span>
-<span class="string">Validation passed (42 files)</span>
-<span class="string">Created baseline v1.0-design-freeze</span>
+<span class="string">✓ All files passed validation!</span>
+<span class="string">Created baseline: tdt-v1.0-design-freeze</span>
 
-<span class="comment">$ tdt baseline compare v1.0-design-freeze v2.0-release</span>
-<span class="string">Changed: REQ@3, REQ@7, RISK@2</span>
-<span class="string">Added:   REQ@12, TEST@8</span>
-<span class="string">Removed: (none)</span></code></pre>
+<span class="comment">$ tdt baseline compare tdt-v1.0-design-freeze tdt-v2.0-release</span>
+<span class="string">Comparing: tdt-v1.0-design-freeze .. tdt-v2.0-release</span>
+<span class="string">Added:     REQ@12, TEST@8</span>
+<span class="string">Modified:  REQ@3, REQ@7, RISK@2</span>
+<span class="string">Summary: 2 added, 3 modified, 0 deleted</span></code></pre>
         </div>
       </section>
 

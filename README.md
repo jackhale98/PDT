@@ -16,18 +16,41 @@ A CLI tool for managing engineering artifacts as plain-text YAML files. TDT prov
 
 ## Installation
 
+### Pre-built Binaries (Recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/jackhale98/tdt/releases):
+
+```bash
+# Linux (x64)
+curl -sSL https://github.com/jackhale98/tdt/releases/latest/download/tdt-linux-x64.tar.gz | tar xz
+sudo mv tdt /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -sSL https://github.com/jackhale98/tdt/releases/latest/download/tdt-macos-arm64.tar.gz | tar xz
+sudo mv tdt /usr/local/bin/
+
+# macOS (Intel)
+curl -sSL https://github.com/jackhale98/tdt/releases/latest/download/tdt-macos-x64.tar.gz | tar xz
+sudo mv tdt /usr/local/bin/
+
+# Windows - download tdt-windows-x64.zip and extract to your PATH
+```
+
+### From crates.io
+
 ```bash
 cargo install tessera-design-toolkit
 ```
 
-This installs the `tdt` binary.
+This installs the `tdt` binary. Note: compilation takes a few minutes due to dependencies.
 
-Or build from source:
+### From Source
 
 ```bash
 git clone https://github.com/jackhale98/tdt.git
 cd tdt
 cargo build --release
+# Binary will be at target/release/tdt
 ```
 
 ## Quick Start

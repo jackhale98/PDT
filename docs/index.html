@@ -1720,8 +1720,8 @@ Total: <span class="status-approved">$16.75</span></span></pre>
             <div class="install-step">
               <div class="step-number">1</div>
               <div class="step-content">
-                <h4>Install with Cargo</h4>
-                <p>Requires Rust toolchain installed</p>
+                <h4>Install TDT</h4>
+                <p>Download a <a href="https://github.com/jackhale98/tdt/releases" style="color: var(--accent)">pre-built binary</a> or use Cargo</p>
               </div>
             </div>
             <div class="install-step">
@@ -1759,7 +1759,7 @@ Total: <span class="status-approved">$16.75</span></span></pre>
 
 <span style="color: var(--text-muted)"># Validate</span>
 <span style="color: var(--accent)">$</span> tdt validate
-<span style="color: var(--success)">✓</span> All files valid</pre>
+<span style="color: var(--success)">✓</span> All files passed validation</pre>
         </div>
       </div>
     </div>
@@ -1788,23 +1788,25 @@ Total: <span class="status-approved">$16.75</span></span></pre>
             <span class="terminal-prompt">❯</span>
             <span class="terminal-cmd">tdt status</span>
           </div>
-          <div class="terminal-output table"><span style="color: var(--accent)">TDT Project Status</span>
-════════════════════════════════════════════════════════
+          <div class="terminal-output table"><span style="color: var(--accent)">Tessera Project Status</span>
+════════════════════════════════════════════════════════════════════
 
-<span class="header">REQUIREMENTS                 RISKS</span>
-  Total:      <span style="color: var(--info)">24</span>               Total:      <span style="color: var(--info)">8</span>
-  Verified:   <span class="status-approved">22 (92%)</span>         High:       <span style="color: #f85149">2</span>
-  Unverified: <span style="color: #d29922">2</span>                Medium:     <span style="color: #d29922">4</span>
-                               Avg RPN:    <span style="color: var(--info)">106</span>
+<span class="header">REQUIREMENTS                     RISKS</span>
+-------------------------------- --------------------------------
+  Total:      <span style="color: var(--info)">24</span>                   Total:      <span style="color: var(--info)">8</span>
+  Verified:   <span class="status-approved">22 (92%)</span>             High:       <span style="color: #f85149">2</span>
+  Unverified: <span style="color: #d29922">2</span>                    Medium:     <span style="color: #d29922">4</span>
+                                   Avg RPN:    <span style="color: var(--info)">106</span>
 
-<span class="header">TESTS                        TOLERANCE ANALYSIS</span>
-  Protocols:  <span style="color: var(--info)">18</span>               Features:   <span style="color: var(--info)">12</span>
-  Executed:   <span style="color: var(--info)">16</span>               Stackups:   <span style="color: var(--info)">4</span>
-  Pass Rate:  <span class="status-approved">94%</span>                Passing:  <span class="status-approved">3</span>
-                                 Marginal: <span style="color: #d29922">1</span> ⚠
+<span class="header">TESTS                            TOLERANCE ANALYSIS</span>
+-------------------------------- --------------------------------
+  Protocols:  <span style="color: var(--info)">18</span>                   Features:   <span style="color: var(--info)">12</span>
+  Executed:   <span style="color: var(--info)">16</span>                   Stackups:   <span style="color: var(--info)">4</span>
+  Pass Rate:  <span class="status-approved">94%</span>                    Passing:  <span class="status-approved">3</span>
+                                     Marginal: <span style="color: #d29922">1</span> ⚠
 
-════════════════════════════════════════════════════════
-Project Health: <span class="status-approved">Good</span></div>
+════════════════════════════════════════════════════════════════════
+Project Health: <span class="status-approved">Healthy</span></div>
 
           <div class="terminal-line">
             <span class="terminal-prompt">❯</span>
@@ -1842,18 +1844,19 @@ Project Health: <span class="status-approved">Good</span></div>
             <span class="terminal-cmd">tdt trace coverage</span>
           </div>
           <div class="terminal-output"><span class="header">Verification Coverage Report</span>
-════════════════════════════════════════
+════════════════════════════════════════════════════════════
+
 Total requirements:     <span style="color: var(--info)">24</span>
 With verification:      <span class="status-approved">22</span>
 Without verification:   <span style="color: #d29922">2</span>
 
-Coverage: <span class="status-approved">92%</span> ████████████████░░</div>
+Coverage: <span class="status-approved">91.7%</span></div>
 
           <div class="terminal-line">
             <span class="terminal-prompt">❯</span>
             <span class="terminal-cmd">tdt validate</span>
           </div>
-          <div class="terminal-output"><span style="color: var(--success)">✓</span> All 37 files passed validation</div>
+          <div class="terminal-output"><span style="color: var(--success)">✓</span> All files passed validation!</div>
 
           <div class="terminal-line">
             <span class="terminal-prompt">❯</span>
@@ -1867,8 +1870,10 @@ Coverage: <span class="status-approved">92%</span> █████████�
             <span class="terminal-prompt">❯</span>
             <span class="terminal-cmd">tdt baseline create v1.0</span>
           </div>
-          <div class="terminal-output"><span style="color: var(--success)">✓</span> Validation passed (37 files)
-<span style="color: var(--success)">✓</span> Created baseline <span class="highlight">v1.0</span></div>
+          <div class="terminal-output"><span style="color: var(--success)">✓</span> All files passed validation!
+Validation passed.
+
+Created baseline: <span class="highlight">tdt-v1.0</span></div>
 
           <div class="terminal-line">
             <span class="terminal-prompt">❯</span>

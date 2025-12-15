@@ -55,7 +55,7 @@ pub fn run(_args: StatusArgs, global: &GlobalOpts) -> Result<()> {
             // Human-readable dashboard
             let width = 68;
 
-            println!("{}", style("TDT Project Status").bold().underlined());
+            println!("{}", style("Tessera Project Status").bold().underlined());
             println!("{}", "═".repeat(width));
             println!();
 

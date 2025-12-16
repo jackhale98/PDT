@@ -351,7 +351,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
         // Apply post-filters
         cached_cmps.retain(|c| {
-            args.recent.map_or(true, |days| {
+            args.recent.is_none_or(|days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 c.created >= cutoff
             })
@@ -417,7 +417,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(cmp) = serde_yml::from_str::<Component>(&content) {
                 components.push(cmp);
@@ -456,28 +456,28 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     || c.title.to_lowercase().contains(&search_lower)
                     || c.description
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
             } else {
                 true
             }
         })
         .filter(|c| {
-            args.author.as_ref().map_or(true, |author| {
+            args.author.as_ref().is_none_or(|author| {
                 c.author.to_lowercase().contains(&author.to_lowercase())
             })
         })
         .filter(|c| {
-            args.recent.map_or(true, |days| {
+            args.recent.is_none_or(|days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 c.created >= cutoff
             })
         })
         // Long lead time filter - check if any supplier has lead_time_days > threshold
         .filter(|c| {
-            args.long_lead.map_or(true, |threshold| {
+            args.long_lead.is_none_or(|threshold| {
                 c.suppliers
                     .iter()
-                    .any(|s| s.lead_time_days.map_or(false, |days| days > threshold))
+                    .any(|s| s.lead_time_days.is_some_and(|days| days > threshold))
             })
         })
         // Single source filter - exactly one supplier
@@ -494,15 +494,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 let cid_str = c.id.to_string();
                 !quotes
                     .iter()
-                    .any(|q| q.component.as_ref().map_or(false, |qc| qc == &cid_str))
+                    .any(|q| q.component.as_ref() == Some(&cid_str))
             } else {
                 true
             }
         })
         // High cost filter
         .filter(|c| {
-            args.high_cost.map_or(true, |threshold| {
-                c.unit_cost.map_or(false, |cost| cost > threshold)
+            args.high_cost.is_none_or(|threshold| {
+                c.unit_cost.is_some_and(|cost| cost > threshold)
             })
         })
         .collect();
@@ -959,7 +959,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1150,7 +1150,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1245,7 +1245,7 @@ fn run_set_quote(args: SetQuoteArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&cmp_id) || filename.starts_with(&cmp_id) {
                     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -1334,7 +1334,7 @@ fn run_clear_quote(args: ClearQuoteArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&cmp_id) || filename.starts_with(&cmp_id) {
                     let content = fs::read_to_string(&path).into_diagnostic()?;

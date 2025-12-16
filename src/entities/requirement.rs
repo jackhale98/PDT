@@ -9,16 +9,13 @@ use crate::core::identity::EntityId;
 /// Requirement type - design input or output
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RequirementType {
+    #[default]
     Input,
     Output,
 }
 
-impl Default for RequirementType {
-    fn default() -> Self {
-        RequirementType::Input
-    }
-}
 
 impl std::fmt::Display for RequirementType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

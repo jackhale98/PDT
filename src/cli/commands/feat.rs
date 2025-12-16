@@ -314,7 +314,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(feat) = serde_yml::from_str::<Feature>(&content) {
                 features.push(feat);
@@ -351,18 +351,18 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 f.title.to_lowercase().contains(&search_lower)
                     || f.description
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
             } else {
                 true
             }
         })
         .filter(|f| {
-            args.author.as_ref().map_or(true, |author| {
+            args.author.as_ref().is_none_or(|author| {
                 f.author.to_lowercase().contains(&author.to_lowercase())
             })
         })
         .filter(|f| {
-            args.recent.map_or(true, |days| {
+            args.recent.is_none_or(|days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 f.created >= cutoff
             })
@@ -778,7 +778,7 @@ fn run_new(args: NewArgs) -> Result<()> {
         for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&component_id) {
                     component_found = true;
@@ -937,7 +937,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1084,7 +1084,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);

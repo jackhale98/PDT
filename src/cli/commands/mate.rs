@@ -226,7 +226,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(mate) = serde_yml::from_str::<Mate>(&content) {
                 mates.push(mate);
@@ -259,18 +259,18 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 m.title.to_lowercase().contains(&search_lower)
                     || m.description
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
             } else {
                 true
             }
         })
         .filter(|m| {
-            args.author.as_ref().map_or(true, |a| {
+            args.author.as_ref().is_none_or(|a| {
                 m.author.to_lowercase().contains(&a.to_lowercase())
             })
         })
         .filter(|m| {
-            args.recent.map_or(true, |days| {
+            args.recent.is_none_or(|days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 m.created >= cutoff
             })
@@ -575,7 +575,7 @@ fn run_new(args: NewArgs) -> Result<()> {
         for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&feature_a) {
                     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -744,7 +744,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -915,7 +915,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -956,7 +956,7 @@ fn run_recalc(args: RecalcArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -983,7 +983,7 @@ fn run_recalc(args: RecalcArgs) -> Result<()> {
         for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
             let feat_path = entry.path();
-            if feat_path.extension().map_or(false, |e| e == "yaml") {
+            if feat_path.extension().is_some_and(|e| e == "yaml") {
                 let filename = feat_path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&feat_a_id) {
                     let content = fs::read_to_string(&feat_path).into_diagnostic()?;
@@ -1060,7 +1060,7 @@ fn run_recalc_all(args: RecalcAllArgs) -> Result<()> {
         for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let content = fs::read_to_string(&path).into_diagnostic()?;
                 if let Ok(feat) = serde_yml::from_str::<Feature>(&content) {
                     features.insert(feat.id.to_string(), feat);
@@ -1077,7 +1077,7 @@ fn run_recalc_all(args: RecalcAllArgs) -> Result<()> {
         for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let content = fs::read_to_string(&path).into_diagnostic()?;
                 if let Ok(value) = serde_yml::from_str::<serde_yml::Value>(&content) {
                     if let (Some(id), Some(title)) = (
@@ -1102,7 +1102,7 @@ fn run_recalc_all(args: RecalcAllArgs) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if !path.extension().map_or(false, |e| e == "yaml") {
+        if !path.extension().is_some_and(|e| e == "yaml") {
             continue;
         }
 

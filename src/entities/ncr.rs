@@ -9,8 +9,10 @@ use crate::core::identity::EntityId;
 /// NCR type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum NcrType {
     /// Internal quality issue
+    #[default]
     Internal,
     /// Supplier quality issue
     Supplier,
@@ -18,11 +20,6 @@ pub enum NcrType {
     Customer,
 }
 
-impl Default for NcrType {
-    fn default() -> Self {
-        NcrType::Internal
-    }
-}
 
 impl std::fmt::Display for NcrType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -53,17 +50,14 @@ impl std::str::FromStr for NcrType {
 /// NCR severity level
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum NcrSeverity {
+    #[default]
     Minor,
     Major,
     Critical,
 }
 
-impl Default for NcrSeverity {
-    fn default() -> Self {
-        NcrSeverity::Minor
-    }
-}
 
 impl std::fmt::Display for NcrSeverity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -94,7 +88,9 @@ impl std::str::FromStr for NcrSeverity {
 /// NCR category
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum NcrCategory {
+    #[default]
     Dimensional,
     Cosmetic,
     Material,
@@ -104,11 +100,6 @@ pub enum NcrCategory {
     Packaging,
 }
 
-impl Default for NcrCategory {
-    fn default() -> Self {
-        NcrCategory::Dimensional
-    }
-}
 
 impl std::fmt::Display for NcrCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -147,10 +138,12 @@ impl std::str::FromStr for NcrCategory {
 /// Detection stage
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum DetectionStage {
     /// Incoming inspection
     Incoming,
     /// In-process inspection
+    #[default]
     InProcess,
     /// Final inspection
     Final,
@@ -160,11 +153,6 @@ pub enum DetectionStage {
     Field,
 }
 
-impl Default for DetectionStage {
-    fn default() -> Self {
-        DetectionStage::InProcess
-    }
-}
 
 /// Detection information
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -229,16 +217,13 @@ pub struct Defect {
 /// Containment action status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ContainmentStatus {
+    #[default]
     Open,
     Completed,
 }
 
-impl Default for ContainmentStatus {
-    fn default() -> Self {
-        ContainmentStatus::Open
-    }
-}
 
 /// Containment action
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -262,18 +247,15 @@ pub struct ContainmentAction {
 /// Disposition decision
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum DispositionDecision {
     UseAsIs,
     Rework,
+    #[default]
     Scrap,
     ReturnToSupplier,
 }
 
-impl Default for DispositionDecision {
-    fn default() -> Self {
-        DispositionDecision::Scrap
-    }
-}
 
 impl std::fmt::Display for DispositionDecision {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -329,7 +311,9 @@ pub struct CostImpact {
 /// NCR workflow status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum NcrStatus {
+    #[default]
     Open,
     Containment,
     Investigation,
@@ -337,11 +321,6 @@ pub enum NcrStatus {
     Closed,
 }
 
-impl Default for NcrStatus {
-    fn default() -> Self {
-        NcrStatus::Open
-    }
-}
 
 impl std::fmt::Display for NcrStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

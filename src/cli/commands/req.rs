@@ -383,12 +383,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 }
                 _ => true,
             };
-            let tag_match = args.tag.as_ref().map_or(true, |tag| {
+            let tag_match = args.tag.as_ref().is_none_or(|tag| {
                 r.tags
                     .iter()
                     .any(|t| t.to_lowercase() == tag.to_lowercase())
             });
-            let recent_match = args.recent.map_or(true, |days| {
+            let recent_match = args.recent.is_none_or(|days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 r.created >= cutoff
             });
@@ -527,26 +527,26 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         // Category filter (for full entity mode)
-        let category_match = args.category.as_ref().map_or(true, |cat| {
+        let category_match = args.category.as_ref().is_none_or(|cat| {
             req.category
                 .as_ref()
-                .map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+                .is_some_and(|c| c.to_lowercase() == cat.to_lowercase())
         });
 
         // Tag filter
-        let tag_match = args.tag.as_ref().map_or(true, |tag| {
+        let tag_match = args.tag.as_ref().is_none_or(|tag| {
             req.tags
                 .iter()
                 .any(|t| t.to_lowercase() == tag.to_lowercase())
         });
 
         // Author filter (for full entity mode)
-        let author_match = args.author.as_ref().map_or(true, |author| {
+        let author_match = args.author.as_ref().is_none_or(|author| {
             req.author.to_lowercase().contains(&author.to_lowercase())
         });
 
         // Search filter (in title and text)
-        let search_match = args.search.as_ref().map_or(true, |search| {
+        let search_match = args.search.as_ref().is_none_or(|search| {
             let search_lower = search.to_lowercase();
             req.title.to_lowercase().contains(&search_lower)
                 || req.text.to_lowercase().contains(&search_lower)
@@ -568,7 +568,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         // Recent filter (created in last N days)
-        let recent_match = args.recent.map_or(true, |days| {
+        let recent_match = args.recent.is_none_or(|days| {
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
             req.created >= cutoff
         });
@@ -1257,15 +1257,13 @@ fn find_requirement(project: &Project, id_query: &str) -> Result<Requirement> {
                 // Also check title for fuzzy match (only if not a short ID lookup)
                 else if !id_query.starts_with('@')
                     && !id_query.chars().all(|c| c.is_ascii_digit())
-                {
-                    if req
+                    && req
                         .title
                         .to_lowercase()
                         .contains(&resolved_query.to_lowercase())
                     {
                         matches.push((req, entry.path().to_path_buf()));
                     }
-                }
             }
         }
     }

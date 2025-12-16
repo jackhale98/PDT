@@ -477,7 +477,7 @@ impl TemplateGenerator {
                 .map_err(|e| TemplateError::RenderError(e.to_string()))
         } else {
             // Hardcoded fallback template
-            Ok(self.hardcoded_requirement_template(&ctx))
+            Ok(self.hardcoded_requirement_template(ctx))
         }
     }
 

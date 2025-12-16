@@ -29,7 +29,9 @@ pub trait Entity: Serialize + DeserializeOwned {
 /// Status values common across entity types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Status {
+    #[default]
     Draft,
     Review,
     Approved,
@@ -37,11 +39,6 @@ pub enum Status {
     Obsolete,
 }
 
-impl Default for Status {
-    fn default() -> Self {
-        Status::Draft
-    }
-}
 
 impl std::fmt::Display for Status {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -58,18 +55,15 @@ impl std::fmt::Display for Status {
 /// Priority values common across entity types
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Priority {
     Low,
+    #[default]
     Medium,
     High,
     Critical,
 }
 
-impl Default for Priority {
-    fn default() -> Self {
-        Priority::Medium
-    }
-}
 
 impl std::fmt::Display for Priority {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

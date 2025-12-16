@@ -109,7 +109,7 @@ impl ShortIdIndex {
     pub fn save(&self, project: &Project) -> std::io::Result<()> {
         // Open cache and ensure all our entries are saved
         if let Ok(mut cache) = EntityCache::open(project) {
-            for (_short_id, entity_id) in &self.entries {
+            for entity_id in self.entries.values() {
                 let _ = cache.ensure_short_id(entity_id);
             }
         }

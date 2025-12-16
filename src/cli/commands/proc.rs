@@ -355,7 +355,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(proc) = serde_yml::from_str::<Process>(&content) {
                 processes.push(proc);
@@ -410,7 +410,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 p.title.to_lowercase().contains(&search_lower)
                     || p.description
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
             } else {
                 true
             }
@@ -730,7 +730,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -864,7 +864,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -949,7 +949,7 @@ fn output_cached_processes(
             println!();
             println!(
                 "{}",
-                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len() * 1)
+                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len())
             );
 
             // Print rows
@@ -1028,7 +1028,7 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(proc) = serde_yml::from_str::<Process>(&content) {
                 // If filtering by process ID, skip non-matching
@@ -1067,7 +1067,7 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
     if args.controls && controls_dir.exists() {
         for entry in fs::read_dir(&controls_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(ctrl) = serde_yml::from_str::<serde_json::Value>(&content) {
                         let ctrl_id = ctrl.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -1092,7 +1092,7 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
     if args.work_instructions && work_dir.exists() {
         for entry in fs::read_dir(&work_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(work) = serde_yml::from_str::<serde_json::Value>(&content) {
                         let work_id = work.get("id").and_then(|v| v.as_str()).unwrap_or("");

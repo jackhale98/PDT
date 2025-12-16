@@ -475,30 +475,30 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
         // RPN filters (above_rpn is an alias for min_rpn)
         let effective_min_rpn = args.above_rpn.or(args.min_rpn);
-        let min_rpn_match = effective_min_rpn.map_or(true, |min| r.rpn.unwrap_or(0) >= min);
-        let max_rpn_match = args.max_rpn.map_or(true, |max| r.rpn.unwrap_or(0) <= max);
+        let min_rpn_match = effective_min_rpn.is_none_or(|min| r.rpn.unwrap_or(0) >= min);
+        let max_rpn_match = args.max_rpn.is_none_or(|max| r.rpn.unwrap_or(0) <= max);
 
         // Category filter (case-insensitive)
-        let category_match = args.category.as_ref().map_or(true, |cat| {
+        let category_match = args.category.as_ref().is_none_or(|cat| {
             r.category
                 .as_ref()
-                .map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+                .is_some_and(|c| c.to_lowercase() == cat.to_lowercase())
         });
 
         // Tag filter (case-insensitive)
-        let tag_match = args.tag.as_ref().map_or(true, |tag| {
+        let tag_match = args.tag.as_ref().is_none_or(|tag| {
             r.tags
                 .iter()
                 .any(|t| t.to_lowercase() == tag.to_lowercase())
         });
 
         // Author filter
-        let author_match = args.author.as_ref().map_or(true, |author| {
+        let author_match = args.author.as_ref().is_none_or(|author| {
             r.author.to_lowercase().contains(&author.to_lowercase())
         });
 
         // Search filter
-        let search_match = args.search.as_ref().map_or(true, |search| {
+        let search_match = args.search.as_ref().is_none_or(|search| {
             let search_lower = search.to_lowercase();
             r.title.to_lowercase().contains(&search_lower)
                 || r.description.to_lowercase().contains(&search_lower)
@@ -527,7 +527,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let critical_match = !args.critical || r.risk_level == Some(RiskLevel::Critical);
 
         // Recent filter (created in last N days)
-        let recent_match = args.recent.map_or(true, |days| {
+        let recent_match = args.recent.is_none_or(|days| {
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
             r.created >= cutoff
         });
@@ -1211,15 +1211,13 @@ fn find_risk(project: &Project, id_query: &str) -> Result<Risk> {
                 // Also check title for fuzzy match (only if not a short ID lookup)
                 else if !id_query.starts_with('@')
                     && !id_query.chars().all(|c| c.is_ascii_digit())
-                {
-                    if risk
+                    && risk
                         .title
                         .to_lowercase()
                         .contains(&resolved_query.to_lowercase())
                     {
                         matches.push((risk, entry.path().to_path_buf()));
                     }
-                }
             }
         }
     }
@@ -1418,7 +1416,7 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
             if unmitigated > 0 {
                 println!("  {} {}", style("Unmitigated:").red(), unmitigated);
             } else {
-                println!("  {} {}", style("Unmitigated:").green(), "0");
+                println!("  {} 0", style("Unmitigated:").green());
             }
             if open_mitigations > 0 {
                 println!(
@@ -1563,13 +1561,13 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
 
         // Map to matrix indices (1-10 or 1-5 for compact)
         let sev_idx = if args.compact {
-            ((sev + 1) / 2).min(size).max(1) // Map 1-2 -> 1, 3-4 -> 2, etc.
+            sev.div_ceil(2).min(size).max(1) // Map 1-2 -> 1, 3-4 -> 2, etc.
         } else {
             sev.min(size).max(1)
         };
 
         let occ_idx = if args.compact {
-            ((occ + 1) / 2).min(size).max(1)
+            occ.div_ceil(2).min(size).max(1)
         } else {
             occ.min(size).max(1)
         };

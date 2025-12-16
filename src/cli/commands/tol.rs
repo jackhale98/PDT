@@ -286,7 +286,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(stackup) = serde_yml::from_str::<Stackup>(&content) {
                 stackups.push(stackup);
@@ -339,7 +339,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 s.title.to_lowercase().contains(&search_lower)
                     || s.description
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
             } else {
                 true
             }
@@ -379,7 +379,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 ListColumn::Disposition => {
                     format!("{}", a.disposition).cmp(&format!("{}", b.disposition))
                 }
-                ListColumn::Status => a.status().cmp(&b.status()),
+                ListColumn::Status => a.status().cmp(b.status()),
                 ListColumn::Result => {
                     let a_result = a
                         .analysis_results
@@ -814,7 +814,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1018,7 +1018,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1060,7 +1060,7 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1195,7 +1195,7 @@ fn run_add(args: AddArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_stackup_id)
                     || filename.starts_with(&resolved_stackup_id)
@@ -1242,7 +1242,7 @@ fn run_add(args: AddArgs) -> Result<()> {
                 let entry = entry.into_diagnostic()?;
                 let path = entry.path();
 
-                if path.extension().map_or(false, |e| e == "yaml") {
+                if path.extension().is_some_and(|e| e == "yaml") {
                     let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                     if filename.contains(&resolved_feat_id)
                         || filename.starts_with(&resolved_feat_id)
@@ -1308,7 +1308,7 @@ fn run_add(args: AddArgs) -> Result<()> {
                 for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
                     let entry = entry.into_diagnostic()?;
                     let path = entry.path();
-                    if path.extension().map_or(false, |e| e == "yaml") {
+                    if path.extension().is_some_and(|e| e == "yaml") {
                         let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                         if filename.contains(&feature.component) {
                             if let Ok(content) = fs::read_to_string(&path) {
@@ -1419,7 +1419,7 @@ fn run_remove(args: RemoveArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_stackup_id)
                     || filename.starts_with(&resolved_stackup_id)

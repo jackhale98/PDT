@@ -16,20 +16,17 @@ use crate::entities::stackup::Distribution;
 /// Specific geometry (counterbore, thread, etc.) can be described in the title/description.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum FeatureType {
     /// Internal feature (hole, bore, pocket, slot) - material is removed, MMC = smallest
     #[serde(alias = "hole", alias = "bore", alias = "pocket", alias = "slot")]
+    #[default]
     Internal,
     /// External feature (shaft, boss, pin) - material remains, MMC = largest
     #[serde(alias = "shaft", alias = "boss", alias = "pin")]
     External,
 }
 
-impl Default for FeatureType {
-    fn default() -> Self {
-        FeatureType::Internal
-    }
-}
 
 impl std::fmt::Display for FeatureType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -151,20 +148,17 @@ pub enum GdtSymbol {
 /// Material condition modifier
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum MaterialCondition {
     /// Maximum Material Condition
     Mmc,
     /// Least Material Condition
     Lmc,
     /// Regardless of Feature Size
+    #[default]
     Rfs,
 }
 
-impl Default for MaterialCondition {
-    fn default() -> Self {
-        MaterialCondition::Rfs
-    }
-}
 
 /// Geometric Dimensioning and Tolerancing control
 #[derive(Debug, Clone, Serialize, Deserialize)]

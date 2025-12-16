@@ -9,16 +9,13 @@ use crate::core::identity::EntityId;
 /// CAPA type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum CapaType {
+    #[default]
     Corrective,
     Preventive,
 }
 
-impl Default for CapaType {
-    fn default() -> Self {
-        CapaType::Corrective
-    }
-}
 
 impl std::fmt::Display for CapaType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -47,7 +44,9 @@ impl std::str::FromStr for CapaType {
 /// CAPA source type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SourceType {
+    #[default]
     Ncr,
     Audit,
     CustomerComplaint,
@@ -55,11 +54,6 @@ pub enum SourceType {
     Risk,
 }
 
-impl Default for SourceType {
-    fn default() -> Self {
-        SourceType::Ncr
-    }
-}
 
 impl std::fmt::Display for SourceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -106,18 +100,15 @@ pub struct Source {
 /// Root cause analysis method
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum RcaMethod {
+    #[default]
     FiveWhy,
     Fishbone,
     FaultTree,
     EightD,
 }
 
-impl Default for RcaMethod {
-    fn default() -> Self {
-        RcaMethod::FiveWhy
-    }
-}
 
 impl std::fmt::Display for RcaMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -149,18 +140,15 @@ pub struct RootCauseAnalysis {
 /// Action item status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ActionStatus {
+    #[default]
     Open,
     InProgress,
     Completed,
     Verified,
 }
 
-impl Default for ActionStatus {
-    fn default() -> Self {
-        ActionStatus::Open
-    }
-}
 
 impl std::fmt::Display for ActionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -176,16 +164,13 @@ impl std::fmt::Display for ActionStatus {
 /// Action type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ActionType {
+    #[default]
     Corrective,
     Preventive,
 }
 
-impl Default for ActionType {
-    fn default() -> Self {
-        ActionType::Corrective
-    }
-}
 
 /// Individual action item
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -291,7 +276,9 @@ pub struct Timeline {
 /// CAPA workflow status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum CapaStatus {
+    #[default]
     Initiation,
     Investigation,
     Implementation,
@@ -299,11 +286,6 @@ pub enum CapaStatus {
     Closed,
 }
 
-impl Default for CapaStatus {
-    fn default() -> Self {
-        CapaStatus::Initiation
-    }
-}
 
 impl std::fmt::Display for CapaStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

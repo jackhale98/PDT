@@ -165,7 +165,7 @@ fn find_bom_references(
             crate::yaml::parse_yaml_file::<crate::entities::assembly::Assembly>(entry.path())
         {
             for item in &asm.bom {
-                if item.component_id.to_string() == target_id {
+                if item.component_id == target_id {
                     found_refs.push((
                         asm.id.to_string(),
                         "assembly".to_string(),
@@ -215,7 +215,7 @@ fn find_mate_references(
                 found_refs.push((
                     mate.id.to_string(),
                     "mate".to_string(),
-                    format!("{}", which_feature),
+                    which_feature.to_string(),
                 ));
             }
         }
@@ -248,7 +248,7 @@ fn find_stackup_references(
                 if contrib
                     .feature
                     .as_ref()
-                    .map_or(false, |f| f.id.to_string() == target_id)
+                    .is_some_and(|f| f.id.to_string() == target_id)
                 {
                     found_refs.push((
                         stackup.id.to_string(),
@@ -370,7 +370,7 @@ fn find_component_quote_references(
         if let Ok(quote) =
             crate::yaml::parse_yaml_file::<crate::entities::quote::Quote>(entry.path())
         {
-            if quote.component.as_ref().map_or(false, |c| c == target_id) {
+            if quote.component.as_ref().is_some_and(|c| c == target_id) {
                 found_refs.push((
                     quote.id.to_string(),
                     "quote".to_string(),

@@ -304,7 +304,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             // Verdict: Issues filter (fail, conditional, incomplete)
             if matches!(args.verdict, VerdictFilter::Issues) {
                 cached_results.retain(|r| {
-                    r.verdict.as_deref().map_or(false, |v| {
+                    r.verdict.as_deref().is_some_and(|v| {
                         v == "fail" || v == "conditional" || v == "incomplete"
                     })
                 });
@@ -316,7 +316,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 cached_results.retain(|r| {
                     r.executed_by
                         .as_ref()
-                        .map_or(false, |e| e.to_lowercase().contains(&exec_lower))
+                        .is_some_and(|e| e.to_lowercase().contains(&exec_lower))
                 });
             }
 
@@ -324,7 +324,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             if let Some(days) = args.recent {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 cached_results.retain(|r| {
-                    r.executed_date.as_ref().map_or(false, |d| {
+                    r.executed_date.as_ref().is_some_and(|d| {
                         chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
                             .map(|nd| nd >= cutoff.date_naive())
                             .unwrap_or(false)
@@ -449,44 +449,44 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         // Test ID filter
-        let test_match = args.test.as_ref().map_or(true, |test_query| {
+        let test_match = args.test.as_ref().is_none_or(|test_query| {
             let test_id = r.test_id.to_string();
             test_id.contains(test_query) || test_id.starts_with(test_query)
         });
 
         // Category filter (case-insensitive)
-        let category_match = args.category.as_ref().map_or(true, |cat| {
+        let category_match = args.category.as_ref().is_none_or(|cat| {
             r.category
                 .as_ref()
-                .map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+                .is_some_and(|c| c.to_lowercase() == cat.to_lowercase())
         });
 
         // Tag filter (case-insensitive)
-        let tag_match = args.tag.as_ref().map_or(true, |tag| {
+        let tag_match = args.tag.as_ref().is_none_or(|tag| {
             r.tags
                 .iter()
                 .any(|tg| tg.to_lowercase() == tag.to_lowercase())
         });
 
         // Executed by filter
-        let executed_by_match = args.executed_by.as_ref().map_or(true, |ex| {
+        let executed_by_match = args.executed_by.as_ref().is_none_or(|ex| {
             r.executed_by.to_lowercase().contains(&ex.to_lowercase())
         });
 
         // Author filter
-        let author_match = args.author.as_ref().map_or(true, |author| {
+        let author_match = args.author.as_ref().is_none_or(|author| {
             r.author.to_lowercase().contains(&author.to_lowercase())
         });
 
         // Search filter
-        let search_match = args.search.as_ref().map_or(true, |search| {
+        let search_match = args.search.as_ref().is_none_or(|search| {
             let search_lower = search.to_lowercase();
             r.title
                 .as_ref()
-                .map_or(false, |t| t.to_lowercase().contains(&search_lower))
+                .is_some_and(|t| t.to_lowercase().contains(&search_lower))
                 || r.notes
                     .as_ref()
-                    .map_or(false, |n| n.to_lowercase().contains(&search_lower))
+                    .is_some_and(|n| n.to_lowercase().contains(&search_lower))
         });
 
         // Failures filter
@@ -496,7 +496,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let deviations_match = !args.with_deviations || r.has_deviations();
 
         // Recent filter (executed in last N days)
-        let recent_match = args.recent.map_or(true, |days| {
+        let recent_match = args.recent.is_none_or(|days| {
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
             r.executed_date >= cutoff
         });
@@ -1151,12 +1151,10 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 let total = result.step_results.len();
 
                 println!(
-                    "  {} total | {} {} | {} {}",
+                    "  {} total | {} passed | {} failed",
                     total,
                     style(pass_count).green(),
-                    "passed",
-                    style(fail_count).red(),
-                    "failed"
+                    style(fail_count).red()
                 );
 
                 if let Some(rate) = result.pass_rate() {

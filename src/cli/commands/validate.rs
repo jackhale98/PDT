@@ -91,7 +91,7 @@ fn format_path_with_alias(
 ) -> String {
     // Try to get short ID alias
     let alias = content
-        .and_then(|c| extract_entity_id(c))
+        .and_then(extract_entity_id)
         .and_then(|id| cache.as_ref().and_then(|c| c.get_short_id(&id)));
 
     match alias {
@@ -213,10 +213,9 @@ pub fn run(args: ValidateArgs) -> Result<()> {
             None => {
                 if !args.summary {
                     println!(
-                        "{} {} - {}",
+                        "{} {} - unknown entity type (skipped)",
                         style("?").yellow(),
-                        path.display(),
-                        "unknown entity type (skipped)"
+                        path.display()
                     );
                 }
                 continue;
@@ -648,13 +647,11 @@ fn check_mate_values(
                 ));
             }
         }
+    } else if fix {
+        mate.fit_analysis = Some(expected_analysis);
+        needs_fix = true;
     } else {
-        if fix {
-            mate.fit_analysis = Some(expected_analysis);
-            needs_fix = true;
-        } else {
-            issues.push("fit_analysis not calculated".to_string());
-        }
+        issues.push("fit_analysis not calculated".to_string());
     }
 
     // Fix if requested and there are changes to make
@@ -698,24 +695,22 @@ fn check_stackup_values(
         // O(1) lookup from cache instead of O(n) directory scan
         if let Some(feature) = features.get_feature(&feature_id) {
             // Check dimensional sync
-            if contributor.is_out_of_sync(&feature) {
+            if contributor.is_out_of_sync(feature) {
                 if fix {
-                    contributor.sync_from_feature(&feature);
+                    contributor.sync_from_feature(feature);
                     any_synced = true;
-                } else {
-                    if let Some(dim) = feature.primary_dimension() {
-                        issues.push(format!(
-                            "Contributor '{}' out of sync with {}: stored ({:.4} +{:.4}/-{:.4}) vs feature ({:.4} +{:.4}/-{:.4})",
-                            contributor.name,
-                            feature_id,
-                            contributor.nominal,
-                            contributor.plus_tol,
-                            contributor.minus_tol,
-                            dim.nominal,
-                            dim.plus_tol,
-                            dim.minus_tol
-                        ));
-                    }
+                } else if let Some(dim) = feature.primary_dimension() {
+                    issues.push(format!(
+                        "Contributor '{}' out of sync with {}: stored ({:.4} +{:.4}/-{:.4}) vs feature ({:.4} +{:.4}/-{:.4})",
+                        contributor.name,
+                        feature_id,
+                        contributor.nominal,
+                        contributor.plus_tol,
+                        contributor.minus_tol,
+                        dim.nominal,
+                        dim.plus_tol,
+                        dim.minus_tol
+                    ));
                 }
             }
 

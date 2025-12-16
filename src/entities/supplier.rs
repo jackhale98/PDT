@@ -311,7 +311,7 @@ impl Supplier {
         let today = Utc::now().date_naive();
         self.certifications
             .iter()
-            .any(|c| c.expiry.map_or(false, |exp| exp < today))
+            .any(|c| c.expiry.is_some_and(|exp| exp < today))
     }
 
     /// Get certifications expiring within N days
@@ -322,7 +322,7 @@ impl Supplier {
             .iter()
             .filter(|c| {
                 c.expiry
-                    .map_or(false, |exp| exp <= threshold && exp >= today)
+                    .is_some_and(|exp| exp <= threshold && exp >= today)
             })
             .collect()
     }

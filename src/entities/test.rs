@@ -9,16 +9,13 @@ use crate::core::identity::EntityId;
 /// Test type - verification or validation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum TestType {
+    #[default]
     Verification,
     Validation,
 }
 
-impl Default for TestType {
-    fn default() -> Self {
-        TestType::Verification
-    }
-}
 
 impl std::fmt::Display for TestType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -32,18 +29,15 @@ impl std::fmt::Display for TestType {
 /// Test level in the V-model hierarchy
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum TestLevel {
     Unit,
     Integration,
+    #[default]
     System,
     Acceptance,
 }
 
-impl Default for TestLevel {
-    fn default() -> Self {
-        TestLevel::System
-    }
-}
 
 impl std::fmt::Display for TestLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -59,18 +53,15 @@ impl std::fmt::Display for TestLevel {
 /// Test method (IADT)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum TestMethod {
     Inspection,
     Analysis,
     Demonstration,
+    #[default]
     Test,
 }
 
-impl Default for TestMethod {
-    fn default() -> Self {
-        TestMethod::Test
-    }
-}
 
 impl std::fmt::Display for TestMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

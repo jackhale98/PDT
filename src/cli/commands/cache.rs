@@ -117,7 +117,7 @@ fn run_status() -> Result<()> {
 
     if !stats.by_prefix.is_empty() {
         println!();
-        println!("  {} {}", style("By Type:").bold(), "");
+        println!("  {} ", style("By Type:").bold());
         let mut prefixes: Vec<_> = stats.by_prefix.iter().collect();
         prefixes.sort_by_key(|(k, _)| *k);
         for (prefix, count) in prefixes {

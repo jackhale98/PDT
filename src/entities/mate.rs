@@ -14,8 +14,10 @@ use crate::entities::feature::Dimension;
 /// Mate type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum MateType {
     /// Clearance fit (gap between parts)
+    #[default]
     ClearanceFit,
     /// Interference fit (press fit)
     InterferenceFit,
@@ -27,11 +29,6 @@ pub enum MateType {
     ThreadEngagement,
 }
 
-impl Default for MateType {
-    fn default() -> Self {
-        MateType::ClearanceFit
-    }
-}
 
 impl std::fmt::Display for MateType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

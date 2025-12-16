@@ -9,10 +9,12 @@ use crate::core::identity::EntityId;
 /// Control type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ControlType {
     /// Statistical Process Control
     Spc,
     /// Dimensional/attribute inspection
+    #[default]
     Inspection,
     /// Error-proofing device
     PokaYoke,
@@ -24,11 +26,6 @@ pub enum ControlType {
     Attribute,
 }
 
-impl Default for ControlType {
-    fn default() -> Self {
-        ControlType::Inspection
-    }
-}
 
 impl std::fmt::Display for ControlType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,18 +62,15 @@ impl std::str::FromStr for ControlType {
 /// Control category (variable vs attribute data)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ControlCategory {
     /// Variable (continuous) data
+    #[default]
     Variable,
     /// Attribute (discrete/pass-fail) data
     Attribute,
 }
 
-impl Default for ControlCategory {
-    fn default() -> Self {
-        ControlCategory::Variable
-    }
-}
 
 impl std::fmt::Display for ControlCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -133,8 +127,10 @@ pub struct Measurement {
 /// Sampling plan
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum SamplingType {
     /// Continuous sampling
+    #[default]
     Continuous,
     /// Periodic (time-based)
     Periodic,
@@ -144,11 +140,6 @@ pub enum SamplingType {
     FirstArticle,
 }
 
-impl Default for SamplingType {
-    fn default() -> Self {
-        SamplingType::Continuous
-    }
-}
 
 /// Sampling configuration
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

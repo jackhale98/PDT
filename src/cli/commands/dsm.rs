@@ -418,7 +418,7 @@ fn get_assembly_components(
     if asm_dir.exists() {
         for entry in fs::read_dir(&asm_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(asm) = serde_yml::from_str::<serde_json::Value>(&content) {
                         let file_asm_id = asm.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -492,7 +492,7 @@ fn add_mate_relationships(project: &Project, dsm: &mut Dsm) -> Result<()> {
     if feature_dir.exists() {
         for entry in fs::read_dir(&feature_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(feat) = serde_yml::from_str::<serde_json::Value>(&content) {
                         let feat_id = feat.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -512,7 +512,7 @@ fn add_mate_relationships(project: &Project, dsm: &mut Dsm) -> Result<()> {
     if mate_dir.exists() {
         for entry in fs::read_dir(&mate_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(mate) = serde_yml::from_str::<serde_json::Value>(&content) {
                         // Get component IDs from mate via feature_a and feature_b
@@ -575,7 +575,7 @@ fn add_tolerance_relationships(project: &Project, dsm: &mut Dsm) -> Result<()> {
     if feature_dir.exists() {
         for entry in fs::read_dir(&feature_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(feat) = serde_yml::from_str::<serde_json::Value>(&content) {
                         let feat_id = feat.get("id").and_then(|v| v.as_str()).unwrap_or("");
@@ -595,7 +595,7 @@ fn add_tolerance_relationships(project: &Project, dsm: &mut Dsm) -> Result<()> {
     if stackup_dir.exists() {
         for entry in fs::read_dir(&stackup_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(stackup) = serde_yml::from_str::<serde_json::Value>(&content) {
                         // Collect all unique components in the stackup
@@ -866,16 +866,12 @@ fn output_table(dsm: &Dsm, opts: &DisplayOptions) {
         );
     } else {
         println!(
-            "{}: {} {} {} {} {} {} {} {}",
+            "{}: {} = Mate {} = Tolerance {} = Process {} = Requirement",
             style("Legend").bold(),
             style("M").green(),
-            "= Mate",
             style("T").magenta(),
-            "= Tolerance",
             style("P").blue(),
-            "= Process",
-            style("R").yellow(),
-            "= Requirement"
+            style("R").yellow()
         );
     }
 

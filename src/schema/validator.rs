@@ -182,8 +182,8 @@ impl Validator {
     }
 
     /// Iterate over all errors (useful for detailed error reporting)
-    pub fn iter_errors<'a>(
-        &'a self,
+    pub fn iter_errors(
+        &self,
         content: &str,
         filename: &str,
         prefix: EntityPrefix,

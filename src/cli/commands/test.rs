@@ -645,31 +645,31 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         // Priority filter
-        let priority_match = args.priority.as_ref().map_or(true, |p| {
+        let priority_match = args.priority.as_ref().is_none_or(|p| {
             t.priority.to_string().to_lowercase() == p.to_lowercase()
         });
 
         // Category filter (case-insensitive)
-        let category_match = args.category.as_ref().map_or(true, |cat| {
+        let category_match = args.category.as_ref().is_none_or(|cat| {
             t.category
                 .as_ref()
-                .map_or(false, |c| c.to_lowercase() == cat.to_lowercase())
+                .is_some_and(|c| c.to_lowercase() == cat.to_lowercase())
         });
 
         // Tag filter (case-insensitive)
-        let tag_match = args.tag.as_ref().map_or(true, |tag| {
+        let tag_match = args.tag.as_ref().is_none_or(|tag| {
             t.tags
                 .iter()
                 .any(|tg| tg.to_lowercase() == tag.to_lowercase())
         });
 
         // Author filter
-        let author_match = args.author.as_ref().map_or(true, |author| {
+        let author_match = args.author.as_ref().is_none_or(|author| {
             t.author.to_lowercase().contains(&author.to_lowercase())
         });
 
         // Search filter
-        let search_match = args.search.as_ref().map_or(true, |search| {
+        let search_match = args.search.as_ref().is_none_or(|search| {
             let search_lower = search.to_lowercase();
             t.title.to_lowercase().contains(&search_lower)
                 || t.objective.to_lowercase().contains(&search_lower)
@@ -680,7 +680,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             !args.orphans || (t.links.verifies.is_empty() && t.links.validates.is_empty());
 
         // Recent filter (created in last N days)
-        let recent_match = args.recent.map_or(true, |days| {
+        let recent_match = args.recent.is_none_or(|days| {
             let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
             t.created >= cutoff
         });
@@ -699,7 +699,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             test_results.sort_by(|a, b| b.executed_date.cmp(&a.executed_date));
 
             // Check if most recent result is fail
-            test_results.first().map_or(false, |r| {
+            test_results.first().is_some_and(|r| {
                 r.verdict == crate::entities::result::Verdict::Fail
             })
         } else {
@@ -1541,15 +1541,13 @@ fn find_test(project: &Project, id_query: &str) -> Result<Test> {
                 // Also check title for fuzzy match (only if not a short ID lookup)
                 else if !id_query.starts_with('@')
                     && !id_query.chars().all(|c| c.is_ascii_digit())
-                {
-                    if test
+                    && test
                         .title
                         .to_lowercase()
                         .contains(&resolved_query.to_lowercase())
                     {
                         matches.push((test, entry.path().to_path_buf()));
                     }
-                }
             }
         }
     }
@@ -1631,7 +1629,7 @@ fn run_run(args: RunArgs, global: &GlobalOpts) -> Result<()> {
     if ver_dir.exists() {
         for entry in fs::read_dir(&ver_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_test_id) {
                     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -1649,7 +1647,7 @@ fn run_run(args: RunArgs, global: &GlobalOpts) -> Result<()> {
     if test.is_none() && val_dir.exists() {
         for entry in fs::read_dir(&val_dir).into_diagnostic()?.flatten() {
             let path = entry.path();
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_test_id) {
                     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -1731,7 +1729,7 @@ fn run_run(args: RunArgs, global: &GlobalOpts) -> Result<()> {
         test_id: test.id.clone(),
         test_revision: Some(test.revision),
         title: Some(format!("Result for {}", test.title)),
-        verdict: verdict.clone(),
+        verdict: verdict,
         verdict_rationale: None,
         category: test.category.clone(),
         tags: Vec::new(),

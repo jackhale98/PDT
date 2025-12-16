@@ -248,7 +248,7 @@ impl SchemaWizard {
                 }
                 if let Some(prop_schema) = props.get(*name) {
                     if let Some(field) =
-                        self.parse_field(*name, prop_schema, required.contains(&name.to_string()))
+                        self.parse_field(name, prop_schema, required.contains(&name.to_string()))
                     {
                         fields.push(field);
                     }
@@ -501,7 +501,7 @@ impl SchemaWizard {
             FieldType::Array { .. } => {
                 // For arrays, we prompt for comma-separated values
                 let value: String = Input::with_theme(&self.theme)
-                    .with_prompt(&format!("{} (comma-separated)", prompt))
+                    .with_prompt(format!("{} (comma-separated)", prompt))
                     .allow_empty(true)
                     .interact_text()
                     .into_diagnostic()?;

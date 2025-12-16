@@ -393,7 +393,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(quote) = serde_yml::from_str::<Quote>(&content) {
                 quotes.push(quote);
@@ -422,14 +422,14 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         })
         .filter(|q| {
             if let Some(ref cmp) = component_filter {
-                q.component.as_ref().map_or(false, |c| c.contains(cmp))
+                q.component.as_ref().is_some_and(|c| c.contains(cmp))
             } else {
                 true
             }
         })
         .filter(|q| {
             if let Some(ref asm) = assembly_filter {
-                q.assembly.as_ref().map_or(false, |a| a.contains(asm))
+                q.assembly.as_ref().is_some_and(|a| a.contains(asm))
             } else {
                 true
             }
@@ -447,18 +447,18 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 q.title.to_lowercase().contains(&search_lower)
                     || q.description
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
             } else {
                 true
             }
         })
         .filter(|q| {
-            args.author.as_ref().map_or(true, |author| {
+            args.author.as_ref().is_none_or(|author| {
                 q.author.to_lowercase().contains(&author.to_lowercase())
             })
         })
         .filter(|q| {
-            args.recent.map_or(true, |days| {
+            args.recent.is_none_or(|days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 q.created >= cutoff
             })
@@ -912,7 +912,7 @@ fn run_new(args: NewArgs) -> Result<()> {
             for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
                 let entry = entry.into_diagnostic()?;
                 let path = entry.path();
-                if path.extension().map_or(false, |e| e == "yaml") {
+                if path.extension().is_some_and(|e| e == "yaml") {
                     let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                     if filename.contains(cmp) {
                         found = true;
@@ -937,7 +937,7 @@ fn run_new(args: NewArgs) -> Result<()> {
             for entry in fs::read_dir(&asm_dir).into_diagnostic()? {
                 let entry = entry.into_diagnostic()?;
                 let path = entry.path();
-                if path.extension().map_or(false, |e| e == "yaml") {
+                if path.extension().is_some_and(|e| e == "yaml") {
                     let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                     if filename.contains(asm) {
                         found = true;
@@ -1085,7 +1085,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1230,7 +1230,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -1271,15 +1271,15 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(quote) = serde_yml::from_str::<Quote>(&content) {
                 // Check if quote matches either component or assembly
                 let matches = quote
                     .component
                     .as_ref()
-                    .map_or(false, |c| c.contains(&item))
-                    || quote.assembly.as_ref().map_or(false, |a| a.contains(&item));
+                    .is_some_and(|c| c.contains(&item))
+                    || quote.assembly.as_ref().is_some_and(|a| a.contains(&item));
                 if matches {
                     quotes.push(quote);
                 }

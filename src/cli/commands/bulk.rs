@@ -376,7 +376,7 @@ fn run_remove_tag(mut args: RemoveTagArgs) -> Result<()> {
 
     for (file_path, entity_id) in &entity_files {
         let display_id = short_ids
-            .get_short_id(&entity_id)
+            .get_short_id(entity_id)
             .unwrap_or_else(|| entity_id.clone());
 
         if args.dry_run {
@@ -384,7 +384,7 @@ fn run_remove_tag(mut args: RemoveTagArgs) -> Result<()> {
             continue;
         }
 
-        match remove_tag_from_file(&file_path, &args.tag) {
+        match remove_tag_from_file(file_path, &args.tag) {
             Ok(true) => {
                 println!(
                     "  {} {}",
@@ -480,7 +480,7 @@ fn run_set_author(mut args: SetAuthorArgs) -> Result<()> {
 
     for (file_path, entity_id) in &entity_files {
         let display_id = short_ids
-            .get_short_id(&entity_id)
+            .get_short_id(entity_id)
             .unwrap_or_else(|| entity_id.clone());
 
         if args.dry_run {
@@ -488,7 +488,7 @@ fn run_set_author(mut args: SetAuthorArgs) -> Result<()> {
             continue;
         }
 
-        match update_yaml_field(&file_path, "author", &args.author) {
+        match update_yaml_field(file_path, "author", &args.author) {
             Ok(_) => {
                 println!(
                     "  {} {}",

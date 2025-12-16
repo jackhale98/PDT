@@ -9,8 +9,10 @@ use crate::core::identity::{EntityId, EntityPrefix};
 /// Quote status specific to quotations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum QuoteStatus {
     /// Quote requested but not yet received
+    #[default]
     Pending,
     /// Quote received and under review
     Received,
@@ -22,11 +24,6 @@ pub enum QuoteStatus {
     Expired,
 }
 
-impl Default for QuoteStatus {
-    fn default() -> Self {
-        QuoteStatus::Pending
-    }
-}
 
 impl std::fmt::Display for QuoteStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,7 +58,9 @@ impl std::str::FromStr for QuoteStatus {
 /// Currency code
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
+#[derive(Default)]
 pub enum Currency {
+    #[default]
     Usd,
     Eur,
     Gbp,
@@ -69,11 +68,6 @@ pub enum Currency {
     Jpy,
 }
 
-impl Default for Currency {
-    fn default() -> Self {
-        Currency::Usd
-    }
-}
 
 impl std::fmt::Display for Currency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

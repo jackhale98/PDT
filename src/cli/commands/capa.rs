@@ -311,7 +311,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(capa) = serde_yml::from_str::<Capa>(&content) {
                 capas.push(capa);
@@ -343,7 +343,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 c.timeline
                     .as_ref()
                     .and_then(|t| t.target_date)
-                    .map_or(false, |target| {
+                    .is_some_and(|target| {
                         target < today && c.capa_status != CapaStatus::Closed
                     })
             } else {
@@ -364,10 +364,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 c.title.to_lowercase().contains(&search_lower)
                     || c.problem_statement
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
                     || c.capa_number
                         .as_ref()
-                        .map_or(false, |num| num.to_lowercase().contains(&search_lower))
+                        .is_some_and(|num| num.to_lowercase().contains(&search_lower))
             } else {
                 true
             }
@@ -516,7 +516,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                                 .timeline
                                 .as_ref()
                                 .and_then(|t| t.target_date)
-                                .map_or(false, |target| {
+                                .is_some_and(|target| {
                                     target < today && capa.capa_status != CapaStatus::Closed
                                 });
 
@@ -717,7 +717,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -886,7 +886,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -969,7 +969,7 @@ fn output_cached_capas(
             println!();
             println!(
                 "{}",
-                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len() * 1)
+                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len())
             );
 
             // Print rows
@@ -1045,7 +1045,7 @@ fn run_verify(args: VerifyArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);

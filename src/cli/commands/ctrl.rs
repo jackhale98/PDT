@@ -280,7 +280,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(ctrl) = serde_yml::from_str::<Control>(&content) {
                 controls.push(ctrl);
@@ -289,15 +289,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Resolve process filter if provided
-    let process_filter = if let Some(ref proc_id) = args.process {
-        Some(
-            short_ids
+    let process_filter = args.process.as_ref().map(|proc_id| short_ids
                 .resolve(proc_id)
-                .unwrap_or_else(|| proc_id.clone()),
-        )
-    } else {
-        None
-    };
+                .unwrap_or_else(|| proc_id.clone()));
 
     // Calculate recent cutoff if needed
     let recent_cutoff = if args.recent {
@@ -331,7 +325,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 c.links
                     .process
                     .as_ref()
-                    .map_or(false, |p| p.to_string().contains(proc_id))
+                    .is_some_and(|p| p.to_string().contains(proc_id))
             } else {
                 true
             }
@@ -365,7 +359,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 c.title.to_lowercase().contains(&search_lower)
                     || c.description
                         .as_ref()
-                        .map_or(false, |d| d.to_lowercase().contains(&search_lower))
+                        .is_some_and(|d| d.to_lowercase().contains(&search_lower))
                     || c.characteristic.name.to_lowercase().contains(&search_lower)
             } else {
                 true
@@ -801,7 +795,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);
@@ -951,7 +945,7 @@ fn run_edit(args: EditArgs) -> Result<()> {
             let entry = entry.into_diagnostic()?;
             let path = entry.path();
 
-            if path.extension().map_or(false, |e| e == "yaml") {
+            if path.extension().is_some_and(|e| e == "yaml") {
                 let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
                 if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
                     found_path = Some(path);

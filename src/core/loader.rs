@@ -23,7 +23,7 @@ pub fn load_all<T: DeserializeOwned>(dir: &Path) -> Result<Vec<T>> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             if let Ok(content) = fs::read_to_string(&path) {
                 if let Ok(entity) = serde_yml::from_str::<T>(&content) {
                     entities.push(entity);
@@ -48,7 +48,7 @@ pub fn find_entity_file(dir: &Path, id: &str) -> Option<PathBuf> {
         let entry = entry.ok()?;
         let path = entry.path();
 
-        if path.extension().map_or(false, |e| e == "yaml") {
+        if path.extension().is_some_and(|e| e == "yaml") {
             let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             if filename.contains(id) || filename.starts_with(id) {
                 return Some(path);

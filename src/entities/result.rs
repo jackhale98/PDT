@@ -9,7 +9,9 @@ use crate::core::identity::EntityId;
 /// Overall verdict for a test result
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Verdict {
+    #[default]
     Pass,
     Fail,
     Conditional,
@@ -18,11 +20,6 @@ pub enum Verdict {
     NotApplicable,
 }
 
-impl Default for Verdict {
-    fn default() -> Self {
-        Verdict::Pass
-    }
-}
 
 impl std::fmt::Display for Verdict {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -39,7 +36,9 @@ impl std::fmt::Display for Verdict {
 /// Result for a single step
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum StepResult {
+    #[default]
     Pass,
     Fail,
     Skip,
@@ -47,11 +46,6 @@ pub enum StepResult {
     NotApplicable,
 }
 
-impl Default for StepResult {
-    fn default() -> Self {
-        StepResult::Pass
-    }
-}
 
 impl std::fmt::Display for StepResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -206,20 +200,17 @@ pub struct Failure {
 /// Attachment type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum AttachmentType {
     Data,
     Photo,
     Screenshot,
     Log,
     Report,
+    #[default]
     Other,
 }
 
-impl Default for AttachmentType {
-    fn default() -> Self {
-        AttachmentType::Other
-    }
-}
 
 /// An attachment to the result
 #[derive(Debug, Clone, Serialize, Deserialize)]

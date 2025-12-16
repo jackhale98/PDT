@@ -9,8 +9,10 @@ use crate::core::identity::EntityId;
 /// Risk type - categorizes risk by source/domain
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RiskType {
     /// Design risks - product/component failure modes
+    #[default]
     Design,
     /// Process risks - manufacturing/operational failure modes
     Process,
@@ -20,11 +22,6 @@ pub enum RiskType {
     Software,
 }
 
-impl Default for RiskType {
-    fn default() -> Self {
-        RiskType::Design
-    }
-}
 
 impl std::fmt::Display for RiskType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -40,18 +37,15 @@ impl std::fmt::Display for RiskType {
 /// Risk level assessment
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RiskLevel {
     Low,
+    #[default]
     Medium,
     High,
     Critical,
 }
 
-impl Default for RiskLevel {
-    fn default() -> Self {
-        RiskLevel::Medium
-    }
-}
 
 impl std::fmt::Display for RiskLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -67,32 +61,26 @@ impl std::fmt::Display for RiskLevel {
 /// Mitigation action type
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum MitigationType {
+    #[default]
     Prevention,
     Detection,
 }
 
-impl Default for MitigationType {
-    fn default() -> Self {
-        MitigationType::Prevention
-    }
-}
 
 /// Mitigation status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum MitigationStatus {
+    #[default]
     Proposed,
     InProgress,
     Completed,
     Verified,
 }
 
-impl Default for MitigationStatus {
-    fn default() -> Self {
-        MitigationStatus::Proposed
-    }
-}
 
 impl std::fmt::Display for MitigationStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

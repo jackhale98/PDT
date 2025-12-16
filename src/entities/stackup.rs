@@ -42,24 +42,23 @@ fn default_units() -> String {
 /// Direction of contributor in stackup
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Direction {
     /// Adds to the stack (positive contribution)
+    #[default]
     Positive,
     /// Subtracts from the stack (negative contribution)
     Negative,
 }
 
-impl Default for Direction {
-    fn default() -> Self {
-        Direction::Positive
-    }
-}
 
 /// Statistical distribution for Monte Carlo
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum Distribution {
     /// Normal (Gaussian) distribution
+    #[default]
     Normal,
     /// Uniform distribution
     Uniform,
@@ -67,11 +66,6 @@ pub enum Distribution {
     Triangular,
 }
 
-impl Default for Distribution {
-    fn default() -> Self {
-        Distribution::Normal
-    }
-}
 
 /// Cached feature reference info (denormalized for readability, validated on check)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,8 +298,10 @@ pub struct AnalysisResults {
 /// Disposition status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum Disposition {
     /// Under review
+    #[default]
     UnderReview,
     /// Approved
     Approved,
@@ -313,11 +309,6 @@ pub enum Disposition {
     Rejected,
 }
 
-impl Default for Disposition {
-    fn default() -> Self {
-        Disposition::UnderReview
-    }
-}
 
 impl std::fmt::Display for Disposition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

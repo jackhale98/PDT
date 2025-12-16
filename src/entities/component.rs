@@ -9,16 +9,13 @@ use crate::core::identity::EntityId;
 /// Make or buy decision
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum MakeBuy {
     Make,
+    #[default]
     Buy,
 }
 
-impl Default for MakeBuy {
-    fn default() -> Self {
-        MakeBuy::Buy
-    }
-}
 
 impl std::fmt::Display for MakeBuy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -47,7 +44,9 @@ impl std::str::FromStr for MakeBuy {
 /// Component category
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum ComponentCategory {
+    #[default]
     Mechanical,
     Electrical,
     Software,
@@ -55,11 +54,6 @@ pub enum ComponentCategory {
     Consumable,
 }
 
-impl Default for ComponentCategory {
-    fn default() -> Self {
-        ComponentCategory::Mechanical
-    }
-}
 
 impl std::fmt::Display for ComponentCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

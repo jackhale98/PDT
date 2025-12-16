@@ -343,9 +343,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 c.timeline
                     .as_ref()
                     .and_then(|t| t.target_date)
-                    .is_some_and(|target| {
-                        target < today && c.capa_status != CapaStatus::Closed
-                    })
+                    .is_some_and(|target| target < today && c.capa_status != CapaStatus::Closed)
             } else {
                 true
             }

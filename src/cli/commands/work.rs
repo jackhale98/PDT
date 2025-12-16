@@ -258,9 +258,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Resolve process filter if provided
-    let process_filter = args.process.as_ref().map(|proc_id| short_ids
-                .resolve(proc_id)
-                .unwrap_or_else(|| proc_id.clone()));
+    let process_filter = args.process.as_ref().map(|proc_id| {
+        short_ids
+            .resolve(proc_id)
+            .unwrap_or_else(|| proc_id.clone())
+    });
 
     // Apply filters
     let work_instructions: Vec<WorkInstruction> = work_instructions

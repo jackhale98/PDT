@@ -16,7 +16,6 @@ pub enum CapaType {
     Preventive,
 }
 
-
 impl std::fmt::Display for CapaType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -53,7 +52,6 @@ pub enum SourceType {
     TrendAnalysis,
     Risk,
 }
-
 
 impl std::fmt::Display for SourceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -109,7 +107,6 @@ pub enum RcaMethod {
     EightD,
 }
 
-
 impl std::fmt::Display for RcaMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -149,7 +146,6 @@ pub enum ActionStatus {
     Verified,
 }
 
-
 impl std::fmt::Display for ActionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -170,7 +166,6 @@ pub enum ActionType {
     Corrective,
     Preventive,
 }
-
 
 /// Individual action item
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -285,7 +280,6 @@ pub enum CapaStatus {
     Verification,
     Closed,
 }
-
 
 impl std::fmt::Display for CapaStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

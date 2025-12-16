@@ -27,7 +27,6 @@ pub enum FeatureType {
     External,
 }
 
-
 impl std::fmt::Display for FeatureType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -158,7 +157,6 @@ pub enum MaterialCondition {
     #[default]
     Rfs,
 }
-
 
 /// Geometric Dimensioning and Tolerancing control
 #[derive(Debug, Clone, Serialize, Deserialize)]

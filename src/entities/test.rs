@@ -16,7 +16,6 @@ pub enum TestType {
     Validation,
 }
 
-
 impl std::fmt::Display for TestType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -37,7 +36,6 @@ pub enum TestLevel {
     System,
     Acceptance,
 }
-
 
 impl std::fmt::Display for TestLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -61,7 +59,6 @@ pub enum TestMethod {
     #[default]
     Test,
 }
-
 
 impl std::fmt::Display for TestMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

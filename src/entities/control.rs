@@ -26,7 +26,6 @@ pub enum ControlType {
     Attribute,
 }
 
-
 impl std::fmt::Display for ControlType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -70,7 +69,6 @@ pub enum ControlCategory {
     /// Attribute (discrete/pass-fail) data
     Attribute,
 }
-
 
 impl std::fmt::Display for ControlCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -139,7 +137,6 @@ pub enum SamplingType {
     /// First article only
     FirstArticle,
 }
-
 
 /// Sampling configuration
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

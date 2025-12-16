@@ -772,8 +772,8 @@ fn run_test_status(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
     output.push_str("# Test Execution Status Report\n\n");
 
     output.push_str("## Summary\n\n");
-    output.push_str(&"| Metric | Count |\n".to_string());
-    output.push_str(&"|--------|-------|\n".to_string());
+    output.push_str("| Metric | Count |\n");
+    output.push_str("|--------|-------|\n");
     output.push_str(&format!("| Total Protocols | {} |\n", tests.len()));
     output.push_str(&format!("| Executed | {} |\n", executed));
     output.push_str(&format!("| Pending | {} |\n", pending));
@@ -856,8 +856,8 @@ fn run_open_issues(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
 
     // Summary
     output.push_str("## Summary\n\n");
-    output.push_str(&"| Category | Count |\n".to_string());
-    output.push_str(&"|----------|-------|\n".to_string());
+    output.push_str("| Category | Count |\n");
+    output.push_str("|----------|-------|\n");
     output.push_str(&format!("| Open NCRs | {} |\n", open_ncrs.len()));
     output.push_str(&format!("| Open CAPAs | {} |\n", open_capas.len()));
     output.push_str(&format!("| Failed Tests | {} |\n", failed_tests.len()));

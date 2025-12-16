@@ -16,7 +16,6 @@ pub enum RequirementType {
     Output,
 }
 
-
 impl std::fmt::Display for RequirementType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

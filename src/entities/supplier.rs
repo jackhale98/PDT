@@ -320,10 +320,7 @@ impl Supplier {
         let threshold = today + chrono::Duration::days(days);
         self.certifications
             .iter()
-            .filter(|c| {
-                c.expiry
-                    .is_some_and(|exp| exp <= threshold && exp >= today)
-            })
+            .filter(|c| c.expiry.is_some_and(|exp| exp <= threshold && exp >= today))
             .collect()
     }
 }

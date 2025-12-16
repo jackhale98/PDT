@@ -22,7 +22,6 @@ pub enum RiskType {
     Software,
 }
 
-
 impl std::fmt::Display for RiskType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -46,7 +45,6 @@ pub enum RiskLevel {
     Critical,
 }
 
-
 impl std::fmt::Display for RiskLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -68,7 +66,6 @@ pub enum MitigationType {
     Detection,
 }
 
-
 /// Mitigation status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -80,7 +77,6 @@ pub enum MitigationStatus {
     Completed,
     Verified,
 }
-
 
 impl std::fmt::Display for MitigationStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

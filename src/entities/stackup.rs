@@ -51,7 +51,6 @@ pub enum Direction {
     Negative,
 }
 
-
 /// Statistical distribution for Monte Carlo
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -65,7 +64,6 @@ pub enum Distribution {
     /// Triangular distribution
     Triangular,
 }
-
 
 /// Cached feature reference info (denormalized for readability, validated on check)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -308,7 +306,6 @@ pub enum Disposition {
     /// Rejected
     Rejected,
 }
-
 
 impl std::fmt::Display for Disposition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

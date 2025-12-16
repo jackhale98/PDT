@@ -16,7 +16,6 @@ pub enum MakeBuy {
     Buy,
 }
 
-
 impl std::fmt::Display for MakeBuy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -53,7 +52,6 @@ pub enum ComponentCategory {
     Fastener,
     Consumable,
 }
-
 
 impl std::fmt::Display for ComponentCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

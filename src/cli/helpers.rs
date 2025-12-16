@@ -75,7 +75,7 @@ pub fn read_ids_from_stdin() -> Option<Vec<String>> {
     let ids: Vec<String> = stdin
         .lock()
         .lines()
-        .filter_map(|line| line.ok())
+        .map_while(|line| line.ok())
         .map(|line| line.trim().to_string())
         .filter(|line| !line.is_empty())
         .collect();

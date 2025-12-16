@@ -151,6 +151,7 @@ impl Dsm {
     }
 
     /// Apply clustering to minimize off-diagonal distance
+    #[allow(clippy::needless_range_loop)]
     fn cluster(&mut self) {
         let n = self.components.len();
         if n <= 2 {

@@ -24,7 +24,6 @@ pub enum QuoteStatus {
     Expired,
 }
 
-
 impl std::fmt::Display for QuoteStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -67,7 +66,6 @@ pub enum Currency {
     Cny,
     Jpy,
 }
-
 
 impl std::fmt::Display for Currency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

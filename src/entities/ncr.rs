@@ -20,7 +20,6 @@ pub enum NcrType {
     Customer,
 }
 
-
 impl std::fmt::Display for NcrType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -57,7 +56,6 @@ pub enum NcrSeverity {
     Major,
     Critical,
 }
-
 
 impl std::fmt::Display for NcrSeverity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -99,7 +97,6 @@ pub enum NcrCategory {
     Process,
     Packaging,
 }
-
 
 impl std::fmt::Display for NcrCategory {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -152,7 +149,6 @@ pub enum DetectionStage {
     /// Field detection
     Field,
 }
-
 
 /// Detection information
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -224,7 +220,6 @@ pub enum ContainmentStatus {
     Completed,
 }
 
-
 /// Containment action
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ContainmentAction {
@@ -255,7 +250,6 @@ pub enum DispositionDecision {
     Scrap,
     ReturnToSupplier,
 }
-
 
 impl std::fmt::Display for DispositionDecision {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -320,7 +314,6 @@ pub enum NcrStatus {
     Disposition,
     Closed,
 }
-
 
 impl std::fmt::Display for NcrStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -453,9 +453,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .filter(|q| {
-            args.author.as_ref().is_none_or(|author| {
-                q.author.to_lowercase().contains(&author.to_lowercase())
-            })
+            args.author
+                .as_ref()
+                .is_none_or(|author| q.author.to_lowercase().contains(&author.to_lowercase()))
         })
         .filter(|q| {
             args.recent.is_none_or(|days| {
@@ -1275,10 +1275,7 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
             let content = fs::read_to_string(&path).into_diagnostic()?;
             if let Ok(quote) = serde_yml::from_str::<Quote>(&content) {
                 // Check if quote matches either component or assembly
-                let matches = quote
-                    .component
-                    .as_ref()
-                    .is_some_and(|c| c.contains(&item))
+                let matches = quote.component.as_ref().is_some_and(|c| c.contains(&item))
                     || quote.assembly.as_ref().is_some_and(|a| a.contains(&item));
                 if matches {
                     quotes.push(quote);

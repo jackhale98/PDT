@@ -541,9 +541,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         });
 
         // Author filter (for full entity mode)
-        let author_match = args.author.as_ref().is_none_or(|author| {
-            req.author.to_lowercase().contains(&author.to_lowercase())
-        });
+        let author_match = args
+            .author
+            .as_ref()
+            .is_none_or(|author| req.author.to_lowercase().contains(&author.to_lowercase()));
 
         // Search filter (in title and text)
         let search_match = args.search.as_ref().is_none_or(|search| {
@@ -1249,21 +1250,19 @@ fn find_requirement(project: &Project, id_query: &str) -> Result<Requirement> {
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
             if let Ok(req) = crate::yaml::parse_yaml_file::<Requirement>(entry.path()) {
-                // Check if ID matches (prefix or full)
+                // Check if ID matches (prefix or full) or title fuzzy matches
                 let id_str = req.id.to_string();
-                if id_str.starts_with(&resolved_query) || id_str == resolved_query {
-                    matches.push((req, entry.path().to_path_buf()));
-                }
-                // Also check title for fuzzy match (only if not a short ID lookup)
-                else if !id_query.starts_with('@')
+                let id_matches = id_str.starts_with(&resolved_query) || id_str == resolved_query;
+                let title_matches = !id_query.starts_with('@')
                     && !id_query.chars().all(|c| c.is_ascii_digit())
                     && req
                         .title
                         .to_lowercase()
-                        .contains(&resolved_query.to_lowercase())
-                    {
-                        matches.push((req, entry.path().to_path_buf()));
-                    }
+                        .contains(&resolved_query.to_lowercase());
+
+                if id_matches || title_matches {
+                    matches.push((req, entry.path().to_path_buf()));
+                }
             }
         }
     }

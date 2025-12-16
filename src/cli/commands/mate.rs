@@ -265,9 +265,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .filter(|m| {
-            args.author.as_ref().is_none_or(|a| {
-                m.author.to_lowercase().contains(&a.to_lowercase())
-            })
+            args.author
+                .as_ref()
+                .is_none_or(|a| m.author.to_lowercase().contains(&a.to_lowercase()))
         })
         .filter(|m| {
             args.recent.is_none_or(|days| {
@@ -1102,7 +1102,7 @@ fn run_recalc_all(args: RecalcAllArgs) -> Result<()> {
         let entry = entry.into_diagnostic()?;
         let path = entry.path();
 
-        if !path.extension().is_some_and(|e| e == "yaml") {
+        if path.extension().is_none_or(|e| e != "yaml") {
             continue;
         }
 

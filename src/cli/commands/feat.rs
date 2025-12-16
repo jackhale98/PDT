@@ -357,9 +357,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .filter(|f| {
-            args.author.as_ref().is_none_or(|author| {
-                f.author.to_lowercase().contains(&author.to_lowercase())
-            })
+            args.author
+                .as_ref()
+                .is_none_or(|author| f.author.to_lowercase().contains(&author.to_lowercase()))
         })
         .filter(|f| {
             args.recent.is_none_or(|days| {

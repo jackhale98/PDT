@@ -304,9 +304,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             // Verdict: Issues filter (fail, conditional, incomplete)
             if matches!(args.verdict, VerdictFilter::Issues) {
                 cached_results.retain(|r| {
-                    r.verdict.as_deref().is_some_and(|v| {
-                        v == "fail" || v == "conditional" || v == "incomplete"
-                    })
+                    r.verdict
+                        .as_deref()
+                        .is_some_and(|v| v == "fail" || v == "conditional" || v == "incomplete")
                 });
             }
 
@@ -469,14 +469,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         });
 
         // Executed by filter
-        let executed_by_match = args.executed_by.as_ref().is_none_or(|ex| {
-            r.executed_by.to_lowercase().contains(&ex.to_lowercase())
-        });
+        let executed_by_match = args
+            .executed_by
+            .as_ref()
+            .is_none_or(|ex| r.executed_by.to_lowercase().contains(&ex.to_lowercase()));
 
         // Author filter
-        let author_match = args.author.as_ref().is_none_or(|author| {
-            r.author.to_lowercase().contains(&author.to_lowercase())
-        });
+        let author_match = args
+            .author
+            .as_ref()
+            .is_none_or(|author| r.author.to_lowercase().contains(&author.to_lowercase()));
 
         // Search filter
         let search_match = args.search.as_ref().is_none_or(|search| {

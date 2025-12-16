@@ -1,0 +1,8 @@
+# Clippy configuration for tessera-design-toolkit
+# These settings allow certain lints that are present in the codebase
+
+# Allow functions with more than 7 arguments (default limit)
+too-many-arguments-threshold = 15
+
+# Allow large error types (we use detailed error enums)
+large-error-threshold = 256

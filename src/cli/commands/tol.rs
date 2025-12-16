@@ -1221,10 +1221,10 @@ fn run_add(args: AddArgs) -> Result<()> {
     for feat_ref in &args.features {
         // Parse direction prefix (+/~)
         // Using ~ instead of - to avoid conflicts with CLI flags
-        let (direction, feat_id_str) = if feat_ref.starts_with('+') {
-            (Direction::Positive, &feat_ref[1..])
-        } else if feat_ref.starts_with('~') {
-            (Direction::Negative, &feat_ref[1..])
+        let (direction, feat_id_str) = if let Some(stripped) = feat_ref.strip_prefix('+') {
+            (Direction::Positive, stripped)
+        } else if let Some(stripped) = feat_ref.strip_prefix('~') {
+            (Direction::Negative, stripped)
         } else {
             // Default to positive if no prefix
             (Direction::Positive, feat_ref.as_str())

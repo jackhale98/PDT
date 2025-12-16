@@ -20,7 +20,6 @@ pub enum Verdict {
     NotApplicable,
 }
 
-
 impl std::fmt::Display for Verdict {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -45,7 +44,6 @@ pub enum StepResult {
     #[serde(rename = "not_applicable")]
     NotApplicable,
 }
-
 
 impl std::fmt::Display for StepResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -210,7 +208,6 @@ pub enum AttachmentType {
     #[default]
     Other,
 }
-
 
 /// An attachment to the result
 #[derive(Debug, Clone, Serialize, Deserialize)]

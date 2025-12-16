@@ -645,9 +645,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         // Priority filter
-        let priority_match = args.priority.as_ref().is_none_or(|p| {
-            t.priority.to_string().to_lowercase() == p.to_lowercase()
-        });
+        let priority_match = args
+            .priority
+            .as_ref()
+            .is_none_or(|p| t.priority.to_string().to_lowercase() == p.to_lowercase());
 
         // Category filter (case-insensitive)
         let category_match = args.category.as_ref().is_none_or(|cat| {
@@ -664,9 +665,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         });
 
         // Author filter
-        let author_match = args.author.as_ref().is_none_or(|author| {
-            t.author.to_lowercase().contains(&author.to_lowercase())
-        });
+        let author_match = args
+            .author
+            .as_ref()
+            .is_none_or(|author| t.author.to_lowercase().contains(&author.to_lowercase()));
 
         // Search filter
         let search_match = args.search.as_ref().is_none_or(|search| {
@@ -699,9 +701,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             test_results.sort_by(|a, b| b.executed_date.cmp(&a.executed_date));
 
             // Check if most recent result is fail
-            test_results.first().is_some_and(|r| {
-                r.verdict == crate::entities::result::Verdict::Fail
-            })
+            test_results
+                .first()
+                .is_some_and(|r| r.verdict == crate::entities::result::Verdict::Fail)
         } else {
             true
         };
@@ -1533,21 +1535,19 @@ fn find_test(project: &Project, id_query: &str) -> Result<Test> {
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
             if let Ok(test) = crate::yaml::parse_yaml_file::<Test>(entry.path()) {
-                // Check if ID matches (prefix or full)
+                // Check if ID matches (prefix or full) or title fuzzy matches
                 let id_str = test.id.to_string();
-                if id_str.starts_with(&resolved_query) || id_str == resolved_query {
-                    matches.push((test, entry.path().to_path_buf()));
-                }
-                // Also check title for fuzzy match (only if not a short ID lookup)
-                else if !id_query.starts_with('@')
+                let id_matches = id_str.starts_with(&resolved_query) || id_str == resolved_query;
+                let title_matches = !id_query.starts_with('@')
                     && !id_query.chars().all(|c| c.is_ascii_digit())
                     && test
                         .title
                         .to_lowercase()
-                        .contains(&resolved_query.to_lowercase())
-                    {
-                        matches.push((test, entry.path().to_path_buf()));
-                    }
+                        .contains(&resolved_query.to_lowercase());
+
+                if id_matches || title_matches {
+                    matches.push((test, entry.path().to_path_buf()));
+                }
             }
         }
     }
@@ -1729,7 +1729,7 @@ fn run_run(args: RunArgs, global: &GlobalOpts) -> Result<()> {
         test_id: test.id.clone(),
         test_revision: Some(test.revision),
         title: Some(format!("Result for {}", test.title)),
-        verdict: verdict,
+        verdict,
         verdict_rationale: None,
         category: test.category.clone(),
         tags: Vec::new(),

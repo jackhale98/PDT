@@ -393,6 +393,7 @@ impl EntityCache {
     }
 
     /// Get risk distribution summary
+    #[allow(clippy::field_reassign_with_default)]
     pub fn risk_distribution(&self) -> RiskDistribution {
         let mut dist = RiskDistribution::default();
 

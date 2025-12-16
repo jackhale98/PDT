@@ -85,7 +85,7 @@ fn extract_entity_id(content: &str) -> Option<String> {
 
 /// Format file path with short ID alias if available
 fn format_path_with_alias(
-    path: &PathBuf,
+    path: &std::path::Path,
     content: Option<&str>,
     cache: &Option<EntityCache>,
 ) -> String {

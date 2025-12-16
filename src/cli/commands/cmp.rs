@@ -462,9 +462,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .filter(|c| {
-            args.author.as_ref().is_none_or(|author| {
-                c.author.to_lowercase().contains(&author.to_lowercase())
-            })
+            args.author
+                .as_ref()
+                .is_none_or(|author| c.author.to_lowercase().contains(&author.to_lowercase()))
         })
         .filter(|c| {
             args.recent.is_none_or(|days| {
@@ -501,9 +501,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         })
         // High cost filter
         .filter(|c| {
-            args.high_cost.is_none_or(|threshold| {
-                c.unit_cost.is_some_and(|cost| cost > threshold)
-            })
+            args.high_cost
+                .is_none_or(|threshold| c.unit_cost.is_some_and(|cost| cost > threshold))
         })
         .collect();
 

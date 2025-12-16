@@ -24,7 +24,6 @@ pub enum ProcessType {
     Coating,
 }
 
-
 impl std::fmt::Display for ProcessType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -76,7 +75,6 @@ pub enum SkillLevel {
     Advanced,
     Expert,
 }
-
 
 impl std::fmt::Display for SkillLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

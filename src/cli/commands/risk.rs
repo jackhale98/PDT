@@ -493,9 +493,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         });
 
         // Author filter
-        let author_match = args.author.as_ref().is_none_or(|author| {
-            r.author.to_lowercase().contains(&author.to_lowercase())
-        });
+        let author_match = args
+            .author
+            .as_ref()
+            .is_none_or(|author| r.author.to_lowercase().contains(&author.to_lowercase()));
 
         // Search filter
         let search_match = args.search.as_ref().is_none_or(|search| {
@@ -1203,21 +1204,19 @@ fn find_risk(project: &Project, id_query: &str) -> Result<Risk> {
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
             if let Ok(risk) = crate::yaml::parse_yaml_file::<Risk>(entry.path()) {
-                // Check if ID matches (prefix or full)
+                // Check if ID matches (prefix or full) or title fuzzy matches
                 let id_str = risk.id.to_string();
-                if id_str.starts_with(&resolved_query) || id_str == resolved_query {
-                    matches.push((risk, entry.path().to_path_buf()));
-                }
-                // Also check title for fuzzy match (only if not a short ID lookup)
-                else if !id_query.starts_with('@')
+                let id_matches = id_str.starts_with(&resolved_query) || id_str == resolved_query;
+                let title_matches = !id_query.starts_with('@')
                     && !id_query.chars().all(|c| c.is_ascii_digit())
                     && risk
                         .title
                         .to_lowercase()
-                        .contains(&resolved_query.to_lowercase())
-                    {
-                        matches.push((risk, entry.path().to_path_buf()));
-                    }
+                        .contains(&resolved_query.to_lowercase());
+
+                if id_matches || title_matches {
+                    matches.push((risk, entry.path().to_path_buf()));
+                }
             }
         }
     }
@@ -1518,6 +1517,7 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::needless_range_loop)]
 fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let short_ids = ShortIdIndex::load(&project);

@@ -5,6 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::{CachedNcr, EntityCache};
@@ -922,6 +923,38 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             if !ncr.tags.is_empty() {
                 println!();
                 println!("{}: {}", style("Tags").bold(), ncr.tags.join(", "));
+            }
+
+            // Links
+            let cache = EntityCache::open(&project).ok();
+            let has_links = ncr.links.component.is_some()
+                || ncr.links.process.is_some()
+                || ncr.links.control.is_some()
+                || ncr.links.capa.is_some();
+
+            if has_links {
+                println!();
+                println!("{}", style("Links:").bold());
+
+                if let Some(ref id) = ncr.links.component {
+                    let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                    println!("  {}: {}", style("Component").dim(), style(&display).cyan());
+                }
+
+                if let Some(ref id) = ncr.links.process {
+                    let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                    println!("  {}: {}", style("Process").dim(), style(&display).cyan());
+                }
+
+                if let Some(ref id) = ncr.links.control {
+                    let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                    println!("  {}: {}", style("Control").dim(), style(&display).cyan());
+                }
+
+                if let Some(ref id) = ncr.links.capa {
+                    let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                    println!("  {}: {}", style("CAPA").dim(), style(&display).cyan());
+                }
             }
 
             // Footer

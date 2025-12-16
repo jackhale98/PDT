@@ -5,6 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
@@ -986,6 +987,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         }
         _ => {
             // Human-readable format
+            let short_ids = ShortIdIndex::load(&project);
+
             println!("{}", style("─".repeat(60)).dim());
             println!(
                 "{}: {}",
@@ -1068,6 +1071,50 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                     if !m.action.is_empty() {
                         let status_str = m.status.map(|s| format!(" [{}]", s)).unwrap_or_default();
                         println!("  {}. {}{}", i + 1, m.action, style(status_str).dim());
+                    }
+                }
+            }
+
+            // Links
+            let cache = EntityCache::open(&project).ok();
+            let has_links = !risk.links.related_to.is_empty()
+                || !risk.links.mitigated_by.is_empty()
+                || !risk.links.verified_by.is_empty()
+                || !risk.links.affects.is_empty();
+
+            if has_links {
+                println!();
+                println!("{}", style("Links:").bold());
+
+                if !risk.links.related_to.is_empty() {
+                    println!("  {}:", style("Related To").dim());
+                    for id in &risk.links.related_to {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
+                    }
+                }
+
+                if !risk.links.mitigated_by.is_empty() {
+                    println!("  {}:", style("Mitigated By").dim());
+                    for id in &risk.links.mitigated_by {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
+                    }
+                }
+
+                if !risk.links.verified_by.is_empty() {
+                    println!("  {}:", style("Verified By").dim());
+                    for id in &risk.links.verified_by {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
+                    }
+                }
+
+                if !risk.links.affects.is_empty() {
+                    println!("  {}:", style("Affects").dim());
+                    for id in &risk.links.affects {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
                     }
                 }
             }

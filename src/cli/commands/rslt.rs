@@ -5,6 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, format_short_id_str, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
@@ -1073,6 +1074,10 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", result.id);
         }
         _ => {
+            // Load cache and short IDs for title lookups
+            let short_ids = ShortIdIndex::load(&project);
+            let cache = EntityCache::open(&project).ok();
+
             // Human-readable format
             println!("{}", style("─".repeat(60)).dim());
             println!(
@@ -1080,10 +1085,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style("ID").bold(),
                 style(&result.id.to_string()).cyan()
             );
+            let test_display = format_link_with_title(&result.test_id.to_string(), &short_ids, &cache);
             println!(
                 "{}: {}",
                 style("Test").bold(),
-                style(&result.test_id.to_string()).yellow()
+                style(&test_display).yellow()
             );
             if let Some(ref title) = result.title {
                 println!("{}: {}", style("Title").bold(), title);

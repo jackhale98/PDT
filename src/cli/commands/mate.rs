@@ -5,8 +5,10 @@ use console::style;
 use miette::{bail, IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, smart_round, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
+use crate::core::cache::EntityCache;
 use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
@@ -770,6 +772,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", mate.id);
         }
         _ => {
+            // Load cache for title lookups
+            let cache = EntityCache::open(&project).ok();
+
             // Pretty format (default)
             println!("{}", style("─".repeat(60)).dim());
             println!(
@@ -785,29 +790,50 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             // Features
             println!();
             println!("{}", style("Mating Features:").bold());
-            let feat_a_display = short_ids
-                .get_short_id(&mate.feature_a.id.to_string())
-                .unwrap_or_else(|| format_short_id(&mate.feature_a.id));
-            let feat_b_display = short_ids
-                .get_short_id(&mate.feature_b.id.to_string())
-                .unwrap_or_else(|| format_short_id(&mate.feature_b.id));
+            let feat_a_display = format_link_with_title(&mate.feature_a.id.to_string(), &short_ids, &cache);
+            let feat_b_display = format_link_with_title(&mate.feature_b.id.to_string(), &short_ids, &cache);
+
+            // Helper to get component display with part number and title
+            let get_component_display = |cmp_id: Option<&String>, cmp_name: Option<&String>| -> Option<String> {
+                if let Some(cmp_id) = cmp_id {
+                    // Look up component info from cache
+                    if let Some(ref c) = cache {
+                        let components = c.list_components(None, None, None, None, None, None);
+                        if let Some(cmp) = components.iter().find(|c| &c.id == cmp_id) {
+                            let short = short_ids.get_short_id(cmp_id).unwrap_or_else(|| cmp_id.clone());
+                            match (&cmp.part_number, cmp.title.as_str()) {
+                                (Some(pn), title) if !pn.is_empty() && !title.is_empty() => {
+                                    return Some(format!("{} ({}) {}", short, pn, title));
+                                }
+                                (Some(pn), _) if !pn.is_empty() => {
+                                    return Some(format!("{} ({})", short, pn));
+                                }
+                                (_, title) if !title.is_empty() => {
+                                    return Some(format!("{} ({})", short, title));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+                // Fall back to component_name if available
+                cmp_name.map(|name| name.clone())
+            };
 
             println!(
-                "  Feature A: {} - {}",
-                style(&feat_a_display).cyan(),
-                mate.feature_a.name.as_deref().unwrap_or("")
+                "  Feature A: {}",
+                style(&feat_a_display).cyan()
             );
-            if let Some(ref cmp_name) = mate.feature_a.component_name {
-                println!("             ({})", style(cmp_name).dim());
+            if let Some(display) = get_component_display(mate.feature_a.component_id.as_ref(), mate.feature_a.component_name.as_ref()) {
+                println!("             Component: {}", style(&display).dim());
             }
 
             println!(
-                "  Feature B: {} - {}",
-                style(&feat_b_display).cyan(),
-                mate.feature_b.name.as_deref().unwrap_or("")
+                "  Feature B: {}",
+                style(&feat_b_display).cyan()
             );
-            if let Some(ref cmp_name) = mate.feature_b.component_name {
-                println!("             ({})", style(cmp_name).dim());
+            if let Some(display) = get_component_display(mate.feature_b.component_id.as_ref(), mate.feature_b.component_name.as_ref()) {
+                println!("             Component: {}", style(&display).dim());
             }
 
             // Fit Analysis

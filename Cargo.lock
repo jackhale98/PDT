@@ -2051,7 +2051,6 @@ dependencies = [
  "insta",
  "jsonschema",
  "miette",
- "once_cell",
  "predicates",
  "rand 0.9.2",
  "rusqlite",

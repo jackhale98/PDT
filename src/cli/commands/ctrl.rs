@@ -5,6 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
@@ -829,6 +830,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", ctrl.id);
         }
         _ => {
+            // Load cache for title lookups
+            let cache = EntityCache::open(&project).ok();
+
             // Pretty format (default)
             println!("{}", style("─".repeat(60)).dim());
             println!(
@@ -838,6 +842,22 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             );
             println!("{}: {}", style("Title").bold(), style(&ctrl.title).yellow());
             println!("{}: {}", style("Control Type").bold(), ctrl.control_type);
+            if let Some(ref proc_id) = ctrl.links.process {
+                let proc_display = format_link_with_title(&proc_id.to_string(), &short_ids, &cache);
+                println!(
+                    "{}: {}",
+                    style("Process").bold(),
+                    style(&proc_display).cyan()
+                );
+            }
+            if let Some(ref feat_id) = ctrl.links.feature {
+                let feat_display = format_link_with_title(&feat_id.to_string(), &short_ids, &cache);
+                println!(
+                    "{}: {}",
+                    style("Feature").bold(),
+                    style(&feat_display).cyan()
+                );
+            }
             println!("{}: {}", style("Status").bold(), ctrl.status);
             println!("{}", style("─".repeat(60)).dim());
 

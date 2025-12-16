@@ -1,5 +1,7 @@
 //! CLI command implementations
 
+pub mod utils;
+
 pub mod asm;
 pub mod baseline;
 pub mod blame;

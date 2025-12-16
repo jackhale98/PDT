@@ -608,6 +608,22 @@ impl EntityCache {
         rows.filter_map(|r| r.ok()).collect()
     }
 
+    /// Get assembly-specific info (part_number, revision) for an assembly ID
+    pub fn get_assembly_info(&self, id: &str) -> Option<(Option<String>, Option<String>)> {
+        let mut stmt = match self
+            .conn
+            .prepare("SELECT part_number, revision FROM assemblies WHERE id = ?1")
+        {
+            Ok(s) => s,
+            Err(_) => return None,
+        };
+
+        stmt.query_row(params![id], |row| {
+            Ok((row.get::<_, Option<String>>(0)?, row.get::<_, Option<String>>(1)?))
+        })
+        .ok()
+    }
+
     /// Trace forward from an entity (recursive)
     /// Returns all entities reachable from source via outgoing links
     pub fn trace_from(&self, source_id: &str, max_depth: usize) -> Vec<(String, String, usize)> {

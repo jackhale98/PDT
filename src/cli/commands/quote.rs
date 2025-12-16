@@ -5,6 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
@@ -1113,6 +1114,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", quote.id);
         }
         _ => {
+            // Load cache for title lookups
+            let cache = EntityCache::open(&project).ok();
+
             // Pretty format (default)
             println!("{}", style("─".repeat(60)).dim());
             println!(
@@ -1126,7 +1130,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 style(&quote.title).yellow()
             );
             if let Some(ref cmp) = quote.component {
-                let cmp_display = short_ids.get_short_id(cmp).unwrap_or_else(|| cmp.clone());
+                let cmp_display = format_link_with_title(cmp, &short_ids, &cache);
                 println!(
                     "{}: {}",
                     style("Component").bold(),
@@ -1134,16 +1138,14 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
             if let Some(ref asm) = quote.assembly {
-                let asm_display = short_ids.get_short_id(asm).unwrap_or_else(|| asm.clone());
+                let asm_display = format_link_with_title(asm, &short_ids, &cache);
                 println!(
                     "{}: {}",
                     style("Assembly").bold(),
                     style(&asm_display).cyan()
                 );
             }
-            let sup_display = short_ids
-                .get_short_id(&quote.supplier)
-                .unwrap_or_else(|| quote.supplier.clone());
+            let sup_display = format_link_with_title(&quote.supplier, &short_ids, &cache);
             println!(
                 "{}: {}",
                 style("Supplier").bold(),

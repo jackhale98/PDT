@@ -5,6 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::{CachedCapa, EntityCache};
@@ -803,6 +804,50 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             if !capa.tags.is_empty() {
                 println!();
                 println!("{}: {}", style("Tags").bold(), capa.tags.join(", "));
+            }
+
+            // Links
+            let cache = EntityCache::open(&project).ok();
+            let has_links = !capa.links.ncrs.is_empty()
+                || !capa.links.risks.is_empty()
+                || !capa.links.processes_modified.is_empty()
+                || !capa.links.controls_added.is_empty();
+
+            if has_links {
+                println!();
+                println!("{}", style("Links:").bold());
+
+                if !capa.links.ncrs.is_empty() {
+                    println!("  {}:", style("NCRs").dim());
+                    for id in &capa.links.ncrs {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
+                    }
+                }
+
+                if !capa.links.risks.is_empty() {
+                    println!("  {}:", style("Risks").dim());
+                    for id in &capa.links.risks {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
+                    }
+                }
+
+                if !capa.links.processes_modified.is_empty() {
+                    println!("  {}:", style("Processes Modified").dim());
+                    for id in &capa.links.processes_modified {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
+                    }
+                }
+
+                if !capa.links.controls_added.is_empty() {
+                    println!("  {}:", style("Controls Added").dim());
+                    for id in &capa.links.controls_added {
+                        let display = format_link_with_title(&id.to_string(), &short_ids, &cache);
+                        println!("    {}", style(&display).cyan());
+                    }
+                }
             }
 
             // Footer

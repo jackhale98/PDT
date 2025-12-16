@@ -5,6 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
@@ -1340,6 +1341,10 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", test.id);
         }
         _ => {
+            // Load cache and short IDs for title lookups
+            let short_ids = ShortIdIndex::load(&project);
+            let cache = EntityCache::open(&project).ok();
+
             // Human-readable format
             println!("{}", style("─".repeat(60)).dim());
             println!(
@@ -1425,7 +1430,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         test.links
                             .verifies
                             .iter()
-                            .map(|id| id.to_string())
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
                             .collect::<Vec<_>>()
                             .join(", ")
                     );
@@ -1437,7 +1442,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         test.links
                             .validates
                             .iter()
-                            .map(|id| id.to_string())
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
                             .collect::<Vec<_>>()
                             .join(", ")
                     );
@@ -1449,7 +1454,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         test.links
                             .mitigates
                             .iter()
-                            .map(|id| id.to_string())
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
                             .collect::<Vec<_>>()
                             .join(", ")
                     );

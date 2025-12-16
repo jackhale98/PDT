@@ -8,6 +8,7 @@ use std::fs;
 
 use crate::cli::helpers::{escape_csv, format_short_id, smart_round, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
+use crate::core::cache::EntityCache;
 use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
@@ -872,6 +873,21 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 
             // Contributors
             if !stackup.contributors.is_empty() {
+                // Load cache for component lookups
+                let cache = EntityCache::open(&project).ok();
+                let component_info: std::collections::HashMap<String, (String, String)> =
+                    if let Some(ref c) = cache {
+                        c.list_components(None, None, None, None, None, None)
+                            .into_iter()
+                            .map(|cmp| {
+                                let pn = cmp.part_number.unwrap_or_default();
+                                (cmp.id, (pn, cmp.title))
+                            })
+                            .collect()
+                    } else {
+                        std::collections::HashMap::new()
+                    };
+
                 println!();
                 println!(
                     "{} ({}):",
@@ -894,6 +910,31 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         c.nominal,
                         avg_tol
                     );
+
+                    // Show component info if available from feature reference
+                    if let Some(ref feat_ref) = c.feature {
+                        if let Some(ref cmp_id) = feat_ref.component_id {
+                            let cmp_short = short_ids
+                                .get_short_id(cmp_id)
+                                .unwrap_or_else(|| cmp_id.clone());
+                            let display = if let Some((pn, title)) = component_info.get(cmp_id) {
+                                if !pn.is_empty() && !title.is_empty() {
+                                    format!("{} ({}) {}", cmp_short, pn, title)
+                                } else if !pn.is_empty() {
+                                    format!("{} ({})", cmp_short, pn)
+                                } else if !title.is_empty() {
+                                    format!("{} ({})", cmp_short, title)
+                                } else {
+                                    cmp_short
+                                }
+                            } else if let Some(ref cmp_name) = feat_ref.component_name {
+                                format!("{} ({})", cmp_short, cmp_name)
+                            } else {
+                                cmp_short
+                            };
+                            println!("      Component: {}", style(&display).dim());
+                        }
+                    }
                 }
             }
 

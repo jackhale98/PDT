@@ -966,6 +966,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", feat.id);
         }
         _ => {
+            // Load cache for title lookups
+            let cache = EntityCache::open(&project).ok();
+
             // Pretty format (default)
             println!("{}", style("─".repeat(60)).dim());
             println!(
@@ -975,9 +978,27 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             );
             println!("{}: {}", style("Title").bold(), style(&feat.title).yellow());
             println!("{}: {}", style("Type").bold(), feat.feature_type);
-            let cmp_display = short_ids
+            // Look up component info for part number and title
+            let cmp_short = short_ids
                 .get_short_id(&feat.component)
                 .unwrap_or_else(|| feat.component.clone());
+            let cmp_display = if let Some(ref cache) = cache {
+                // Find component in cache to get part number and title
+                let components = cache.list_components(None, None, None, None, None, None);
+                if let Some(cmp) = components.iter().find(|c| c.id == feat.component) {
+                    match (&cmp.part_number, cmp.title.as_str()) {
+                        (Some(pn), title) if !pn.is_empty() => {
+                            format!("{} ({}) {}", cmp_short, pn, title)
+                        }
+                        (_, title) if !title.is_empty() => format!("{} ({})", cmp_short, title),
+                        _ => cmp_short,
+                    }
+                } else {
+                    cmp_short
+                }
+            } else {
+                cmp_short
+            };
             println!(
                 "{}: {}",
                 style("Component").bold(),

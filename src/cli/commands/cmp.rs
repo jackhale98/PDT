@@ -1071,6 +1071,40 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{}: {}", style("Tags").bold(), cmp.tags.join(", "));
             }
 
+            // Used in assemblies
+            if let Ok(cache) = EntityCache::open(&project) {
+                let containing_asms = cache.get_links_to_of_type(&cmp.id.to_string(), "contains");
+                if !containing_asms.is_empty() {
+                    println!();
+                    println!("{}", style("Used In Assemblies:").bold());
+                    for asm_id in &containing_asms {
+                        let short_id = short_ids
+                            .get_short_id(asm_id)
+                            .unwrap_or_else(|| asm_id.clone());
+                        // Look up assembly part number and title from cache
+                        let entity = cache.get_entity(asm_id);
+                        let asm_info = cache.get_assembly_info(asm_id);
+                        let part_number = asm_info.and_then(|(pn, _)| pn);
+                        let title = entity.as_ref().map(|e| e.title.as_str()).unwrap_or("");
+
+                        match (part_number.as_deref(), title) {
+                            (Some(pn), t) if !pn.is_empty() && !t.is_empty() => {
+                                println!("  • {} ({}) {}", style(&short_id).cyan(), pn, t);
+                            }
+                            (Some(pn), _) if !pn.is_empty() => {
+                                println!("  • {} ({})", style(&short_id).cyan(), pn);
+                            }
+                            (_, t) if !t.is_empty() => {
+                                println!("  • {} ({})", style(&short_id).cyan(), t);
+                            }
+                            _ => {
+                                println!("  • {}", style(&short_id).cyan());
+                            }
+                        }
+                    }
+                }
+            }
+
             // Description
             if let Some(ref desc) = cmp.description {
                 if !desc.is_empty() && !desc.starts_with('#') {

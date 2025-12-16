@@ -668,14 +668,40 @@ fn add_link_to_yaml(content: &str, link_type: &str, target_id: &str) -> Result<S
     // Parse YAML
     let mut value: serde_yml::Value = serde_yml::from_str(content).into_diagnostic()?;
 
-    // Navigate to links section
+    // Navigate to links section, creating it if it doesn't exist
+    if value.get("links").is_none() {
+        value["links"] = serde_yml::Value::Mapping(serde_yml::Mapping::new());
+    }
+
     let links = value
         .get_mut("links")
         .ok_or_else(|| miette::miette!("No 'links' section found in file"))?;
 
-    let link_value = links
-        .get_mut(link_type)
-        .ok_or_else(|| miette::miette!("Unknown link type: {}", link_type))?;
+    // Check if link type exists; if not, create it
+    let link_value = if let Some(existing) = links.get_mut(link_type) {
+        existing
+    } else {
+        // Determine if this should be an array or single-value link
+        let is_array_link = is_array_link_type(link_type);
+        let links_map = links
+            .as_mapping_mut()
+            .ok_or_else(|| miette::miette!("Links section is not a mapping"))?;
+
+        if is_array_link {
+            links_map.insert(
+                serde_yml::Value::String(link_type.to_string()),
+                serde_yml::Value::Sequence(vec![]),
+            );
+        } else {
+            links_map.insert(
+                serde_yml::Value::String(link_type.to_string()),
+                serde_yml::Value::Null,
+            );
+        }
+        links
+            .get_mut(link_type)
+            .ok_or_else(|| miette::miette!("Failed to create link type"))?
+    };
 
     // Handle both array links and single-value links
     if let Some(arr) = link_value.as_sequence_mut() {
@@ -696,6 +722,17 @@ fn add_link_to_yaml(content: &str, link_type: &str, target_id: &str) -> Result<S
 
     // Serialize back
     serde_yml::to_string(&value).into_diagnostic()
+}
+
+/// Determine if a link type should be an array (multiple values) or single-value
+fn is_array_link_type(link_type: &str) -> bool {
+    match link_type {
+        // Single-value links (can only have one target)
+        "component" | "assembly" | "requirement" | "process" | "parent" | "supplier" | "capa"
+        | "from_result" | "control" | "feature" | "test" => false,
+        // Everything else is an array (can have multiple targets)
+        _ => true,
+    }
 }
 
 /// Remove a link from a YAML file
@@ -892,6 +929,10 @@ fn infer_link_type(source_prefix: EntityPrefix, target_prefix: EntityPrefix) -> 
         // Requirements linking to risks
         (EntityPrefix::Req, EntityPrefix::Risk) => Some("risks".to_string()),
 
+        // Requirements satisfied by components/assemblies
+        (EntityPrefix::Req, EntityPrefix::Cmp) => Some("satisfied_by".to_string()),
+        (EntityPrefix::Req, EntityPrefix::Asm) => Some("satisfied_by".to_string()),
+
         // Verification entities linking to requirements
         (EntityPrefix::Test, EntityPrefix::Req) => Some("verifies".to_string()),
         (EntityPrefix::Ctrl, EntityPrefix::Req) => Some("verifies".to_string()),
@@ -936,12 +977,20 @@ fn infer_link_type(source_prefix: EntityPrefix, target_prefix: EntityPrefix) -> 
         // Processes linking to requirements
         (EntityPrefix::Proc, EntityPrefix::Req) => Some("requirements".to_string()),
 
-        // Controls linking to components
-        (EntityPrefix::Ctrl, EntityPrefix::Cmp) => Some("component".to_string()),
+        // Processes linking to components/assemblies (produces)
+        (EntityPrefix::Proc, EntityPrefix::Cmp) => Some("produces".to_string()),
+        (EntityPrefix::Proc, EntityPrefix::Asm) => Some("produces".to_string()),
 
-        // Work instructions linking to components/assemblies
+        // Controls linking to components and features
+        (EntityPrefix::Ctrl, EntityPrefix::Cmp) => Some("component".to_string()),
+        (EntityPrefix::Ctrl, EntityPrefix::Feat) => Some("feature".to_string()),
+        (EntityPrefix::Ctrl, EntityPrefix::Proc) => Some("process".to_string()),
+
+        // Work instructions linking to components/assemblies/processes/controls
         (EntityPrefix::Work, EntityPrefix::Cmp) => Some("component".to_string()),
         (EntityPrefix::Work, EntityPrefix::Asm) => Some("assembly".to_string()),
+        (EntityPrefix::Work, EntityPrefix::Proc) => Some("process".to_string()),
+        (EntityPrefix::Work, EntityPrefix::Ctrl) => Some("controls".to_string()),
 
         // Features to requirements (allocation back-link)
         (EntityPrefix::Feat, EntityPrefix::Req) => Some("allocated_from".to_string()),
@@ -988,6 +1037,10 @@ fn get_reciprocal_link_type(link_type: &str, target_prefix: EntityPrefix) -> Opt
 
         // REQ.satisfied_by -> REQ means bidirectional satisfaction
         ("satisfied_by", EntityPrefix::Req) => Some("satisfied_by".to_string()),
+
+        // REQ.satisfied_by -> CMP/ASM means CMP/ASM.requirements -> REQ
+        ("satisfied_by", EntityPrefix::Cmp) => Some("requirements".to_string()),
+        ("satisfied_by", EntityPrefix::Asm) => Some("requirements".to_string()),
 
         // TEST.verifies -> REQ or CTRL.verifies -> REQ means REQ.verified_by
         ("verifies", EntityPrefix::Req) => Some("verified_by".to_string()),

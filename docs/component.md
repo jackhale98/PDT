@@ -45,11 +45,14 @@ Components represent individual parts in your Bill of Materials (BOM). They can 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `name` | string | Supplier name |
+| `supplier_id` | string | Supplier entity ID (SUP-... or SUP@N) - links to SUP entity |
+| `name` | string | Supplier name (fallback if supplier_id not set) |
 | `supplier_pn` | string | Supplier's part number |
 | `lead_time_days` | integer | Lead time in days |
 | `moq` | integer | Minimum order quantity |
 | `unit_cost` | number | Cost per unit from this supplier |
+
+> **Note:** Use `supplier_id` to link to SUP entities for full traceability. The `name` field is optional and can be used as a display name or fallback.
 
 ### Document Object
 
@@ -88,12 +91,13 @@ mass_kg: 0.125
 unit_cost: 12.50
 
 suppliers:
-  - name: "Acme Corp"
+  - supplier_id: SUP-01HC2JB7SMQX7RS1Y0GFKBHPTS  # Links to Acme Corp supplier entity
     supplier_pn: "ACM-123"
     lead_time_days: 14
     moq: 100
     unit_cost: 11.00
-  - name: "Quality Parts Inc"
+  - supplier_id: SUP-01HC2JB7SMQX7RS1Y0GFKBHPTT  # Links to Quality Parts supplier entity
+    name: "Quality Parts Inc"  # Optional display name
     supplier_pn: "QP-456"
     lead_time_days: 21
     moq: 50
@@ -205,74 +209,24 @@ tdt cmp edit CMP-01HC2
 tdt cmp edit CMP@1
 ```
 
-### Show component interaction matrix (DSM)
+### Analyze component interactions
 
-Display a Design Structure Matrix showing how components interact through mates and tolerance stackups.
+Use the Design Structure Matrix (DSM) to analyze component relationships:
 
 ```bash
 # Show all component interactions
-tdt cmp matrix
+tdt dsm
 
 # Filter by interaction type
-tdt cmp matrix --interaction-type mate       # Only mate interactions
-tdt cmp matrix --interaction-type tolerance  # Only tolerance stackup interactions
+tdt dsm -t mate       # Only mate interactions
+tdt dsm -t tolerance  # Only tolerance stackup interactions
 
-# Filter to show interactions for specific component
-tdt cmp matrix --component CMP@1
-
-# Export as CSV (recommended for large matrices)
-tdt cmp matrix --csv
-
-# Output as JSON for programmatic use
-tdt cmp matrix -f json
+# Apply clustering and show metrics
+tdt dsm --cluster --metrics
 ```
 
-**Example Output:**
-
-```
-Component Interaction Matrix
-5 components, 8 interactions
-
-              1   2   3   4   5
-             ──────────────────────
-Housing       ·   M   MT  T   ·
-Shaft         M   ·   M   ·   ·
-Bearing       MT  M   ·   T   M
-Cover         T   ·   T   ·   T
-Bracket       ·   ·   M   T   ·
-
-Legend:
-  M = Mate interaction
-  T = Tolerance stackup
-  MT = Both mate and tolerance
-
-Components:
-   1. CMP@1 Housing
-   2. CMP@2 Shaft
-   3. CMP@3 Bearing
-   4. CMP@4 Cover
-   5. CMP@5 Bracket
-```
-
-**CSV Output Example:**
-
-```csv
-"Component","Housing","Shaft","Bearing","Cover","Bracket"
-"Housing","","M","MT","T",""
-"Shaft","M","","M","",""
-"Bearing","MT","M","","T","M"
-"Cover","T","","T","","T"
-"Bracket","","","M","T",""
-```
-
-**Notes:**
-- The matrix is symmetric (A interacts with B = B interacts with A)
-- Interactions are derived from mate definitions (`tdt mate`) and tolerance stackups (`tdt tol`)
-- Use `--csv` for large matrices that don't fit in terminal width
-- JSON output includes full component IDs for integration with other tools
-
-> **See Also:** For more comprehensive component analysis, use:
-> - `tdt dsm` - Design Structure Matrix including mates, processes, and requirements with clustering, metrics, and cycle detection
+> **See Also:**
+> - `tdt dsm` - Full Design Structure Matrix with clustering, metrics, and cycle detection
 > - `tdt dmm cmp req` - Domain Mapping Matrix showing component-to-requirement allocation
 
 ## Make vs Buy Classification

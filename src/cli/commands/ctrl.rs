@@ -662,6 +662,7 @@ fn run_new(args: NewArgs) -> Result<()> {
 
     let title: String;
     let control_type: String;
+    let description: Option<String>;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -675,9 +676,11 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("control_type")
             .map(String::from)
             .unwrap_or_else(|| "inspection".to_string());
+        description = result.get_string("description").map(String::from);
     } else {
         title = args.title.unwrap_or_else(|| "New Control".to_string());
         control_type = args.r#type;
+        description = None;
     }
 
     // Validate control type
@@ -716,9 +719,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         ctx = ctx.with_characteristic_name(char_name);
     }
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_control(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard description via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                let indented = desc
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "description: |\n  # Detailed description of this control plan item\n  # Include what is being controlled and why",
+                    &format!("description: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Write file
     let output_dir = project.root().join("manufacturing/controls");

@@ -122,13 +122,26 @@
       "type": "object",
       "properties": {
         "process": {
-          "type": "string",
-          "description": "Parent process"
+          "type": ["string", "null"],
+          "description": "Parent process ID"
+        },
+        "component": {
+          "type": ["string", "null"],
+          "description": "Component ID this work instruction is for"
+        },
+        "assembly": {
+          "type": ["string", "null"],
+          "description": "Assembly ID this work instruction is for"
         },
         "controls": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Related control plan items"
+          "description": "IDs of related control plan items"
+        },
+        "risks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of risks addressed by following this instruction"
         }
       }
     },

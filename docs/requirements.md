@@ -235,11 +235,11 @@ tdt trace to REQ-01HC2
 # Find orphaned requirements
 tdt trace orphans
 
-# Verification coverage report
-tdt trace coverage
+# Verification coverage report (part of results summary)
+tdt rslt summary
 
 # Show uncovered requirements
-tdt trace coverage --uncovered
+tdt rslt summary --uncovered
 
 # Domain Mapping Matrix: requirements vs components
 tdt dmm req cmp --stats

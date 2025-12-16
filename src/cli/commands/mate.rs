@@ -606,6 +606,8 @@ fn run_new(args: NewArgs) -> Result<()> {
 
     let title: String;
     let mate_type: String;
+    let description: Option<String>;
+    let notes: Option<String>;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -619,9 +621,13 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("mate_type")
             .map(String::from)
             .unwrap_or_else(|| "clearance_fit".to_string());
+        description = result.get_string("description").map(String::from);
+        notes = result.get_string("notes").map(String::from);
     } else {
         title = args.title.unwrap_or_else(|| "New Mate".to_string());
         mate_type = args.mate_type;
+        description = None;
+        notes = None;
     }
 
     // Generate ID
@@ -642,9 +648,21 @@ fn run_new(args: NewArgs) -> Result<()> {
     // Try to calculate fit if both features have dimensions
     let fit_analysis = calculate_fit_from_features(&feat_a.unwrap(), &feat_b.unwrap());
 
-    // Parse and update with fit analysis
+    // Parse and update with fit analysis and wizard values
     let mut mate: Mate = serde_yml::from_str(&yaml_content).into_diagnostic()?;
     mate.fit_analysis = fit_analysis;
+    if args.interactive {
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                mate.description = Some(desc.clone());
+            }
+        }
+        if let Some(ref n) = notes {
+            if !n.is_empty() {
+                mate.notes = Some(n.clone());
+            }
+        }
+    }
     let yaml_content = serde_yml::to_string(&mate).into_diagnostic()?;
 
     // Write file

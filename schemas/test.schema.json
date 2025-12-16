@@ -192,6 +192,14 @@
           },
           "description": "IDs of risks whose mitigation this test verifies"
         },
+        "component": {
+          "type": ["string", "null"],
+          "description": "Component ID - item under test"
+        },
+        "assembly": {
+          "type": ["string", "null"],
+          "description": "Assembly ID - item under test"
+        },
         "depends_on": {
           "type": "array",
           "items": {

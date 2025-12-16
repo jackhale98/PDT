@@ -678,21 +678,6 @@ fn test_link_check_empty_project() {
 }
 
 // ============================================================================
-// Trace Command Tests
-// ============================================================================
-
-#[test]
-fn test_trace_coverage_empty_project() {
-    let tmp = setup_test_project();
-
-    tdt()
-        .current_dir(tmp.path())
-        .args(["trace", "coverage"])
-        .assert()
-        .success();
-}
-
-// ============================================================================
 // Cross-Command Integration Tests
 // ============================================================================
 

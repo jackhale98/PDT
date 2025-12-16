@@ -66,11 +66,14 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name"],
         "properties": {
+          "supplier_id": {
+            "type": ["string", "null"],
+            "description": "Supplier entity ID (SUP-...) - links to SUP entity"
+          },
           "name": {
             "type": ["string", "null"],
-            "description": "Supplier name"
+            "description": "Supplier name (fallback if supplier_id not set)"
           },
           "supplier_pn": {
             "type": ["string", "null"],
@@ -93,7 +96,7 @@
           }
         }
       },
-      "description": "Supplier information"
+      "description": "Supplier information (use supplier_id to link to SUP entities)"
     },
     "documents": {
       "type": "array",
@@ -133,12 +136,33 @@
     "links": {
       "type": "object",
       "properties": {
-        "related_to": {
+        "requirements": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "IDs of related entities"
+          "description": "IDs of requirements this component satisfies"
+        },
+        "processes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of processes used to manufacture this component"
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of tests for this component"
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of risks affecting this component"
         },
         "used_in": {
           "type": "array",
@@ -168,12 +192,12 @@
           },
           "description": "IDs of interchangeable components"
         },
-        "risks": {
+        "related_to": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "IDs of risks affecting this component"
+          "description": "IDs of related entities"
         }
       }
     },

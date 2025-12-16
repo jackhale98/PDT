@@ -1092,82 +1092,91 @@ fn run_new(args: NewArgs) -> Result<()> {
     let config = Config::load();
 
     // Determine values - either from schema-driven wizard or args
-    let (test_type, test_level, test_method, title, category, priority) = if args.interactive {
-        // Use the schema-driven wizard
-        let wizard = SchemaWizard::new();
-        let result = wizard.run(EntityPrefix::Test)?;
+    let (test_type, test_level, test_method, title, category, priority, objective, description) =
+        if args.interactive {
+            // Use the schema-driven wizard
+            let wizard = SchemaWizard::new();
+            let result = wizard.run(EntityPrefix::Test)?;
 
-        let test_type = result
-            .get_string("type")
-            .map(|s| match s {
-                "validation" => TestType::Validation,
-                _ => TestType::Verification,
-            })
-            .unwrap_or(TestType::Verification);
+            let test_type = result
+                .get_string("type")
+                .map(|s| match s {
+                    "validation" => TestType::Validation,
+                    _ => TestType::Verification,
+                })
+                .unwrap_or(TestType::Verification);
 
-        let test_level = result
-            .get_string("test_level")
-            .map(|s| match s {
-                "unit" => TestLevel::Unit,
-                "integration" => TestLevel::Integration,
-                "acceptance" => TestLevel::Acceptance,
-                _ => TestLevel::System,
-            })
-            .unwrap_or(TestLevel::System);
+            let test_level = result
+                .get_string("test_level")
+                .map(|s| match s {
+                    "unit" => TestLevel::Unit,
+                    "integration" => TestLevel::Integration,
+                    "acceptance" => TestLevel::Acceptance,
+                    _ => TestLevel::System,
+                })
+                .unwrap_or(TestLevel::System);
 
-        let test_method = result
-            .get_string("test_method")
-            .map(|s| match s {
-                "inspection" => TestMethod::Inspection,
-                "analysis" => TestMethod::Analysis,
-                "demonstration" => TestMethod::Demonstration,
-                _ => TestMethod::Test,
-            })
-            .unwrap_or(TestMethod::Test);
+            let test_method = result
+                .get_string("test_method")
+                .map(|s| match s {
+                    "inspection" => TestMethod::Inspection,
+                    "analysis" => TestMethod::Analysis,
+                    "demonstration" => TestMethod::Demonstration,
+                    _ => TestMethod::Test,
+                })
+                .unwrap_or(TestMethod::Test);
 
-        let title = result
-            .get_string("title")
-            .map(String::from)
-            .unwrap_or_else(|| "New Test Protocol".to_string());
+            let title = result
+                .get_string("title")
+                .map(String::from)
+                .unwrap_or_else(|| "New Test Protocol".to_string());
 
-        let category = result
-            .get_string("category")
-            .map(String::from)
-            .unwrap_or_default();
+            let category = result
+                .get_string("category")
+                .map(String::from)
+                .unwrap_or_default();
 
-        let priority = result
-            .get_string("priority")
-            .map(String::from)
-            .unwrap_or_else(|| "medium".to_string());
+            let priority = result
+                .get_string("priority")
+                .map(String::from)
+                .unwrap_or_else(|| "medium".to_string());
 
-        (
-            test_type,
-            test_level,
-            test_method,
-            title,
-            category,
-            priority,
-        )
-    } else {
-        // Default mode - use args with defaults
-        let test_type: TestType = args.r#type.into();
-        let test_level: TestLevel = args.level.into();
-        let test_method: TestMethod = args.method.into();
-        let title = args
-            .title
-            .unwrap_or_else(|| "New Test Protocol".to_string());
-        let category = args.category.unwrap_or_default();
-        let priority = args.priority.to_string();
+            // Extract text fields
+            let objective = result.get_string("objective").map(String::from);
+            let description = result.get_string("description").map(String::from);
 
-        (
-            test_type,
-            test_level,
-            test_method,
-            title,
-            category,
-            priority,
-        )
-    };
+            (
+                test_type,
+                test_level,
+                test_method,
+                title,
+                category,
+                priority,
+                objective,
+                description,
+            )
+        } else {
+            // Default mode - use args with defaults
+            let test_type: TestType = args.r#type.into();
+            let test_level: TestLevel = args.level.into();
+            let test_method: TestMethod = args.method.into();
+            let title = args
+                .title
+                .unwrap_or_else(|| "New Test Protocol".to_string());
+            let category = args.category.unwrap_or_default();
+            let priority = args.priority.to_string();
+
+            (
+                test_type,
+                test_level,
+                test_method,
+                title,
+                category,
+                priority,
+                None,
+                None,
+            )
+        };
 
     // Generate entity ID and create from template
     let id = EntityId::new(EntityPrefix::Test);
@@ -1182,9 +1191,39 @@ fn run_new(args: NewArgs) -> Result<()> {
         .with_category(&category)
         .with_priority(&priority);
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_test(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard text values via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref obj) = objective {
+            if !obj.is_empty() {
+                let indented = obj
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "objective: |\n  # What does this test verify or validate?\n  # Be specific about success criteria",
+                    &format!("objective: |\n{}", indented),
+                );
+            }
+        }
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                let indented = desc
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "description: |\n  # Detailed description of the test\n  # Include any background or context",
+                    &format!("description: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Determine output directory based on type
     let output_dir = project.test_directory(&test_type.to_string());

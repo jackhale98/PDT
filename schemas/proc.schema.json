@@ -109,27 +109,36 @@
         "produces": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Components produced"
+          "description": "IDs of components produced by this process"
+        },
+        "requirements": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of requirements this process implements"
+        },
+        "supplier": {
+          "type": ["string", "null"],
+          "description": "Supplier ID if process is outsourced"
         },
         "controls": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Control plan items"
+          "description": "IDs of control plan items for this process"
         },
         "work_instructions": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Work instructions"
+          "description": "IDs of work instructions for this process"
         },
         "risks": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Related risks"
+          "description": "IDs of risks associated with this process"
         },
         "related_to": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Related entities"
+          "description": "IDs of other related entities"
         }
       }
     },

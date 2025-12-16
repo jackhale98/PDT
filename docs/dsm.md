@@ -7,6 +7,7 @@ This document describes the Design Structure Matrix command in TDT (Tessera Desi
 The Design Structure Matrix (DSM) is a systems engineering tool that visualizes relationships between components in your product. It helps identify:
 
 - **Physical interfaces** (mates between components)
+- **Tolerance chains** (components linked in tolerance stackups)
 - **Process dependencies** (components sharing manufacturing processes)
 - **Requirement allocation** (components linked to the same requirements)
 
@@ -28,7 +29,7 @@ tdt dsm [OPTIONS] [ASSEMBLY]
 
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--rel-type` | `-t` | Relationship types to include: `all`, `mate`, `process`, `requirement` (default: `all`) |
+| `--rel-type` | `-t` | Relationship types to include: `all`, `mate`, `tolerance`, `process`, `requirement` (default: `all`) |
 | `--output` | `-o` | Output format: `table`, `csv`, `dot`, `json` (default: `table`) |
 | `--cluster` | `-c` | Apply clustering optimization to group related components |
 | `--weighted` | `-w` | Show numeric dependency strength instead of relationship type symbols |
@@ -56,9 +57,9 @@ CMP@1     ■      M      ·
 CMP@2     M      ■      P
 CMP@3     ·      P      ■
 
-Legend: M = Mate P = Process R = Requirement
+Legend: M = Mate T = Tolerance P = Process R = Requirement
 
-Summary: 3 components, 1 mate interfaces, 1 process links, 0 requirement links
+Summary: 3 components, 1 mate, 0 tolerance, 1 process, 0 requirement
 ```
 
 ### Filter by Relationship Type
@@ -67,6 +68,12 @@ Show only mate relationships:
 
 ```bash
 tdt dsm -t mate
+```
+
+Show only tolerance stackup relationships:
+
+```bash
+tdt dsm -t tolerance
 ```
 
 Show only process relationships:
@@ -101,9 +108,9 @@ CMP@1     ■      M      ·
 CMP@3     M      ■      P
 CMP@2     ·      P      ■
 
-Legend: M = Mate P = Process R = Requirement
+Legend: M = Mate T = Tolerance P = Process R = Requirement
 
-Summary: 3 components, 1 mate interfaces, 1 process links, 0 requirement links
+Summary: 3 components, 1 mate, 0 tolerance, 1 process, 0 requirement
 
 Identified Clusters:
   Cluster 1: CMP@1, CMP@3
@@ -180,8 +187,9 @@ Legend: Numbers show dependency strength (count of relationship types)
 
 Values indicate how many relationship types connect each pair:
 - `1` = single relationship type (e.g., just Mate)
-- `2` = two relationship types (e.g., Mate + Process)
-- `3` = all three types (Mate + Process + Requirement)
+- `2` = two relationship types (e.g., Mate + Tolerance)
+- `3` = three relationship types (e.g., Mate + Tolerance + Process)
+- `4` = all four types (Mate + Tolerance + Process + Requirement)
 
 ### Coupling Metrics
 
@@ -244,10 +252,11 @@ Cycles indicate tightly coupled subsystems where changes propagate both ways.
 |--------|---------|
 | `■` | Diagonal (component with itself) |
 | `M` | Mate relationship (physical interface) |
+| `T` | Tolerance relationship (tolerance stackup) |
 | `P` | Process relationship (shared manufacturing) |
 | `R` | Requirement relationship (common allocation) |
 | `·` | No relationship |
-| `M,P` | Multiple relationship types |
+| `M,T` | Multiple relationship types |
 
 ### Relationship Types
 
@@ -255,6 +264,11 @@ Cycles indicate tightly coupled subsystems where changes propagate both ways.
 - Detected from mate entities that connect features on different components
 - Indicates physical interfaces requiring tolerance analysis
 - Example: A bearing housing mating with a shaft
+
+**Tolerance (T)**
+- Components linked through tolerance stackups
+- Indicates dimensional chains requiring analysis
+- Example: Multiple parts contributing to an assembly gap
 
 **Process (P)**
 - Components linked to the same manufacturing process

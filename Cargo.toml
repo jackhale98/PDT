@@ -1,6 +1,6 @@
 [package]
 name = "tessera-design-toolkit"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Tessera Design Toolkit - A CLI for managing engineering artifacts as plain-text YAML files with full traceability"
 license = "MIT"

@@ -91,17 +91,26 @@
       "type": "object",
       "properties": {
         "process": {
-          "type": "string",
-          "description": "Parent process"
+          "type": ["string", "null"],
+          "description": "Parent process ID"
+        },
+        "component": {
+          "type": ["string", "null"],
+          "description": "Component ID being controlled"
         },
         "feature": {
           "type": ["string", "null"],
-          "description": "Feature being controlled"
+          "description": "Feature ID being controlled"
+        },
+        "risks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of risks this control mitigates"
         },
         "verifies": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "Requirements verified"
+          "description": "IDs of requirements this control verifies"
         }
       }
     },

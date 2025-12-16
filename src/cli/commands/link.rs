@@ -29,55 +29,83 @@ pub enum LinkCommands {
 #[command(after_help = "\
 LINK TYPES:
   Requirements (REQ):
-    satisfied_by    REQ that satisfies this requirement (symmetric)
+    satisfied_by    Entity that satisfies this requirement (→ requirements)
     verified_by     TEST or CTRL that verifies this requirement (→ verifies)
     derives_from    Parent REQ this derives from (→ derived_by)
     allocated_to    FEAT this requirement is allocated to (→ allocated_from)
+    risks           RISKs associated with this requirement (→ requirement)
 
-  Tests (TEST) / Controls (CTRL):
-    verifies        REQ that this test/control verifies (→ verified_by)
-
-  Risks (RISK):
-    affects         Any entity affected by this risk: FEAT, CMP, ASM, PROC (→ risks)
-    mitigated_by    Design output that mitigates this risk
-    verified_by     TEST that verifies mitigation
-    related_to      Any related entity (symmetric)
+  Tests (TEST):
+    verifies        REQ that this test verifies (→ verified_by)
+    component       CMP being tested (→ tests)
+    assembly        ASM being tested (→ tests)
 
   Results (RSLT):
-    created_ncr     NCR created from this result (→ from_result)
+    component       CMP that was tested (→ tests)
+    assembly        ASM that was tested (→ tests)
+    ncrs            NCRs created from failures (→ from_result)
 
-  NCRs (NCR):
-    from_result     RSLT that created this NCR (→ created_ncr)
+  Risks (RISK):
+    requirement     REQ this risk is associated with (→ risks)
+    component       CMP primarily affected (single-value)
+    assembly        ASM primarily affected (single-value)
+    process         PROC associated with this risk (→ risks)
+    affects         Additional entities affected (→ risks)
+    mitigated_by    Design output that mitigates this risk
+    verified_by     TEST that verifies mitigation
+    controls        CTRL items that address this risk (→ risks)
 
-  CAPAs (CAPA):
-    processes_modified   PROC modified by this CAPA (→ modified_by_capa)
-    controls_added       CTRL added by this CAPA (→ added_by_capa)
-    ncrs                 Source NCRs for this CAPA
-
-  Components (CMP):
-    replaces             CMP this replaces (→ replaced_by)
-    replaced_by          CMP that replaces this (→ replaces)
-    interchangeable_with CMP that is interchangeable (symmetric)
-    risks                RISKs affecting this component (→ affects)
+  Components (CMP) / Assemblies (ASM):
+    requirements    REQs this component satisfies (→ satisfied_by)
+    processes       PROCs used to manufacture this (→ produces)
+    tests           TESTs for this component (→ component)
+    risks           RISKs affecting this component
+    used_in         ASMs using this component
+    replaces        CMP this replaces (→ replaced_by)
+    replaced_by     CMP that replaces this (→ replaces)
 
   Processes (PROC):
-    risks                RISKs affecting this process (→ affects)
-    modified_by_capa     CAPA that modified this process (→ processes_modified)
+    requirements    REQs this process implements
+    produces        CMPs/ASMs produced (→ processes)
+    risks           RISKs affecting this process
 
-  Features (FEAT):
-    allocated_from       REQs allocated to this feature (→ allocated_to)
-    risks                RISKs affecting this feature (→ affects)
+  Controls (CTRL):
+    verifies        REQ that this control verifies (→ verified_by)
+    component       CMP being controlled
+    risks           RISKs this control mitigates
+
+  Work Instructions (WORK):
+    component       CMP this instruction is for
+    assembly        ASM this instruction is for
+    risks           RISKs addressed by following this
+
+  NCRs (NCR):
+    component       CMP affected
+    supplier        SUP related to this NCR
+    process         PROC related to this NCR
+    from_result     RSLT that created this NCR (→ ncrs)
+    capa            CAPA opened for this NCR (→ ncrs)
+
+  CAPAs (CAPA):
+    ncrs                 Source NCRs for this CAPA
+    component            CMP this CAPA addresses
+    supplier             SUP this CAPA is for
+    risks                RISKs addressed by this CAPA
+    processes_modified   PROC modified by this CAPA (→ modified_by_capa)
+    controls_added       CTRL added by this CAPA (→ added_by_capa)
 
   General (all entities):
     related_to           Symmetric link to any related entity
 
   Reciprocal links are added by default. Use --no-reciprocal to skip.
+  Single-value links (component, assembly, requirement, etc.) replace existing values.
 
 EXAMPLES:
   tdt link add REQ@1 TEST@1                   # Auto-infers 'verified_by' (both directions)
-  tdt link add RISK@1 CMP@1                   # Auto-infers 'affects' (both directions)
-  tdt link add TEST@1 REQ@1                   # Auto-infers 'verifies' (both directions)
-  tdt link add REQ@1 TEST@1 verified_by       # Explicit link type
+  tdt link add TEST@1 CMP@1                   # Links test to component under test
+  tdt link add CMP@1 REQ@1                    # Links component to requirement it satisfies
+  tdt link add RISK@1 CMP@1                   # Links risk to affected component
+  tdt link add NCR@1 CMP@1                    # Links NCR to affected component
   tdt link add REQ@1 REQ@2 derives_from       # Requirement decomposition
   tdt link add CAPA@1 PROC@1 --no-reciprocal  # One-way only
 ")]
@@ -645,18 +673,25 @@ fn add_link_to_yaml(content: &str, link_type: &str, target_id: &str) -> Result<S
         .get_mut("links")
         .ok_or_else(|| miette::miette!("No 'links' section found in file"))?;
 
-    let link_array = links
+    let link_value = links
         .get_mut(link_type)
         .ok_or_else(|| miette::miette!("Unknown link type: {}", link_type))?;
 
-    // Add the new ID if not already present
-    if let Some(arr) = link_array.as_sequence_mut() {
+    // Handle both array links and single-value links
+    if let Some(arr) = link_value.as_sequence_mut() {
+        // Array link - add to array if not already present
         let new_value = serde_yml::Value::String(target_id.to_string());
         if !arr.contains(&new_value) {
             arr.push(new_value);
         }
+    } else if link_value.is_null() || link_value.as_str().is_some() {
+        // Single-value link (null or existing string) - replace with new value
+        *link_value = serde_yml::Value::String(target_id.to_string());
     } else {
-        return Err(miette::miette!("Link type '{}' is not an array", link_type));
+        return Err(miette::miette!(
+            "Link type '{}' has unexpected format (not array or single value)",
+            link_type
+        ));
     }
 
     // Serialize back
@@ -673,14 +708,20 @@ fn remove_link_from_yaml(content: &str, link_type: &str, target_id: &str) -> Res
         .get_mut("links")
         .ok_or_else(|| miette::miette!("No 'links' section found in file"))?;
 
-    let link_array = links
+    let link_value = links
         .get_mut(link_type)
         .ok_or_else(|| miette::miette!("Unknown link type: {}", link_type))?;
 
-    // Remove the ID
-    if let Some(arr) = link_array.as_sequence_mut() {
+    // Handle both array links and single-value links
+    if let Some(arr) = link_value.as_sequence_mut() {
+        // Array link - remove from array
         let remove_value = serde_yml::Value::String(target_id.to_string());
         arr.retain(|v| v != &remove_value);
+    } else if let Some(current) = link_value.as_str() {
+        // Single-value link - clear if it matches
+        if current == target_id {
+            *link_value = serde_yml::Value::Null;
+        }
     }
 
     // Serialize back
@@ -849,38 +890,77 @@ fn infer_link_type(source_prefix: EntityPrefix, target_prefix: EntityPrefix) -> 
         (EntityPrefix::Req, EntityPrefix::Feat) => Some("allocated_to".to_string()),
 
         // Requirements linking to risks
-        (EntityPrefix::Req, EntityPrefix::Risk) => Some("related_to".to_string()),
+        (EntityPrefix::Req, EntityPrefix::Risk) => Some("risks".to_string()),
 
         // Verification entities linking to requirements
         (EntityPrefix::Test, EntityPrefix::Req) => Some("verifies".to_string()),
         (EntityPrefix::Ctrl, EntityPrefix::Req) => Some("verifies".to_string()),
 
-        // Risks affecting entities
+        // Tests linking to components/assemblies (item under test)
+        (EntityPrefix::Test, EntityPrefix::Cmp) => Some("component".to_string()),
+        (EntityPrefix::Test, EntityPrefix::Asm) => Some("assembly".to_string()),
+
+        // Results linking to components/assemblies (item tested)
+        (EntityPrefix::Rslt, EntityPrefix::Cmp) => Some("component".to_string()),
+        (EntityPrefix::Rslt, EntityPrefix::Asm) => Some("assembly".to_string()),
+
+        // Risks linking to specific entities (single-value links)
+        (EntityPrefix::Risk, EntityPrefix::Req) => Some("requirement".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Cmp) => Some("component".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Asm) => Some("assembly".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Proc) => Some("process".to_string()),
         (EntityPrefix::Risk, EntityPrefix::Feat) => Some("affects".to_string()),
-        (EntityPrefix::Risk, EntityPrefix::Cmp) => Some("affects".to_string()),
-        (EntityPrefix::Risk, EntityPrefix::Asm) => Some("affects".to_string()),
-        (EntityPrefix::Risk, EntityPrefix::Proc) => Some("affects".to_string()),
         (EntityPrefix::Risk, EntityPrefix::Test) => Some("verified_by".to_string()),
-        (EntityPrefix::Risk, EntityPrefix::Req) => Some("related_to".to_string()),
+        (EntityPrefix::Risk, EntityPrefix::Ctrl) => Some("controls".to_string()),
 
         // Entities referencing risks
         (EntityPrefix::Feat, EntityPrefix::Risk) => Some("risks".to_string()),
         (EntityPrefix::Cmp, EntityPrefix::Risk) => Some("risks".to_string()),
         (EntityPrefix::Asm, EntityPrefix::Risk) => Some("risks".to_string()),
         (EntityPrefix::Proc, EntityPrefix::Risk) => Some("risks".to_string()),
+        (EntityPrefix::Ctrl, EntityPrefix::Risk) => Some("risks".to_string()),
+        (EntityPrefix::Work, EntityPrefix::Risk) => Some("risks".to_string()),
+
+        // Components/Assemblies linking to requirements
+        (EntityPrefix::Cmp, EntityPrefix::Req) => Some("requirements".to_string()),
+        (EntityPrefix::Asm, EntityPrefix::Req) => Some("requirements".to_string()),
+
+        // Components/Assemblies linking to processes
+        (EntityPrefix::Cmp, EntityPrefix::Proc) => Some("processes".to_string()),
+        (EntityPrefix::Asm, EntityPrefix::Proc) => Some("processes".to_string()),
+
+        // Components/Assemblies linking to tests
+        (EntityPrefix::Cmp, EntityPrefix::Test) => Some("tests".to_string()),
+        (EntityPrefix::Asm, EntityPrefix::Test) => Some("tests".to_string()),
+
+        // Processes linking to requirements
+        (EntityPrefix::Proc, EntityPrefix::Req) => Some("requirements".to_string()),
+
+        // Controls linking to components
+        (EntityPrefix::Ctrl, EntityPrefix::Cmp) => Some("component".to_string()),
+
+        // Work instructions linking to components/assemblies
+        (EntityPrefix::Work, EntityPrefix::Cmp) => Some("component".to_string()),
+        (EntityPrefix::Work, EntityPrefix::Asm) => Some("assembly".to_string()),
 
         // Features to requirements (allocation back-link)
         (EntityPrefix::Feat, EntityPrefix::Req) => Some("allocated_from".to_string()),
 
         // Results and NCRs
-        (EntityPrefix::Rslt, EntityPrefix::Ncr) => Some("created_ncr".to_string()),
+        (EntityPrefix::Rslt, EntityPrefix::Ncr) => Some("ncrs".to_string()),
         (EntityPrefix::Ncr, EntityPrefix::Rslt) => Some("from_result".to_string()),
         (EntityPrefix::Ncr, EntityPrefix::Capa) => Some("capa".to_string()),
+        (EntityPrefix::Ncr, EntityPrefix::Cmp) => Some("component".to_string()),
+        (EntityPrefix::Ncr, EntityPrefix::Sup) => Some("supplier".to_string()),
+        (EntityPrefix::Ncr, EntityPrefix::Proc) => Some("process".to_string()),
 
         // CAPAs
         (EntityPrefix::Capa, EntityPrefix::Ncr) => Some("ncrs".to_string()),
         (EntityPrefix::Capa, EntityPrefix::Proc) => Some("processes_modified".to_string()),
         (EntityPrefix::Capa, EntityPrefix::Ctrl) => Some("controls_added".to_string()),
+        (EntityPrefix::Capa, EntityPrefix::Cmp) => Some("component".to_string()),
+        (EntityPrefix::Capa, EntityPrefix::Sup) => Some("supplier".to_string()),
+        (EntityPrefix::Capa, EntityPrefix::Risk) => Some("risks".to_string()),
 
         // Process/Control back-links to CAPA
         (EntityPrefix::Proc, EntityPrefix::Capa) => Some("modified_by_capa".to_string()),
@@ -912,13 +992,34 @@ fn get_reciprocal_link_type(link_type: &str, target_prefix: EntityPrefix) -> Opt
         // TEST.verifies -> REQ or CTRL.verifies -> REQ means REQ.verified_by
         ("verifies", EntityPrefix::Req) => Some("verified_by".to_string()),
 
+        // TEST/RSLT linking to component/assembly - reciprocal is tests array
+        ("component", EntityPrefix::Cmp) => Some("tests".to_string()),
+        ("assembly", EntityPrefix::Asm) => Some("tests".to_string()),
+
+        // CMP/ASM.tests -> TEST means TEST.component or TEST.assembly (no reciprocal needed - handled above)
+        ("tests", EntityPrefix::Test) => None, // Already handled by component/assembly
+
+        // CMP/ASM.requirements -> REQ means REQ.satisfied_by -> CMP/ASM
+        ("requirements", EntityPrefix::Req) => Some("satisfied_by".to_string()),
+
+        // CMP/ASM.processes -> PROC means PROC.produces -> CMP
+        ("processes", EntityPrefix::Proc) => Some("produces".to_string()),
+        ("produces", EntityPrefix::Cmp) => Some("processes".to_string()),
+        ("produces", EntityPrefix::Asm) => Some("processes".to_string()),
+
+        // RISK single-value links
+        ("requirement", EntityPrefix::Req) => Some("risks".to_string()),
+        ("component", EntityPrefix::Risk) => None, // RISK.component is single-value
+        ("assembly", EntityPrefix::Risk) => None,  // RISK.assembly is single-value
+        ("process", EntityPrefix::Proc) => Some("risks".to_string()),
+
+        // RISK.controls -> CTRL means CTRL.risks -> RISK
+        ("controls", EntityPrefix::Ctrl) => Some("risks".to_string()),
+
         // related_to is symmetric
         ("related_to", _) => Some("related_to".to_string()),
 
-        // process/control/ncr/capa links
-        ("process", EntityPrefix::Proc) => None, // Processes don't link back
-        ("controls", EntityPrefix::Ctrl) => Some("process".to_string()),
-        ("ncrs", EntityPrefix::Ncr) => None,
+        // capa link
         ("capa", EntityPrefix::Capa) => Some("ncrs".to_string()),
 
         // Requirement decomposition: derives_from <-> derived_by
@@ -929,16 +1030,20 @@ fn get_reciprocal_link_type(link_type: &str, target_prefix: EntityPrefix) -> Opt
         ("allocated_to", EntityPrefix::Feat) => Some("allocated_from".to_string()),
         ("allocated_from", EntityPrefix::Req) => Some("allocated_to".to_string()),
 
-        // RISK.affects -> target.risks (simplified from affects_*)
+        // REQ.risks -> RISK means RISK.requirement -> REQ
+        ("risks", EntityPrefix::Risk) => Some("requirement".to_string()),
+
+        // RISK.affects -> target.risks
         ("affects", EntityPrefix::Feat) => Some("risks".to_string()),
         ("affects", EntityPrefix::Cmp) => Some("risks".to_string()),
         ("affects", EntityPrefix::Asm) => Some("risks".to_string()),
         ("affects", EntityPrefix::Proc) => Some("risks".to_string()),
-        ("risks", EntityPrefix::Risk) => Some("affects".to_string()),
 
-        // Result -> NCR: created_ncr <-> from_result
-        ("created_ncr", EntityPrefix::Ncr) => Some("from_result".to_string()),
-        ("from_result", EntityPrefix::Rslt) => Some("created_ncr".to_string()),
+        // Result -> NCR: from_result link
+        ("from_result", EntityPrefix::Rslt) => Some("ncrs".to_string()),
+
+        // NCR single-value links (component, supplier, process) - no reciprocals
+        ("supplier", _) => None, // Supplier doesn't link back to NCRs/CAPAs
 
         // CAPA -> Process/Control modifications
         ("processes_modified", EntityPrefix::Proc) => Some("modified_by_capa".to_string()),

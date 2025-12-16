@@ -690,6 +690,7 @@ fn run_new(args: NewArgs) -> Result<()> {
     let target_nominal: f64;
     let target_upper: f64;
     let target_lower: f64;
+    let description: Option<String>;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -715,12 +716,14 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("target.lower_limit")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0.0);
+        description = result.get_string("description").map(String::from);
     } else {
         title = args.title.unwrap_or_else(|| "New Stackup".to_string());
         target_name = args.target_name.unwrap_or_else(|| "Target".to_string());
         target_nominal = args.target_nominal.unwrap_or(0.0);
         target_upper = args.target_upper.unwrap_or(0.0);
         target_lower = args.target_lower.unwrap_or(0.0);
+        description = None;
     }
 
     // Generate ID
@@ -732,9 +735,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         .with_title(&title)
         .with_target(&target_name, target_nominal, target_upper, target_lower);
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_stackup(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard description via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                let indented = desc
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "description: |\n  # Detailed description of this tolerance stackup\n  # Include the tolerance chain being analyzed",
+                    &format!("description: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Write file
     let output_dir = project.root().join("tolerances/stackups");

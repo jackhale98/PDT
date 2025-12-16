@@ -5,7 +5,7 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::helpers::{escape_csv, format_short_id, format_short_id_str, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
@@ -217,6 +217,14 @@ pub struct SummaryArgs {
     /// Include detailed breakdown by test type
     #[arg(long, short = 'd')]
     pub detailed: bool,
+
+    /// Show list of uncovered requirements (no test verification)
+    #[arg(long, short = 'u')]
+    pub uncovered: bool,
+
+    /// Filter requirements by type (input/output) for coverage check
+    #[arg(long)]
+    pub req_type: Option<String>,
 }
 
 pub fn run(cmd: RsltCommands, global: &GlobalOpts) -> Result<()> {
@@ -862,7 +870,7 @@ fn run_new(args: NewArgs) -> Result<()> {
     let config = Config::load();
 
     // Determine values - either from schema-driven wizard or args
-    let (test_id, verdict, title, category, executed_by) = if args.interactive {
+    let (test_id, verdict, title, category, executed_by, verdict_rationale) = if args.interactive {
         // Use the schema-driven wizard
         let wizard = SchemaWizard::new();
         let result = wizard.run(EntityPrefix::Rslt)?;
@@ -901,7 +909,9 @@ fn run_new(args: NewArgs) -> Result<()> {
             .map(String::from)
             .unwrap_or_else(|| config.author());
 
-        (test_id, verdict, title, category, executed_by)
+        let verdict_rationale = result.get_string("verdict_rationale").map(String::from);
+
+        (test_id, verdict, title, category, executed_by, verdict_rationale)
     } else {
         // Default mode - use args with defaults
         let test_id = if let Some(test_query) = &args.test {
@@ -934,7 +944,7 @@ fn run_new(args: NewArgs) -> Result<()> {
         let category = args.category.unwrap_or_default();
         let executed_by = args.executed_by.unwrap_or_else(|| config.author());
 
-        (test_id, verdict, title, category, executed_by)
+        (test_id, verdict, title, category, executed_by, None)
     };
 
     // Determine test type by looking up the test
@@ -955,9 +965,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         ctx = ctx.with_title(t);
     }
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_result(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard values via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref rationale) = verdict_rationale {
+            if !rationale.is_empty() {
+                let indented = rationale
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "verdict_rationale: |\n  # Explain the verdict\n  # Especially important for fail or conditional results",
+                    &format!("verdict_rationale: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Determine output directory based on test type
     let output_dir = project.result_directory(&test_type);
@@ -1294,6 +1321,9 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
         None,                   // limit
     );
 
+    // Get uncovered requirements if requested or for display
+    let uncovered_reqs = get_uncovered_requirements(&cache, args.req_type.as_deref());
+
     if results.is_empty() {
         match global.format {
             OutputFormat::Json => println!("{{}}"),
@@ -1392,7 +1422,8 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                     "total": coverage.total_requirements,
                     "with_tests": coverage.with_tests,
                     "without_tests": coverage.without_tests,
-                    "percent": coverage.coverage_percent
+                    "percent": coverage.coverage_percent,
+                    "uncovered_ids": uncovered_reqs.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>()
                 }
             });
             println!(
@@ -1418,7 +1449,8 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                 "requirement_coverage": {
                     "total": coverage.total_requirements,
                     "with_tests": coverage.with_tests,
-                    "percent": coverage.coverage_percent
+                    "percent": coverage.coverage_percent,
+                    "uncovered_ids": uncovered_reqs.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>()
                 }
             });
             println!("{}", serde_yml::to_string(&summary).unwrap_or_default());
@@ -1549,8 +1581,85 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
                 coverage.with_tests,
                 coverage.total_requirements
             );
+
+            // Show uncovered requirements if requested or if there are few
+            if !uncovered_reqs.is_empty() && (args.uncovered || uncovered_reqs.len() <= 10) {
+                println!();
+                println!("{}", style("Uncovered Requirements:").bold().red());
+                println!("{}", style("─".repeat(50)).dim());
+                for (id, title) in &uncovered_reqs {
+                    let short = short_ids
+                        .get_short_id(id)
+                        .unwrap_or_else(|| format_short_id_str(id));
+                    println!(
+                        "  {} {} - {}",
+                        style("○").red(),
+                        style(&short).cyan(),
+                        truncate_str(title, 40)
+                    );
+                }
+            } else if !uncovered_reqs.is_empty() {
+                println!();
+                println!(
+                    "  {} uncovered requirements. Use {} to see the list",
+                    style(uncovered_reqs.len()).red(),
+                    style("tdt rslt summary --uncovered").yellow()
+                );
+            }
         }
     }
 
     Ok(())
+}
+
+/// Get list of uncovered requirements (no test verification)
+fn get_uncovered_requirements(
+    cache: &EntityCache,
+    req_type_filter: Option<&str>,
+) -> Vec<(String, String)> {
+    // Get all requirements
+    let requirements = cache.list_requirements(None, None, None, None, None, None, None);
+
+    // Get all tests to check verifies links
+    let tests = cache.list_tests(None, None, None, None, None, None, None, None, None);
+
+    // Build set of requirement IDs verified by tests
+    let mut verified_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for test in &tests {
+        let links = cache.get_links_from(&test.id);
+        for link in links {
+            if link.link_type == "verifies" && link.target_id.starts_with("REQ-") {
+                verified_ids.insert(link.target_id);
+            }
+        }
+    }
+
+    // Also check reverse links (requirement.links.verified_by)
+    for req in &requirements {
+        let links = cache.get_links_to(&req.id);
+        for link in links {
+            if link.link_type == "verified_by" {
+                verified_ids.insert(req.id.clone());
+            }
+        }
+    }
+
+    // Filter to uncovered and optionally by type
+    let mut uncovered = Vec::new();
+    for req in &requirements {
+        // Apply type filter if specified
+        if let Some(filter) = req_type_filter {
+            let req_type = req.req_type.as_deref().unwrap_or("");
+            if !req_type.eq_ignore_ascii_case(filter) {
+                continue;
+            }
+        }
+
+        if !verified_ids.contains(&req.id) {
+            uncovered.push((req.id.clone(), req.title.clone()));
+        }
+    }
+
+    uncovered
 }

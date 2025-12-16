@@ -5,14 +5,12 @@ use miette::{IntoDiagnostic, Result};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use crate::cli::helpers::{escape_csv, format_short_id, format_short_id_str, truncate_str};
+use crate::cli::helpers::{escape_csv, format_short_id_str, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::EntityPrefix;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
-use crate::entities::requirement::Requirement;
-use crate::entities::test::Test;
 
 /// A generic entity with extracted link information
 #[derive(Debug, Clone)]
@@ -36,9 +34,6 @@ pub enum TraceCommands {
 
     /// Find orphaned requirements (no incoming or outgoing links)
     Orphans(OrphansArgs),
-
-    /// Coverage report - requirements with/without verification
-    Coverage(CoverageArgs),
 }
 
 #[derive(clap::Args, Debug)]
@@ -107,24 +102,12 @@ pub struct OrphansArgs {
     pub entity_type: Option<String>,
 }
 
-#[derive(clap::Args, Debug)]
-pub struct CoverageArgs {
-    /// Filter by requirement type (input/output)
-    #[arg(long, short = 't')]
-    pub r#type: Option<String>,
-
-    /// Show only uncovered requirements
-    #[arg(long)]
-    pub uncovered: bool,
-}
-
 pub fn run(cmd: TraceCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         TraceCommands::Matrix(args) => run_matrix(args, global),
         TraceCommands::From(args) => run_from(args),
         TraceCommands::To(args) => run_to(args),
         TraceCommands::Orphans(args) => run_orphans(args, global),
-        TraceCommands::Coverage(args) => run_coverage(args, global),
     }
 }
 
@@ -796,182 +779,6 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     Ok(())
-}
-
-fn run_coverage(args: CoverageArgs, global: &GlobalOpts) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let reqs = load_all_requirements(&project)?;
-    let tests = load_all_tests(&project);
-
-    // Build set of requirement IDs that are verified by tests (via test.links.verifies)
-    let mut verified_by_tests: HashSet<String> = HashSet::new();
-    for test in &tests {
-        for req_id in &test.links.verifies {
-            verified_by_tests.insert(req_id.to_string());
-        }
-    }
-
-    // Filter by type if specified
-    let filtered: Vec<&Requirement> = reqs
-        .iter()
-        .filter(|r| {
-            if let Some(ref t) = args.r#type {
-                r.req_type.to_string().to_lowercase() == t.to_lowercase()
-            } else {
-                true
-            }
-        })
-        .collect();
-
-    let total = filtered.len();
-    let mut covered = 0;
-    let mut uncovered_list = Vec::new();
-
-    for req in &filtered {
-        // Check both: req.links.verified_by AND tests that verify this req
-        let has_verification =
-            !req.links.verified_by.is_empty() || verified_by_tests.contains(&req.id.to_string());
-        if has_verification {
-            covered += 1;
-        } else {
-            uncovered_list.push(*req);
-        }
-    }
-
-    let coverage_pct = if total > 0 {
-        (covered as f64 / total as f64) * 100.0
-    } else {
-        100.0
-    };
-
-    // Output based on format
-    match global.format {
-        OutputFormat::Json => {
-            #[derive(serde::Serialize)]
-            struct CoverageReport {
-                total: usize,
-                covered: usize,
-                uncovered: usize,
-                coverage_percent: f64,
-                uncovered_ids: Vec<String>,
-            }
-            let report = CoverageReport {
-                total,
-                covered,
-                uncovered: uncovered_list.len(),
-                coverage_percent: coverage_pct,
-                uncovered_ids: uncovered_list.iter().map(|r| r.id.to_string()).collect(),
-            };
-            let json = serde_json::to_string_pretty(&report).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Id => {
-            // Just output uncovered IDs
-            for req in &uncovered_list {
-                println!("{}", req.id);
-            }
-        }
-        _ => {
-            println!("{}", style("Verification Coverage Report").bold());
-            println!("{}", style("═".repeat(60)).dim());
-            println!();
-            println!("Total requirements:     {}", style(total).cyan());
-            println!("With verification:      {}", style(covered).green());
-            println!(
-                "Without verification:   {}",
-                if uncovered_list.is_empty() {
-                    style(uncovered_list.len()).green()
-                } else {
-                    style(uncovered_list.len()).red()
-                }
-            );
-            println!();
-            println!(
-                "Coverage: {}",
-                if coverage_pct >= 100.0 {
-                    style(format!("{:.1}%", coverage_pct)).green().bold()
-                } else if coverage_pct >= 80.0 {
-                    style(format!("{:.1}%", coverage_pct)).yellow()
-                } else {
-                    style(format!("{:.1}%", coverage_pct)).red()
-                }
-            );
-
-            if !uncovered_list.is_empty() && (args.uncovered || uncovered_list.len() <= 10) {
-                println!();
-                println!("{}", style("Uncovered Requirements:").bold());
-                println!("{}", style("─".repeat(60)).dim());
-
-                for req in &uncovered_list {
-                    println!(
-                        "  {} {} - {}",
-                        style("○").red(),
-                        format_short_id(&req.id),
-                        truncate_str(&req.title, 45)
-                    );
-                }
-            } else if !uncovered_list.is_empty() {
-                println!();
-                println!(
-                    "Use {} to see the full list",
-                    style("tdt trace coverage --uncovered").yellow()
-                );
-            }
-        }
-    }
-
-    Ok(())
-}
-
-/// Load all requirements from the project
-fn load_all_requirements(project: &Project) -> Result<Vec<Requirement>> {
-    let mut reqs = Vec::new();
-
-    for path in project.iter_entity_files(EntityPrefix::Req) {
-        if let Ok(req) = crate::yaml::parse_yaml_file::<Requirement>(&path) {
-            reqs.push(req);
-        }
-    }
-
-    // Also check outputs directory
-    let outputs_dir = project.root().join("requirements/outputs");
-    if outputs_dir.exists() {
-        for entry in walkdir::WalkDir::new(&outputs_dir)
-            .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_type().is_file())
-            .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
-        {
-            if let Ok(req) = crate::yaml::parse_yaml_file::<Requirement>(entry.path()) {
-                reqs.push(req);
-            }
-        }
-    }
-
-    Ok(reqs)
-}
-
-/// Load all test protocols from the project
-fn load_all_tests(project: &Project) -> Vec<Test> {
-    let mut tests = Vec::new();
-
-    for subdir in &["verification/protocols", "validation/protocols"] {
-        let dir = project.root().join(subdir);
-        if dir.exists() {
-            for entry in walkdir::WalkDir::new(&dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-                .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
-            {
-                if let Ok(test) = crate::yaml::parse_yaml_file::<Test>(entry.path()) {
-                    tests.push(test);
-                }
-            }
-        }
-    }
-
-    tests
 }
 
 /// Load all entities from the project (generic version)

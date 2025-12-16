@@ -138,10 +138,11 @@
     "links": {
       "type": "object",
       "properties": {
-        "component": { "type": ["string", "null"] },
-        "process": { "type": ["string", "null"] },
-        "control": { "type": ["string", "null"] },
-        "capa": { "type": ["string", "null"] },
+        "component": { "type": ["string", "null"], "description": "Component ID if NCR is part-specific" },
+        "supplier": { "type": ["string", "null"], "description": "Supplier ID for supplier-related NCRs (incoming inspection, etc.)" },
+        "process": { "type": ["string", "null"], "description": "Process ID if NCR is process-related" },
+        "control": { "type": ["string", "null"], "description": "Control plan item that detected the issue" },
+        "capa": { "type": ["string", "null"], "description": "CAPA opened for this NCR" },
         "from_result": { "type": ["string", "null"], "description": "Test result ID that created this NCR" }
       }
     },

@@ -286,6 +286,21 @@
           "type": "string",
           "description": "ID of the test protocol (same as test_id)"
         },
+        "component": {
+          "type": ["string", "null"],
+          "description": "Component ID - item that was tested"
+        },
+        "assembly": {
+          "type": ["string", "null"],
+          "description": "Assembly ID - item that was tested"
+        },
+        "ncrs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of NCRs created from failures in this result"
+        },
         "actions": {
           "type": "array",
           "items": {

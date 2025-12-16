@@ -422,6 +422,10 @@ fn run_new(args: NewArgs) -> Result<()> {
     let config = Config::load();
 
     let name: String;
+    let short_name: Option<String>;
+    let website: Option<String>;
+    let payment_terms: Option<String>;
+    let notes: Option<String>;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -431,8 +435,18 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("name")
             .map(String::from)
             .unwrap_or_else(|| "New Supplier".to_string());
+
+        // Extract additional fields from wizard
+        short_name = result.get_string("short_name").map(String::from);
+        website = result.get_string("website").map(String::from);
+        payment_terms = result.get_string("payment_terms").map(String::from);
+        notes = result.get_string("notes").map(String::from);
     } else {
         name = args.name.unwrap_or_else(|| "New Supplier".to_string());
+        short_name = args.short_name.clone();
+        website = args.website.clone();
+        payment_terms = args.payment_terms.clone();
+        notes = args.notes.clone();
     }
 
     // Generate ID
@@ -442,26 +456,26 @@ fn run_new(args: NewArgs) -> Result<()> {
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
     let ctx = TemplateContext::new(id.clone(), config.author()).with_title(&name);
 
-    let ctx = if let Some(ref short) = args.short_name {
+    let ctx = if let Some(ref short) = short_name {
         ctx.with_short_name(short)
     } else {
         ctx
     };
 
-    let ctx = if let Some(ref website) = args.website {
-        ctx.with_website(website)
+    let ctx = if let Some(ref w) = website {
+        ctx.with_website(w)
     } else {
         ctx
     };
 
-    let ctx = if let Some(ref terms) = args.payment_terms {
+    let ctx = if let Some(ref terms) = payment_terms {
         ctx.with_payment_terms(terms)
     } else {
         ctx
     };
 
-    let ctx = if let Some(ref notes) = args.notes {
-        ctx.with_notes(notes)
+    let ctx = if let Some(ref n) = notes {
+        ctx.with_notes(n)
     } else {
         ctx
     };

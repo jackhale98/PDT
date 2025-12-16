@@ -582,6 +582,7 @@ fn run_new(args: NewArgs) -> Result<()> {
     let title: String;
     let capa_type: String;
     let source_type: String;
+    let problem_statement: Option<String>;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -599,10 +600,12 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("source.type")
             .map(String::from)
             .unwrap_or_else(|| "ncr".to_string());
+        problem_statement = result.get_string("problem_statement").map(String::from);
     } else {
         title = args.title.unwrap_or_else(|| "New CAPA".to_string());
         capa_type = args.r#type;
         source_type = args.source;
+        problem_statement = None;
     }
 
     // Validate enums
@@ -634,9 +637,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         ctx = ctx.with_source_ref(ncr_id);
     }
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_capa(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard values via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref problem) = problem_statement {
+            if !problem.is_empty() {
+                let indented = problem
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "problem_statement: |\n  # Describe the problem being addressed\n  # Include scope and impact",
+                    &format!("problem_statement: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Write file
     let output_dir = project.root().join("manufacturing/capas");

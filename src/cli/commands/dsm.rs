@@ -2,6 +2,7 @@
 //!
 //! Generates a DSM showing relationships between components based on:
 //! - Mates (physical interfaces via features)
+//! - Tolerance stackups (dimensional chains linking components)
 //! - Processes (shared manufacturing processes)
 //! - Requirements (allocated to same requirement)
 
@@ -20,7 +21,7 @@ pub struct DsmArgs {
     /// Assembly ID to scope the DSM (optional - defaults to all components)
     pub assembly: Option<String>,
 
-    /// Relationship types to include (mate, process, requirement, all)
+    /// Relationship types to include (mate, tolerance, process, requirement, all)
     #[arg(long, short = 't', default_value = "all")]
     pub rel_type: String,
 
@@ -53,6 +54,7 @@ pub struct DsmArgs {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RelationType {
     Mate,
+    Tolerance,
     Process,
     Requirement,
 }
@@ -61,6 +63,7 @@ impl RelationType {
     fn symbol(&self) -> &'static str {
         match self {
             RelationType::Mate => "M",
+            RelationType::Tolerance => "T",
             RelationType::Process => "P",
             RelationType::Requirement => "R",
         }
@@ -69,6 +72,7 @@ impl RelationType {
     fn name(&self) -> &'static str {
         match self {
             RelationType::Mate => "Mate",
+            RelationType::Tolerance => "Tolerance",
             RelationType::Process => "Process",
             RelationType::Requirement => "Requirement",
         }
@@ -270,7 +274,7 @@ impl Dsm {
 
             // For symmetric DSM, fan_in == fan_out, so we use total connections
             let total_connections = fan_out; // Since symmetric
-            let max_possible = (n - 1) * 3; // 3 relationship types max per cell
+            let max_possible = (n - 1) * 4; // 4 relationship types max per cell (M, T, P, R)
             let coupling_coefficient = if max_possible > 0 {
                 (total_connections as f64) / (max_possible as f64)
             } else {
@@ -342,12 +346,17 @@ pub fn run(args: DsmArgs, _global: &GlobalOpts) -> Result<()> {
 
     // Determine which relationship types to include
     let include_mate = args.rel_type == "all" || args.rel_type == "mate";
+    let include_tolerance = args.rel_type == "all" || args.rel_type == "tolerance";
     let include_process = args.rel_type == "all" || args.rel_type == "process";
     let include_req = args.rel_type == "all" || args.rel_type == "requirement";
 
     // Find relationships
     if include_mate {
         add_mate_relationships(&project, &mut dsm)?;
+    }
+
+    if include_tolerance {
+        add_tolerance_relationships(&project, &mut dsm)?;
     }
 
     if include_process {
@@ -550,6 +559,95 @@ fn get_component_from_feature_field(
     None
 }
 
+fn add_tolerance_relationships(project: &Project, dsm: &mut Dsm) -> Result<()> {
+    // Build feature-to-component lookup from feature files
+    let feature_dir = project.root().join("tolerances/features");
+    let mut feature_to_component: HashMap<String, String> = HashMap::new();
+
+    if feature_dir.exists() {
+        for entry in fs::read_dir(&feature_dir).into_diagnostic()?.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(false, |e| e == "yaml") {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(feat) = serde_yml::from_str::<serde_json::Value>(&content) {
+                        let feat_id = feat.get("id").and_then(|v| v.as_str()).unwrap_or("");
+                        let comp_id = feat.get("component").and_then(|v| v.as_str()).unwrap_or("");
+
+                        if !feat_id.is_empty() && !comp_id.is_empty() {
+                            feature_to_component.insert(feat_id.to_string(), comp_id.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Load tolerance stackups and extract component relationships
+    let stackup_dir = project.root().join("tolerances/stackups");
+    if stackup_dir.exists() {
+        for entry in fs::read_dir(&stackup_dir).into_diagnostic()?.flatten() {
+            let path = entry.path();
+            if path.extension().map_or(false, |e| e == "yaml") {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(stackup) = serde_yml::from_str::<serde_json::Value>(&content) {
+                        // Collect all unique components in the stackup
+                        let mut stackup_components: Vec<String> = Vec::new();
+
+                        if let Some(contributors) =
+                            stackup.get("contributors").and_then(|c| c.as_array())
+                        {
+                            for contrib in contributors {
+                                let comp_id = if let Some(feat_id) =
+                                    contrib.get("feature_id").and_then(|v| v.as_str())
+                                {
+                                    // Simple feature_id format - look up from feature file
+                                    feature_to_component.get(feat_id).cloned()
+                                } else if let Some(feature) = contrib.get("feature") {
+                                    // Nested feature object
+                                    if let Some(cid) =
+                                        feature.get("component_id").and_then(|v| v.as_str())
+                                    {
+                                        // Has component_id directly
+                                        Some(cid.to_string())
+                                    } else if let Some(feat_id) =
+                                        feature.get("id").and_then(|v| v.as_str())
+                                    {
+                                        // Only has feature id - look up component
+                                        feature_to_component.get(feat_id).cloned()
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    None
+                                };
+
+                                if let Some(cid) = comp_id {
+                                    if !stackup_components.contains(&cid) {
+                                        stackup_components.push(cid);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Create relationships for all pairs in the stackup
+                        for i in 0..stackup_components.len() {
+                            for j in (i + 1)..stackup_components.len() {
+                                dsm.add_relationship(
+                                    &stackup_components[i],
+                                    &stackup_components[j],
+                                    RelationType::Tolerance,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn add_process_relationships(cache: &EntityCache, dsm: &mut Dsm) -> Result<()> {
     // Build a map of process -> components
     let mut process_components: HashMap<String, HashSet<String>> = HashMap::new();
@@ -739,6 +837,7 @@ fn output_table(dsm: &Dsm, opts: &DisplayOptions) {
                     let symbol = cell.symbol();
                     let styled = match symbol.as_str() {
                         "M" => style(symbol).green(),
+                        "T" => style(symbol).magenta(),
                         "P" => style(symbol).blue(),
                         "R" => style(symbol).yellow(),
                         _ => style(symbol).white(),
@@ -759,10 +858,12 @@ fn output_table(dsm: &Dsm, opts: &DisplayOptions) {
         );
     } else {
         println!(
-            "{}: {} {} {} {} {} {}",
+            "{}: {} {} {} {} {} {} {} {}",
             style("Legend").bold(),
             style("M").green(),
             "= Mate",
+            style("T").magenta(),
+            "= Tolerance",
             style("P").blue(),
             "= Process",
             style("R").yellow(),
@@ -772,6 +873,7 @@ fn output_table(dsm: &Dsm, opts: &DisplayOptions) {
 
     // Statistics
     let mut mate_count = 0;
+    let mut tolerance_count = 0;
     let mut process_count = 0;
     let mut req_count = 0;
     for i in 0..n {
@@ -779,6 +881,9 @@ fn output_table(dsm: &Dsm, opts: &DisplayOptions) {
             let cell = &dsm.matrix[i][j];
             if cell.relationships.contains(&RelationType::Mate) {
                 mate_count += 1;
+            }
+            if cell.relationships.contains(&RelationType::Tolerance) {
+                tolerance_count += 1;
             }
             if cell.relationships.contains(&RelationType::Process) {
                 process_count += 1;
@@ -791,10 +896,11 @@ fn output_table(dsm: &Dsm, opts: &DisplayOptions) {
 
     println!();
     println!(
-        "{}: {} components, {} mate interfaces, {} process links, {} requirement links",
+        "{}: {} components, {} mate, {} tolerance, {} process, {} requirement",
         style("Summary").bold(),
         n,
         mate_count,
+        tolerance_count,
         process_count,
         req_count
     );
@@ -977,6 +1083,8 @@ fn output_dot(dsm: &Dsm, opts: &DisplayOptions) {
             if !cell.is_empty() {
                 let color = if cell.relationships.contains(&RelationType::Mate) {
                     "green"
+                } else if cell.relationships.contains(&RelationType::Tolerance) {
+                    "magenta"
                 } else if cell.relationships.contains(&RelationType::Process) {
                     "blue"
                 } else {

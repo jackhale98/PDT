@@ -58,6 +58,7 @@ TRACEABILITY & REPORTS:
   link        Manage links between entities (add, remove, show)
   trace       Traceability queries (from, to, coverage)
   dsm         Design Structure Matrix for component interactions
+  dmm         Domain Mapping Matrix for cross-entity analysis
   where-used  Find where an entity is used/referenced
   report      Generate engineering reports (rvm, fmea, bom, etc.)
 

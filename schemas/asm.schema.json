@@ -109,17 +109,44 @@
     "links": {
       "type": "object",
       "properties": {
+        "requirements": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of requirements this assembly satisfies"
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of tests for this assembly"
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of risks affecting this assembly"
+        },
+        "processes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of processes used to build this assembly"
+        },
+        "parent": {
+          "type": ["string", "null"],
+          "description": "Parent assembly ID if this is a sub-assembly"
+        },
         "related_to": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "description": "IDs of related entities"
-        },
-        "parent": {
-          "type": "string",
-          "pattern": "^ASM-[0-9A-Z]{26}$",
-          "description": "Parent assembly ID if this is a sub-assembly"
         }
       }
     },

@@ -692,6 +692,7 @@ fn run_new(args: NewArgs) -> Result<()> {
     let ncr_type: String;
     let severity: String;
     let category: String;
+    let mut description: Option<String> = None;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -713,6 +714,7 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("category")
             .map(String::from)
             .unwrap_or_else(|| "dimensional".to_string());
+        description = result.get_string("description").map(String::from);
     } else {
         title = args.title.unwrap_or_else(|| "New NCR".to_string());
         ncr_type = args.r#type.to_string();
@@ -731,9 +733,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         .with_ncr_severity(&severity)
         .with_ncr_category(&category);
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_ncr(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply interactive mode values
+    if args.interactive {
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                let indented = desc
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "description: |\n  # Describe the non-conformance in detail",
+                    &format!("description: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Write file
     let output_dir = project.root().join("manufacturing/ncrs");

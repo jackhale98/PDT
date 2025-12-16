@@ -55,6 +55,10 @@ enum FieldType {
         minimum: Option<i64>,
         maximum: Option<i64>,
     },
+    Number {
+        minimum: Option<f64>,
+        maximum: Option<f64>,
+    },
     Boolean,
     Array {
         item_type: Box<FieldType>,
@@ -128,7 +132,7 @@ impl SchemaWizard {
 
         if let Some(props) = properties {
             // Define the order we want to prompt fields for each entity type
-            // This covers requirements, risks, tests, and results
+            // This covers requirements, risks, tests, results, and components
             let field_order = [
                 // Common fields
                 "type",
@@ -139,6 +143,13 @@ impl SchemaWizard {
                 "priority",
                 "category",
                 "tags",
+                // Component fields
+                "part_number",
+                "revision",
+                "make_buy",
+                "material",
+                "mass_kg",
+                "unit_cost",
                 // Requirement fields
                 "text",
                 "rationale",
@@ -175,16 +186,17 @@ impl SchemaWizard {
                 "notes",
             ];
 
-            // Fields to skip entirely (auto-managed or calculated)
+            // Fields to skip entirely (auto-managed, calculated, or complex nested structures)
             let skip_fields = [
+                // Auto-managed fields
                 "id",
                 "created",
                 "author",
-                "revision",
+                "entity_revision",
                 "source",
                 "links",
                 "status",
-                // Calculated fields that should not be prompted
+                // Calculated fields
                 "rpn",
                 "risk_level",
                 "initial_risk",
@@ -193,11 +205,40 @@ impl SchemaWizard {
                 "test_revision",
                 "reviewed_by",
                 "reviewed_date",
-                // Feature fields - component is provided via -c, dimensions are complex nested objects
+                // Feature fields - complex nested objects
                 "component",
                 "dimensions",
                 "gdt",
                 "drawing",
+                // Complex array-of-object fields (wizard can't handle these)
+                "suppliers",
+                "documents",
+                "procedure",
+                "preconditions",
+                "equipment",
+                "step_results",
+                "deviations",
+                "failures",
+                "attachments",
+                "containment",
+                "affected_items",
+                "defect",
+                "disposition",
+                "cost_impact",
+                "detection",
+                "safety",
+                "tools_required",
+                "materials_required",
+                "quality_checks",
+                "price_breaks",
+                "actions",
+                "root_cause_analysis",
+                "effectiveness",
+                "contributors",
+                "stackup",
+                "fit_analysis",
+                "sample_info",
+                "equipment_used",
             ];
 
             // First add fields in preferred order
@@ -236,8 +277,8 @@ impl SchemaWizard {
 
     /// Parse a single field from its schema
     fn parse_field(&self, name: &str, schema: &Value, required: bool) -> Option<FieldInfo> {
-        // Skip auto-managed fields
-        let auto_fields = ["id", "created", "author", "revision"];
+        // Skip auto-managed fields (but NOT part revision - only entity_revision)
+        let auto_fields = ["id", "created", "author", "entity_revision"];
         if auto_fields.contains(&name) {
             return Some(FieldInfo {
                 name: name.to_string(),
@@ -262,7 +303,25 @@ impl SchemaWizard {
                 .collect();
             FieldType::Enum { values }
         } else {
-            match schema.get("type").and_then(|t| t.as_str()) {
+            // Handle both simple types ("string") and union types (["string", "null"])
+            let type_value = schema.get("type");
+            let primary_type = type_value
+                .and_then(|t| {
+                    // If it's a string, use it directly
+                    if let Some(s) = t.as_str() {
+                        Some(s.to_string())
+                    } else if let Some(arr) = t.as_array() {
+                        // If it's an array like ["string", "null"], get the first non-null type
+                        arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .find(|s| *s != "null")
+                            .map(String::from)
+                    } else {
+                        None
+                    }
+                });
+
+            match primary_type.as_deref() {
                 Some("string") => FieldType::String {
                     min_length: schema.get("minLength").and_then(|v| v.as_u64()),
                     max_length: schema.get("maxLength").and_then(|v| v.as_u64()),
@@ -271,9 +330,17 @@ impl SchemaWizard {
                     minimum: schema.get("minimum").and_then(|v| v.as_i64()),
                     maximum: schema.get("maximum").and_then(|v| v.as_i64()),
                 },
+                Some("number") => FieldType::Number {
+                    minimum: schema.get("minimum").and_then(|v| v.as_f64()),
+                    maximum: schema.get("maximum").and_then(|v| v.as_f64()),
+                },
                 Some("boolean") => FieldType::Boolean,
                 Some("array") => {
                     let item_schema = schema.get("items").unwrap_or(&Value::Null);
+                    // Skip arrays of objects (too complex for wizard)
+                    if item_schema.get("type").and_then(|t| t.as_str()) == Some("object") {
+                        return None;
+                    }
                     let item_type = if let Some(item_enum) =
                         item_schema.get("enum").and_then(|e| e.as_array())
                     {
@@ -372,11 +439,40 @@ impl SchemaWizard {
                 let value: String = Input::with_theme(&self.theme)
                     .with_prompt(&prompt)
                     .default(default_val.to_string())
+                    .allow_empty(!field.required)
                     .interact_text()
                     .into_diagnostic()?;
 
-                let parsed: i64 = value.parse().unwrap_or(default_val);
-                Ok(Some(Value::Number(parsed.into())))
+                if value.is_empty() && !field.required {
+                    Ok(None)
+                } else {
+                    let parsed: i64 = value.parse().unwrap_or(default_val);
+                    Ok(Some(Value::Number(parsed.into())))
+                }
+            }
+
+            FieldType::Number { .. } => {
+                let default_val = field.default.as_ref().and_then(|d| d.as_f64()).unwrap_or(0.0);
+
+                let value: String = Input::with_theme(&self.theme)
+                    .with_prompt(&prompt)
+                    .default(if default_val == 0.0 {
+                        String::new()
+                    } else {
+                        default_val.to_string()
+                    })
+                    .allow_empty(!field.required)
+                    .interact_text()
+                    .into_diagnostic()?;
+
+                if value.is_empty() && !field.required {
+                    Ok(None)
+                } else {
+                    let parsed: f64 = value.parse().unwrap_or(default_val);
+                    Ok(Some(Value::Number(
+                        serde_json::Number::from_f64(parsed).unwrap_or_else(|| 0.into()),
+                    )))
+                }
             }
 
             FieldType::Boolean => {

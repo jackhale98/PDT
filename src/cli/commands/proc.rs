@@ -611,6 +611,8 @@ fn run_new(args: NewArgs) -> Result<()> {
 
     let title: String;
     let process_type: String;
+    let operation_number: Option<String>;
+    let description: Option<String>;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -624,9 +626,13 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("process_type")
             .map(String::from)
             .unwrap_or_else(|| "machining".to_string());
+        operation_number = result.get_string("operation_number").map(String::from);
+        description = result.get_string("description").map(String::from);
     } else {
         title = args.title.unwrap_or_else(|| "New Process".to_string());
         process_type = args.r#type.to_string();
+        operation_number = args.op_number.clone();
+        description = None;
     }
 
     // Generate ID
@@ -638,7 +644,7 @@ fn run_new(args: NewArgs) -> Result<()> {
         .with_title(&title)
         .with_process_type(&process_type);
 
-    if let Some(ref op) = args.op_number {
+    if let Some(ref op) = operation_number {
         ctx = ctx.with_operation_number(op);
     }
     if let Some(cycle) = args.cycle_time {
@@ -648,9 +654,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         ctx = ctx.with_setup_time(setup);
     }
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_process(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard description via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                let indented = desc
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "description: |\n  # Detailed description of this manufacturing process\n  # Include key steps and requirements",
+                    &format!("description: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Write file
     let output_dir = project.root().join("manufacturing/processes");

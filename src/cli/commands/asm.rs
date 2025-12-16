@@ -548,6 +548,7 @@ fn run_new(args: NewArgs) -> Result<()> {
 
     let part_number: String;
     let title: String;
+    let description: Option<String>;
 
     if args.interactive {
         // Use schema-driven wizard
@@ -563,6 +564,8 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("title")
             .map(String::from)
             .unwrap_or_else(|| "New Assembly".to_string());
+
+        description = result.get_string("description").map(String::from);
     } else {
         part_number = args
             .part_number
@@ -570,6 +573,7 @@ fn run_new(args: NewArgs) -> Result<()> {
         title = args
             .title
             .ok_or_else(|| miette::miette!("Title is required (use --title or -T)"))?;
+        description = None;
     }
 
     // Generate ID
@@ -587,9 +591,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         ctx
     };
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_assembly(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard description via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                let indented = desc
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "description: |\n  # Detailed description of this assembly\n  # Include key specifications and assembly requirements",
+                    &format!("description: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Write file
     let output_dir = project.root().join("bom/assemblies");

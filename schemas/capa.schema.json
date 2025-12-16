@@ -129,19 +129,31 @@
       "properties": {
         "ncrs": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "IDs of NCRs that triggered this CAPA"
+        },
+        "component": {
+          "type": ["string", "null"],
+          "description": "Component ID this CAPA addresses"
+        },
+        "supplier": {
+          "type": ["string", "null"],
+          "description": "Supplier ID if CAPA is supplier-related"
         },
         "risks": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "IDs of risks addressed by this CAPA"
         },
         "processes_modified": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "IDs of processes modified as part of CAPA"
         },
         "controls_added": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string" },
+          "description": "IDs of control plan items added as part of CAPA"
         }
       }
     },

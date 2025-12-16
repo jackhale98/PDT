@@ -936,63 +936,88 @@ fn run_new(args: NewArgs) -> Result<()> {
     let config = Config::load();
 
     // Determine values - either from schema-driven wizard or args
-    let (req_type, title, priority, category, tags) = if args.interactive {
-        // Use the schema-driven wizard
-        let wizard = SchemaWizard::new();
-        let result = wizard.run(EntityPrefix::Req)?;
+    let (req_type, title, priority, category, tags, text, rationale, acceptance_criteria) =
+        if args.interactive {
+            // Use the schema-driven wizard
+            let wizard = SchemaWizard::new();
+            let result = wizard.run(EntityPrefix::Req)?;
 
-        // Extract values from wizard result
-        let req_type = result
-            .get_string("type")
-            .map(|s| match s {
-                "output" => RequirementType::Output,
-                _ => RequirementType::Input,
-            })
-            .unwrap_or(RequirementType::Input);
+            // Extract values from wizard result
+            let req_type = result
+                .get_string("type")
+                .map(|s| match s {
+                    "output" => RequirementType::Output,
+                    _ => RequirementType::Input,
+                })
+                .unwrap_or(RequirementType::Input);
 
-        let title = result
-            .get_string("title")
-            .map(String::from)
-            .unwrap_or_else(|| "New Requirement".to_string());
+            let title = result
+                .get_string("title")
+                .map(String::from)
+                .unwrap_or_else(|| "New Requirement".to_string());
 
-        let priority = result
-            .get_string("priority")
-            .map(|s| match s {
-                "low" => Priority::Low,
-                "high" => Priority::High,
-                "critical" => Priority::Critical,
-                _ => Priority::Medium,
-            })
-            .unwrap_or(Priority::Medium);
+            let priority = result
+                .get_string("priority")
+                .map(|s| match s {
+                    "low" => Priority::Low,
+                    "high" => Priority::High,
+                    "critical" => Priority::Critical,
+                    _ => Priority::Medium,
+                })
+                .unwrap_or(Priority::Medium);
 
-        let category = result
-            .get_string("category")
-            .map(String::from)
-            .unwrap_or_default();
+            let category = result
+                .get_string("category")
+                .map(String::from)
+                .unwrap_or_default();
 
-        let tags: Vec<String> = result
-            .values
-            .get("tags")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(String::from)
-                    .collect()
-            })
-            .unwrap_or_default();
+            let tags: Vec<String> = result
+                .values
+                .get("tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
 
-        (req_type, title, priority, category, tags)
-    } else {
-        // Default mode - use args with defaults
-        let req_type: RequirementType = args.r#type.into();
-        let title = args.title.unwrap_or_else(|| "New Requirement".to_string());
-        let priority: Priority = args.priority.into();
-        let category = args.category.unwrap_or_default();
-        let tags = args.tags;
+            // Extract text fields from wizard
+            let text = result.get_string("text").map(String::from);
+            let rationale = result.get_string("rationale").map(String::from);
+            let acceptance_criteria: Vec<String> = result
+                .values
+                .get("acceptance_criteria")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
 
-        (req_type, title, priority, category, tags)
-    };
+            (
+                req_type,
+                title,
+                priority,
+                category,
+                tags,
+                text,
+                rationale,
+                acceptance_criteria,
+            )
+        } else {
+            // Default mode - use args with defaults
+            let req_type: RequirementType = args.r#type.into();
+            let title = args.title.unwrap_or_else(|| "New Requirement".to_string());
+            let priority: Priority = args.priority.into();
+            let category = args.category.unwrap_or_default();
+            let tags = args.tags;
+
+            (req_type, title, priority, category, tags, None, None, vec![])
+        };
 
     // Generate entity ID and create from template
     let id = EntityId::new(EntityPrefix::Req);
@@ -1009,9 +1034,44 @@ fn run_new(args: NewArgs) -> Result<()> {
         ctx = ctx.with_tags(tags);
     }
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_requirement(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply wizard text values via string replacement (for interactive mode)
+    if args.interactive {
+        if let Some(ref text_value) = text {
+            if !text_value.is_empty() {
+                // Indent multi-line text for YAML block scalar
+                let indented_text = text_value
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "text: |\n  # Enter requirement text here\n  # Use clear, testable language (shall, must, will)",
+                    &format!("text: |\n{}", indented_text),
+                );
+            }
+        }
+        if let Some(ref rationale_value) = rationale {
+            if !rationale_value.is_empty() {
+                yaml_content =
+                    yaml_content.replace("rationale: \"\"", &format!("rationale: \"{}\"", rationale_value));
+            }
+        }
+        if !acceptance_criteria.is_empty() {
+            let criteria_yaml = acceptance_criteria
+                .iter()
+                .map(|c| format!("  - \"{}\"", c))
+                .collect::<Vec<_>>()
+                .join("\n");
+            yaml_content = yaml_content.replace(
+                "acceptance_criteria:\n  - \"\"",
+                &format!("acceptance_criteria:\n{}", criteria_yaml),
+            );
+        }
+    }
 
     // Determine output directory based on type
     let output_dir = project.requirement_directory(&req_type.to_string());

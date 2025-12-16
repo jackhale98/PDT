@@ -664,6 +664,7 @@ fn run_new(args: NewArgs) -> Result<()> {
     let config = Config::load();
 
     let title: String;
+    let mut description: Option<String> = None;
 
     if args.interactive {
         let wizard = SchemaWizard::new();
@@ -673,6 +674,7 @@ fn run_new(args: NewArgs) -> Result<()> {
             .get_string("title")
             .map(String::from)
             .unwrap_or_else(|| "New Work Instruction".to_string());
+        description = result.get_string("description").map(String::from);
     } else {
         title = args
             .title
@@ -700,9 +702,26 @@ fn run_new(args: NewArgs) -> Result<()> {
         ctx = ctx.with_process_id(proc_id);
     }
 
-    let yaml_content = generator
+    let mut yaml_content = generator
         .generate_work_instruction(&ctx)
         .map_err(|e| miette::miette!("{}", e))?;
+
+    // Apply interactive mode values
+    if args.interactive {
+        if let Some(ref desc) = description {
+            if !desc.is_empty() {
+                let indented = desc
+                    .lines()
+                    .map(|line| format!("  {}", line))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                yaml_content = yaml_content.replace(
+                    "description: |\n  # Purpose and scope of this work instruction",
+                    &format!("description: |\n{}", indented),
+                );
+            }
+        }
+    }
 
     // Write file
     let output_dir = project.root().join("manufacturing/work_instructions");

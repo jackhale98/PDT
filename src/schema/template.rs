@@ -724,8 +724,12 @@ tags: []
 status: draft
 
 links:
-  related_to: []
-  # parent: ASM-...  # Set if this is a sub-assembly
+  requirements: []     # Requirements this assembly satisfies
+  tests: []            # Tests for this assembly
+  risks: []            # Risks affecting this assembly
+  processes: []        # Processes used to build this assembly
+  parent: null         # Parent assembly ID if this is a sub-assembly
+  related_to: []       # Other related entities
 
 # Auto-managed metadata
 created: {created}
@@ -1085,26 +1089,41 @@ material: "{material}"
 mass_kg: null
 unit_cost: null
 
-# Supplier information
-suppliers:
-  - name: ""
-    supplier_pn: ""
-    lead_time_days: null
-    moq: null
-    unit_cost: null
+# Supplier information (link to SUP entities with supplier_id)
+suppliers: []
+# Example:
+#   - supplier_id: SUP@1      # Link to supplier entity (preferred)
+#     supplier_pn: "ACM-12345"
+#     lead_time_days: 14
+#     moq: 100
+#     unit_cost: 11.00
+#   - supplier_id: SUP@2
+#     name: "Quality Parts Inc"  # Name as fallback/display
+#     supplier_pn: "QP-789"
+#     lead_time_days: 21
+#     moq: 50
+#     unit_cost: 13.50
 
 # Associated documents
-documents:
-  - type: drawing
-    path: ""
-    revision: ""
+documents: []
+# Example:
+#   - type: "drawing"
+#     path: "drawings/PN-001-A.pdf"
+#     revision: "A"
+#   - type: "datasheet"
+#     path: "specs/material-spec.pdf"
+#     revision: "B"
 
 tags: []
 status: draft
 
 links:
-  related_to: []
-  used_in: []
+  requirements: []     # Requirements this component satisfies
+  processes: []        # Processes used to manufacture this component
+  tests: []            # Tests for this component
+  risks: []            # Risks affecting this component
+  used_in: []          # Assemblies using this component
+  related_to: []       # Other related entities
 
 # Auto-managed metadata
 created: {created}
@@ -1181,9 +1200,15 @@ status: draft
 risk_level: {risk_level}
 
 links:
-  related_to: []
-  mitigated_by: []
-  verified_by: []
+  requirement: null    # Requirement this risk is associated with
+  component: null      # Component primarily affected by this risk
+  assembly: null       # Assembly primarily affected by this risk
+  process: null        # Process associated with this risk (for process risks)
+  mitigated_by: []     # Design outputs that mitigate this risk
+  verified_by: []      # Tests that verify risk mitigation
+  controls: []         # Control plan items that address this risk
+  affects: []          # Additional entities affected by this risk
+  related_to: []       # Other related entities
 
 # Auto-managed metadata
 created: {created}
@@ -1247,8 +1272,9 @@ priority: {priority}
 status: draft
 
 links:
-  satisfied_by: []
-  verified_by: []
+  satisfied_by: []     # Entities that satisfy this requirement
+  verified_by: []      # Tests that verify this requirement
+  risks: []            # Risks associated with this requirement
 
 # Auto-managed metadata
 created: {created}
@@ -1314,10 +1340,14 @@ preconditions:
   - "Unit under test is at room temperature"
   - "All required equipment is calibrated"
 
-equipment:
-  - name: ""
-    specification: ""
-    calibration_required: false
+equipment: []
+# Example:
+#   - name: "Digital Multimeter"
+#     specification: "Fluke 87V or equivalent"
+#     calibration_required: true
+#   - name: "Force Gauge"
+#     specification: "0-100N range, ±0.5% accuracy"
+#     calibration_required: true
 
 procedure:
   - step: 1
@@ -1327,6 +1357,21 @@ procedure:
       # What should happen
     acceptance: |
       # Pass/fail criteria
+# Example procedure steps:
+#   - step: 1
+#     action: |
+#       Apply 50N force to mounting point
+#     expected: |
+#       No visible deformation or cracking
+#     acceptance: |
+#       Deformation < 0.1mm
+#   - step: 2
+#     action: |
+#       Measure deflection at center point
+#     expected: |
+#       Deflection within specification
+#     acceptance: |
+#       Deflection ≤ 2.0mm
 
 acceptance_criteria:
   - "All steps pass"
@@ -1342,10 +1387,12 @@ priority: {priority}
 status: draft
 
 links:
-  verifies: []
-  validates: []
-  mitigates: []
-  depends_on: []
+  verifies: []         # Requirements this test verifies
+  validates: []        # User needs this test validates
+  mitigates: []        # Risks whose mitigation this test verifies
+  component: null      # Component ID - item under test
+  assembly: null       # Assembly ID - item under test
+  depends_on: []       # Tests that must pass before this one
 
 # Auto-managed metadata (do not edit manually)
 created: {created}
@@ -1418,11 +1465,16 @@ environment:
   other: ""
 
 # Equipment used (with calibration info)
-equipment_used:
-  - name: ""
-    asset_id: ""
-    calibration_date: ""
-    calibration_due: ""
+equipment_used: []
+# Example:
+#   - name: "Digital Multimeter"
+#     asset_id: "DMM-042"
+#     calibration_date: "2024-01-15"
+#     calibration_due: "2025-01-15"
+#   - name: "Force Gauge"
+#     asset_id: "FG-017"
+#     calibration_date: "2024-02-01"
+#     calibration_due: "2025-02-01"
 
 # Results for each procedure step
 step_results:
@@ -1431,12 +1483,37 @@ step_results:
     observed: |
       # What was actually observed
     notes: ""
+# Example:
+#   - step: 1
+#     result: pass
+#     observed: |
+#       Applied 50N force, no deformation observed
+#     notes: "Conducted at 23°C"
+#   - step: 2
+#     result: pass
+#     observed: |
+#       Measured deflection: 1.8mm
+#     notes: ""
 
 deviations: []
+# Example:
+#   - description: "Test conducted at 25°C instead of 23°C"
+#     impact: "Minor - within acceptable range"
+#     approved_by: "J. Smith"
 
 failures: []
+# Example:
+#   - step: 3
+#     description: "Seal failed at 85 PSI (spec: 100 PSI)"
+#     root_cause: "Material defect in O-ring"
+#     containment: "Quarantined lot #2024-156"
 
 attachments: []
+# Example:
+#   - filename: "test_photos.zip"
+#     description: "Photos of test setup and results"
+#   - filename: "raw_data.csv"
+#     description: "Measurement data export"
 
 duration: "{duration}"
 notes: |
@@ -1446,7 +1523,10 @@ status: draft
 
 links:
   test: {test_id}
-  actions: []
+  component: null     # Component ID - item that was tested
+  assembly: null      # Assembly ID - item that was tested
+  ncrs: []            # NCR IDs created from failures in this result
+  actions: []         # Action item IDs
 
 # Auto-managed metadata (do not edit manually)
 created: {created}
@@ -1527,6 +1607,16 @@ price_breaks:
   - min_qty: 1
     unit_price: 0.00
     lead_time_days: 14
+# Example with multiple quantity breaks:
+#   - min_qty: 1
+#     unit_price: 25.00
+#     lead_time_days: 14
+#   - min_qty: 100
+#     unit_price: 22.00
+#     lead_time_days: 10
+#   - min_qty: 500
+#     unit_price: 18.50
+#     lead_time_days: 7
 
 # Order constraints
 moq: null
@@ -1535,6 +1625,11 @@ lead_time_days: 14
 # One-time costs
 tooling_cost: null
 nre_costs: []
+# Example:
+#   - description: "Fixture design"
+#     cost: 2500.00
+#   - description: "Programming"
+#     cost: 500.00
 
 # Validity
 quote_date: null
@@ -1772,11 +1867,13 @@ tags: []
 status: draft
 
 links:
-  produces: []
-  controls: []
-  work_instructions: []
-  risks: []
-  related_to: []
+  produces: []           # Component IDs produced by this process
+  requirements: []       # Requirements this process implements
+  supplier: null         # Supplier ID if process is outsourced
+  controls: []           # Control plan item IDs
+  work_instructions: []  # Work instruction IDs
+  risks: []              # Risk IDs related to this process
+  related_to: []         # Other related entity IDs
 
 # Auto-managed metadata
 created: {created}
@@ -1873,8 +1970,10 @@ status: draft
 
 links:
   {process_line}
+  component: null      # Component ID being controlled
   {feature_line}
-  verifies: []
+  risks: []            # Risks this control mitigates
+  verifies: []         # Requirements this control verifies
 
 # Auto-managed metadata
 created: {created}
@@ -1927,6 +2026,9 @@ title: "{title}"
 {doc_line}
 revision: "A"
 
+description: |
+  # Purpose and scope of this work instruction
+
 # Safety requirements
 safety:
   ppe_required: []
@@ -1974,7 +2076,10 @@ status: draft
 
 links:
   {process_line}
-  controls: []
+  component: null      # Component ID this work instruction is for
+  assembly: null       # Assembly ID this work instruction is for
+  controls: []         # Related control plan item IDs
+  risks: []            # Risks addressed by following this instruction
 
 # Auto-managed metadata
 created: {created}
@@ -2025,6 +2130,9 @@ ncr_type: {ncr_type}
 severity: {severity}
 category: {category}
 
+description: |
+  # Describe the non-conformance in detail
+
 # Detection details
 detection:
   found_at: in_process
@@ -2074,10 +2182,11 @@ tags: []
 status: draft
 
 links:
-  component: null
-  process: null
-  control: null
-  capa: null
+  component: null   # Component ID if NCR is part-specific
+  supplier: null    # Supplier ID for supplier-related NCRs (incoming inspection, etc.)
+  process: null     # Process ID if NCR is process-related
+  control: null     # Control plan item that detected the issue
+  capa: null        # CAPA opened for this NCR
 
 # Auto-managed metadata
 created: {created}
@@ -2177,10 +2286,12 @@ tags: []
 status: draft
 
 links:
-  ncrs: []
-  risks: []
-  processes_modified: []
-  controls_added: []
+  ncrs: []               # NCRs that triggered this CAPA
+  component: null        # Component ID this CAPA addresses
+  supplier: null         # Supplier ID if CAPA is supplier-related
+  risks: []              # Risks addressed by this CAPA
+  processes_modified: [] # Processes modified as part of CAPA
+  controls_added: []     # Control plan items added as part of CAPA
 
 # Auto-managed metadata
 created: {created}

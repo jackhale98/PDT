@@ -1230,6 +1230,7 @@
         <a href="#features">Features</a>
         <a href="#workflows">Workflows</a>
         <a href="#entities">Entities</a>
+        <a href="#power-user">Power User</a>
         <a href="#install">Install</a>
         <a href="tutorial.html">Tutorial</a>
         <a href="why-plain-text.html">Why Plain Text?</a>
@@ -1254,6 +1255,7 @@
     <a href="#features" onclick="closeMobileMenu()">Features</a>
     <a href="#workflows" onclick="closeMobileMenu()">Workflows</a>
     <a href="#entities" onclick="closeMobileMenu()">Entities</a>
+    <a href="#power-user" onclick="closeMobileMenu()">Power User</a>
     <a href="#install" onclick="closeMobileMenu()">Install</a>
     <a href="tutorial.html" onclick="closeMobileMenu()">Tutorial</a>
     <a href="why-plain-text.html" onclick="closeMobileMenu()">Why Plain Text?</a>
@@ -1720,6 +1722,150 @@ Total: <span class="status-approved">$16.75</span></span></pre>
       </div>
     </div>
 
+  </section>
+
+  <!-- Power User Features -->
+
+  <section id="power-user" class="workflows-section">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">// Power User</div>
+        <h2 class="section-title">Built for the Command Line</h2>
+        <p class="section-desc">TDT follows Unix philosophy. Compose commands, pipe outputs, and integrate with your existing tools.</p>
+      </div>
+
+      <div class="workflow-showcase">
+        <!-- Output Formats -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            </div>
+            <h3>Pipeable Output Formats</h3>
+          </div>
+          <p class="workflow-desc">Every list command supports multiple output formats for scripting and automation.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Get IDs for piping to other commands</span>
+<span class="symbol">$</span> <span class="cmd">tdt req list --format id</span>
+<span class="output">REQ-01KCA9X3JQFT8BHK2VCN5M9A
+REQ-01KCA9X3JQFT8BHK2VCN5M9B
+...</span>
+
+<span class="comment"># Export to JSON for other tools</span>
+<span class="symbol">$</span> <span class="cmd">tdt risk list --format json | jq '.[] | select(.rpn > 100)'</span>
+
+<span class="comment"># Export to CSV for spreadsheets</span>
+<span class="symbol">$</span> <span class="cmd">tdt cmp list --format csv > parts.csv</span></pre>
+          </div>
+        </div>
+
+        <!-- Short IDs -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"/><polygon points="18 2 22 6 12 16 8 16 8 12 18 2"/></svg>
+            </div>
+            <h3>Short ID Aliases</h3>
+          </div>
+          <p class="workflow-desc">Use memorable short IDs instead of 26-character ULIDs. Local to your machine, so they won't conflict across team members.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Short IDs work everywhere</span>
+<span class="symbol">$</span> <span class="cmd">tdt req show REQ@1</span>
+<span class="symbol">$</span> <span class="cmd">tdt link add REQ@1 TEST@3</span>
+<span class="symbol">$</span> <span class="cmd">tdt risk edit RISK@2</span>
+
+<span class="comment"># Chain commands with short-id output</span>
+<span class="symbol">$</span> <span class="cmd">tdt req list --orphans -f short-id | xargs -I{} tdt req show {}</span></pre>
+          </div>
+        </div>
+
+        <!-- Shell Completions -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8l4 4-4 4"/><line x1="12" y1="16" x2="18" y2="16"/></svg>
+            </div>
+            <h3>Shell Completions</h3>
+          </div>
+          <p class="workflow-desc">Tab completion for bash, zsh, fish, and PowerShell. Completes commands, flags, and entity IDs.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Generate completions for your shell</span>
+<span class="symbol">$</span> <span class="cmd">tdt completions bash > ~/.local/share/bash-completion/completions/tdt</span>
+<span class="symbol">$</span> <span class="cmd">tdt completions zsh > ~/.zfunc/_tdt</span>
+<span class="symbol">$</span> <span class="cmd">tdt completions fish > ~/.config/fish/completions/tdt.fish</span></pre>
+          </div>
+        </div>
+
+        <!-- Reports -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <h3>Engineering Reports</h3>
+          </div>
+          <p class="workflow-desc">Generate comprehensive reports for design reviews and audits.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Requirements Verification Matrix</span>
+<span class="symbol">$</span> <span class="cmd">tdt report rvm</span>
+
+<span class="comment"># FMEA with risk reduction tracking</span>
+<span class="symbol">$</span> <span class="cmd">tdt report fmea --min-rpn 100</span>
+
+<span class="comment"># BOM with cost/mass rollup</span>
+<span class="symbol">$</span> <span class="cmd">tdt report bom ASM@1 --with-cost</span>
+
+<span class="comment"># All open issues (NCRs, CAPAs, failed tests)</span>
+<span class="symbol">$</span> <span class="cmd">tdt report open-issues</span></pre>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            </div>
+            <h3>Powerful Filters</h3>
+          </div>
+          <p class="workflow-desc">Filter entities by any field, find orphans, search text, and combine with sorting.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Find critical requirements not yet verified</span>
+<span class="symbol">$</span> <span class="cmd">tdt req list --priority critical --orphans</span>
+
+<span class="comment"># Components in a specific assembly</span>
+<span class="symbol">$</span> <span class="cmd">tdt cmp list --assembly ASM@1</span>
+
+<span class="comment"># High RPN risks by category</span>
+<span class="symbol">$</span> <span class="cmd">tdt risk list --by-rpn --category thermal</span>
+
+<span class="comment"># Quick counts</span>
+<span class="symbol">$</span> <span class="cmd">tdt test list --count</span></pre>
+          </div>
+        </div>
+
+        <!-- Bulk Operations -->
+        <div class="workflow-item">
+          <div class="workflow-header">
+            <div class="workflow-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            </div>
+            <h3>Bulk Operations</h3>
+          </div>
+          <p class="workflow-desc">Process multiple entities at once with CSV import, bulk status changes, and pipeline operations.</p>
+          <div class="workflow-code">
+            <pre><span class="comment"># Import from CSV</span>
+<span class="symbol">$</span> <span class="cmd">tdt import requirements.csv --type req</span>
+
+<span class="comment"># Bulk status update via pipeline</span>
+<span class="symbol">$</span> <span class="cmd">tdt req list --status draft -f id | xargs -I{} tdt req edit {} --status approved</span>
+
+<span class="comment"># Generate all RPN values</span>
+<span class="symbol">$</span> <span class="cmd">tdt validate --fix</span></pre>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- Installation -->

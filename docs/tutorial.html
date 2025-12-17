@@ -806,6 +806,7 @@
             <li><a href="#ncrs-capas">14. NCRs & CAPAs</a></li>
             <li><a href="#status">15. Status & Validation</a></li>
             <li><a href="#traceability">16. Traceability</a></li>
+            <li><a href="#reports">17. Reports</a></li>
             <li><a href="#summary">Summary</a></li>
           </ul>
         </aside>
@@ -997,7 +998,7 @@
 
 <span class="comment"># Lens (buy part)</span>
 <span class="cmd">tdt cmp new</span> --title <span class="string">"Optical Lens"</span> --part-number <span class="string">"LENS-20DEG"</span> \
-  --make-buy buy --category optical --no-edit
+  --make-buy buy --category mechanical --no-edit
 
 <span class="comment"># O-ring seal (buy part)</span>
 <span class="cmd">tdt cmp new</span> --title <span class="string">"Housing O-Ring"</span> --part-number <span class="string">"OR-25x2"</span> \
@@ -1678,6 +1679,20 @@
               <pre><code><span class="cmd">tdt asm cost</span> ASM@1
 <span class="cmd">tdt asm mass</span> ASM@1</code></pre>
             </div>
+
+            <h3>Filter by Assembly</h3>
+            <p>List only components or sub-assemblies within a specific assembly's BOM (recursive):</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Components in this assembly's BOM</span>
+<span class="cmd">tdt cmp list</span> --assembly ASM@1
+
+<span class="comment"># Sub-assemblies within this assembly</span>
+<span class="cmd">tdt asm list</span> --assembly ASM@1</code></pre>
+            </div>
+
+            <p>This is useful for scoping queries to a specific product or subassembly.</p>
           </section>
 
           <!-- Section 14: NCRs & CAPAs -->
@@ -1917,6 +1932,102 @@ Coverage: <span class="success">80.0%</span>
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
               <pre><code><span class="cmd">tdt trace orphans</span></code></pre>
+            </div>
+          </section>
+
+          <!-- Section 17: Reports -->
+          <section id="reports" class="tutorial-section">
+            <h2>17. Reports</h2>
+
+            <p>TDT generates engineering reports that consolidate data across entities for reviews, audits, and documentation.</p>
+
+            <h3>Requirements Verification Matrix (RVM)</h3>
+            <p>Shows which requirements have been verified by tests:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Full RVM report</span>
+<span class="cmd">tdt report rvm</span>
+
+<span class="comment"># Show only unverified requirements</span>
+<span class="cmd">tdt report rvm</span> --unverified-only
+
+<span class="comment"># Output to file</span>
+<span class="cmd">tdt report rvm</span> -o rvm-report.md</code></pre>
+            </div>
+
+            <p>The RVM includes coverage statistics by priority and category.</p>
+
+            <h3>FMEA Report</h3>
+            <p>Failure Mode and Effects Analysis report sorted by RPN:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Full FMEA report</span>
+<span class="cmd">tdt report fmea</span>
+
+<span class="comment"># Filter by minimum RPN</span>
+<span class="cmd">tdt report fmea</span> --min-rpn 100
+
+<span class="comment"># Design risks only</span>
+<span class="cmd">tdt report fmea</span> --design-only
+
+<span class="comment"># Process risks only</span>
+<span class="cmd">tdt report fmea</span> --process-only</code></pre>
+            </div>
+
+            <p>Includes risk reduction tracking, mitigation status, and overdue action alerts.</p>
+
+            <h3>Bill of Materials (BOM)</h3>
+            <p>Hierarchical BOM with cost and mass rollup:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># BOM for an assembly</span>
+<span class="cmd">tdt report bom</span> ASM@1
+
+<span class="comment"># Include cost rollup</span>
+<span class="cmd">tdt report bom</span> ASM@1 --with-cost
+
+<span class="comment"># Include mass rollup</span>
+<span class="cmd">tdt report bom</span> ASM@1 --with-mass
+
+<span class="comment"># Both cost and mass</span>
+<span class="cmd">tdt report bom</span> ASM@1 --with-cost --with-mass</code></pre>
+            </div>
+
+            <p>The BOM report includes supply chain risk analysis identifying single-source components, long lead times, and missing pricing.</p>
+
+            <h3>Test Status Report</h3>
+            <p>Test execution summary with pass/fail statistics:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt report test-status</span></code></pre>
+            </div>
+
+            <p>Shows breakdown by test type (verification/validation), level (unit/integration/system/acceptance), and category.</p>
+
+            <h3>Open Issues Report</h3>
+            <p>All open quality issues in one view:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt report open-issues</span></code></pre>
+            </div>
+
+            <p>Includes NCR aging analysis, cost impact summary, overdue CAPA actions, and failed tests.</p>
+
+            <h3>Tolerance Report</h3>
+            <p>Tolerance analysis summary by component:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># All tolerance data</span>
+<span class="cmd">tdt report tolerance</span>
+
+<span class="comment"># For a specific component</span>
+<span class="cmd">tdt report tolerance</span> --component CMP@1</code></pre>
             </div>
           </section>
 

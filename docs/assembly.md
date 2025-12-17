@@ -147,6 +147,9 @@ tdt asm list --status draft
 # Search in title/description
 tdt asm list --search "power"
 
+# Filter to sub-assemblies within a parent assembly (recursive)
+tdt asm list --assembly ASM@1
+
 # Sort and limit
 tdt asm list --sort title
 tdt asm list --limit 10

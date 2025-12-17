@@ -170,6 +170,9 @@ tdt cmp list --status draft
 # Search in title/description
 tdt cmp list --search "bracket"
 
+# Filter to components within an assembly's BOM (recursive)
+tdt cmp list --assembly ASM@1
+
 # Sort and limit
 tdt cmp list --sort title
 tdt cmp list --limit 10

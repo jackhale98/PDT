@@ -318,6 +318,7 @@ tdt cmp new --make-buy buy --category mechanical
 tdt cmp list                                  # List all components
 tdt cmp list --make-buy buy                   # Filter by make/buy
 tdt cmp list --category electrical            # Filter by category
+tdt cmp list --assembly ASM@1                 # Components in assembly's BOM
 tdt cmp show CMP@1                            # Show details
 tdt cmp edit CMP@1                            # Open in editor
 tdt cmp matrix                                # Design structure matrix (component interactions)
@@ -330,6 +331,7 @@ tdt cmp matrix --show-ids                     # Show component IDs in cells
 tdt asm new                                   # Create with template
 tdt asm new --title "Main Assembly" --part-number "ASM-001"
 tdt asm list                                  # List all assemblies
+tdt asm list --assembly ASM@1                 # Sub-assemblies within ASM@1
 tdt asm show ASM@1                            # Show details
 tdt asm bom ASM@1                             # Show flattened BOM
 tdt asm cost ASM@1                            # Calculate recursive BOM cost

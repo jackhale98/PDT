@@ -3,6 +3,7 @@
 use clap::{Subcommand, ValueEnum};
 use console::style;
 use miette::{IntoDiagnostic, Result};
+use std::collections::HashSet;
 use std::fs;
 
 use crate::cli::helpers::{escape_csv, format_short_id, resolve_id_arg, truncate_str};
@@ -12,6 +13,7 @@ use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
+use crate::entities::assembly::Assembly;
 use crate::entities::component::{Component, ComponentCategory, MakeBuy};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
@@ -147,6 +149,10 @@ pub struct ListArgs {
     /// Show components with unit cost above this amount
     #[arg(long, value_name = "AMOUNT")]
     pub high_cost: Option<f64>,
+
+    /// Filter to components in this assembly's BOM (recursive)
+    #[arg(long, short = 'A')]
+    pub assembly: Option<String>,
 
     /// Columns to display (can specify multiple)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
@@ -300,7 +306,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         || args.long_lead.is_some()  // needs supplier data
         || args.single_source        // needs supplier data
         || args.no_quote             // needs quote data
-        || args.high_cost.is_some(); // needs unit_cost
+        || args.high_cost.is_some()  // needs unit_cost
+        || args.assembly.is_some();  // needs assembly BOM traversal
     let needs_full_entities = needs_full_output || needs_complex_filters;
 
     // Pre-load quotes if needed for no_quote filter
@@ -505,6 +512,43 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 .is_none_or(|threshold| c.unit_cost.is_some_and(|cost| cost > threshold))
         })
         .collect();
+
+    // Filter by parent assembly (components in BOM only)
+    let components = if let Some(ref parent_asm) = args.assembly {
+        let short_ids_tmp = ShortIdIndex::load(&project);
+        let parent_id = short_ids_tmp
+            .resolve(parent_asm)
+            .unwrap_or_else(|| parent_asm.clone());
+
+        // Load all assemblies for recursive BOM traversal
+        let assemblies = load_all_assemblies(&project);
+        let assembly_map: std::collections::HashMap<String, &Assembly> =
+            assemblies.iter().map(|a| (a.id.to_string(), a)).collect();
+
+        // Find the parent assembly
+        if let Some(parent) = assembly_map.get(&parent_id) {
+            // Collect all component IDs in the BOM recursively
+            let mut bom_component_ids: HashSet<String> = HashSet::new();
+            let mut visited: HashSet<String> = HashSet::new();
+            visited.insert(parent_id.clone());
+
+            collect_bom_component_ids(parent, &assembly_map, &mut bom_component_ids, &mut visited);
+
+            // Filter to only components in the BOM
+            components
+                .into_iter()
+                .filter(|c| bom_component_ids.contains(&c.id.to_string()))
+                .collect()
+        } else {
+            eprintln!(
+                "Warning: Assembly '{}' not found, showing all components",
+                parent_asm
+            );
+            components
+        }
+    } else {
+        components
+    };
 
     // Sort
     let mut components = components;
@@ -1411,4 +1455,61 @@ fn run_clear_quote(args: ClearQuoteArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Load all assemblies from the project
+fn load_all_assemblies(project: &Project) -> Vec<Assembly> {
+    let mut assemblies = Vec::new();
+    let dir = project.root().join("bom/assemblies");
+
+    if dir.exists() {
+        for entry in walkdir::WalkDir::new(&dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        {
+            if let Ok(asm) = crate::yaml::parse_yaml_file::<Assembly>(entry.path()) {
+                assemblies.push(asm);
+            }
+        }
+    }
+
+    assemblies
+}
+
+/// Recursively collect all component IDs from an assembly's BOM
+fn collect_bom_component_ids(
+    assembly: &Assembly,
+    assembly_map: &std::collections::HashMap<String, &Assembly>,
+    component_ids: &mut HashSet<String>,
+    visited: &mut HashSet<String>,
+) {
+    for item in &assembly.bom {
+        let item_id = &item.component_id;
+
+        // Check if this is an assembly (ASM-*) or component (CMP-*)
+        if item_id.starts_with("ASM-") {
+            // It's a sub-assembly - recurse into it
+            if !visited.contains(item_id) {
+                visited.insert(item_id.clone());
+                if let Some(sub_asm) = assembly_map.get(item_id) {
+                    collect_bom_component_ids(sub_asm, assembly_map, component_ids, visited);
+                }
+            }
+        } else if item_id.starts_with("CMP-") {
+            // It's a component - add it
+            component_ids.insert(item_id.clone());
+        }
+    }
+
+    // Also check the subassemblies field
+    for sub_id in &assembly.subassemblies {
+        if !visited.contains(sub_id) {
+            visited.insert(sub_id.clone());
+            if let Some(sub_asm) = assembly_map.get(sub_id) {
+                collect_bom_component_ids(sub_asm, assembly_map, component_ids, visited);
+            }
+        }
+    }
 }

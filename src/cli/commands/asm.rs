@@ -3,6 +3,7 @@
 use clap::{Subcommand, ValueEnum};
 use console::style;
 use miette::{IntoDiagnostic, Result};
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 
@@ -100,6 +101,10 @@ pub struct ListArgs {
     /// Filter by author
     #[arg(long)]
     pub author: Option<String>,
+
+    /// Filter to sub-assemblies within this assembly (recursive)
+    #[arg(long, short = 'A')]
+    pub assembly: Option<String>,
 
     /// Show recent assemblies (limit to 10 most recent)
     #[arg(long)]
@@ -323,6 +328,42 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         })
         .collect();
+
+    // Filter by parent assembly (sub-assemblies only)
+    let assemblies = if let Some(ref parent_asm) = args.assembly {
+        let short_ids_tmp = ShortIdIndex::load(&project);
+        let parent_id = short_ids_tmp
+            .resolve(parent_asm)
+            .unwrap_or_else(|| parent_asm.clone());
+
+        // Build assembly map for recursive lookup
+        let assembly_map: std::collections::HashMap<String, &Assembly> =
+            assemblies.iter().map(|a| (a.id.to_string(), a)).collect();
+
+        // Find the parent assembly
+        if let Some(parent) = assembly_map.get(&parent_id) {
+            // Collect all sub-assembly IDs recursively
+            let mut sub_asm_ids: HashSet<String> = HashSet::new();
+            let mut visited: HashSet<String> = HashSet::new();
+            visited.insert(parent_id.clone());
+
+            collect_subassembly_ids(parent, &assembly_map, &mut sub_asm_ids, &mut visited);
+
+            // Filter to only those sub-assemblies
+            assemblies
+                .into_iter()
+                .filter(|a| sub_asm_ids.contains(&a.id.to_string()))
+                .collect()
+        } else {
+            eprintln!(
+                "Warning: Assembly '{}' not found, showing all assemblies",
+                parent_asm
+            );
+            assemblies
+        }
+    } else {
+        assemblies
+    };
 
     // Sort
     let mut assemblies = assemblies;
@@ -1768,4 +1809,40 @@ fn load_all_assemblies(project: &Project) -> Vec<Assembly> {
     }
 
     assemblies
+}
+
+/// Recursively collect all sub-assembly IDs from a parent assembly's BOM
+fn collect_subassembly_ids(
+    assembly: &Assembly,
+    assembly_map: &std::collections::HashMap<String, &Assembly>,
+    sub_asm_ids: &mut HashSet<String>,
+    visited: &mut HashSet<String>,
+) {
+    for item in &assembly.bom {
+        // Check if this BOM item is an assembly (ASM-* prefix)
+        if item.component_id.starts_with("ASM-") {
+            let asm_id = item.component_id.clone();
+            if !visited.contains(&asm_id) {
+                sub_asm_ids.insert(asm_id.clone());
+                visited.insert(asm_id.clone());
+
+                // Recurse into sub-assembly
+                if let Some(sub_asm) = assembly_map.get(&asm_id) {
+                    collect_subassembly_ids(sub_asm, assembly_map, sub_asm_ids, visited);
+                }
+            }
+        }
+    }
+
+    // Also check the subassemblies field
+    for sub_id in &assembly.subassemblies {
+        if !visited.contains(sub_id) {
+            sub_asm_ids.insert(sub_id.clone());
+            visited.insert(sub_id.clone());
+
+            if let Some(sub_asm) = assembly_map.get(sub_id) {
+                collect_subassembly_ids(sub_asm, assembly_map, sub_asm_ids, visited);
+            }
+        }
+    }
 }

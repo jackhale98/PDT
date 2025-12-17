@@ -1,8 +1,9 @@
 //! BOM (Bill of Materials) report
 
 use miette::Result;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use tabled::{builder::Builder, settings::Style};
 
 use crate::cli::GlobalOpts;
 use crate::core::project::Project;
@@ -198,6 +199,145 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
     }
     if args.with_mass {
         output.push_str(&format!("**Total Mass:** {:.3} kg\n", total_mass));
+    }
+
+    // Collect all unique components in the BOM for supply risk analysis
+    let mut bom_components: HashSet<String> = HashSet::new();
+    fn collect_bom_components(
+        bom: &[crate::entities::assembly::BomItem],
+        assembly_map: &HashMap<String, &crate::entities::assembly::Assembly>,
+        component_set: &mut HashSet<String>,
+        visited: &mut HashSet<String>,
+    ) {
+        for item in bom {
+            let item_id = item.component_id.to_string();
+            if item_id.starts_with("CMP-") {
+                component_set.insert(item_id);
+            } else if item_id.starts_with("ASM-") {
+                if !visited.contains(&item_id) {
+                    visited.insert(item_id.clone());
+                    if let Some(asm) = assembly_map.get(&item_id) {
+                        collect_bom_components(&asm.bom, assembly_map, component_set, visited);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut visited_asm: HashSet<String> = HashSet::new();
+    visited_asm.insert(assembly.id.to_string());
+    collect_bom_components(&assembly.bom, &assembly_map, &mut bom_components, &mut visited_asm);
+
+    // Analyze supply risks
+    struct SupplyRisk {
+        id: String,
+        title: String,
+        risk_type: String,
+        details: String,
+    }
+    let mut supply_risks: Vec<SupplyRisk> = Vec::new();
+
+    let long_lead_threshold = 30; // days
+
+    for cmp_id in &bom_components {
+        if let Some(cmp) = component_map.get(cmp_id) {
+            let cmp_short = short_ids
+                .get_short_id(cmp_id)
+                .unwrap_or_else(|| cmp_id.clone());
+
+            // Check for single source (only 1 supplier)
+            let supplier_count = cmp.suppliers.iter().filter(|s| !s.name.is_empty()).count();
+            if supplier_count == 1 {
+                supply_risks.push(SupplyRisk {
+                    id: cmp_short.clone(),
+                    title: cmp.title.clone(),
+                    risk_type: "Single Source".to_string(),
+                    details: cmp.suppliers.first().map(|s| s.name.clone()).unwrap_or_default(),
+                });
+            } else if supplier_count == 0 {
+                supply_risks.push(SupplyRisk {
+                    id: cmp_short.clone(),
+                    title: cmp.title.clone(),
+                    risk_type: "No Supplier".to_string(),
+                    details: "No suppliers defined".to_string(),
+                });
+            }
+
+            // Check for long lead time
+            let max_lead = cmp.suppliers.iter().filter_map(|s| s.lead_time_days).max();
+            if let Some(lead) = max_lead {
+                if lead > long_lead_threshold {
+                    // Only add if not already flagged for supplier risk
+                    if supplier_count > 1 {
+                        supply_risks.push(SupplyRisk {
+                            id: cmp_short.clone(),
+                            title: cmp.title.clone(),
+                            risk_type: "Long Lead Time".to_string(),
+                            details: format!("{} days", lead),
+                        });
+                    }
+                }
+            }
+
+            // Check for no quotes
+            let has_quote = cmp.selected_quote.is_some()
+                || quotes.iter().any(|q| q.component.as_deref() == Some(cmp_id));
+            if !has_quote && cmp.unit_cost.is_none() {
+                supply_risks.push(SupplyRisk {
+                    id: cmp_short.clone(),
+                    title: cmp.title.clone(),
+                    risk_type: "No Pricing".to_string(),
+                    details: "No quote or unit cost".to_string(),
+                });
+            }
+        }
+    }
+
+    // Output supply risk analysis
+    if !supply_risks.is_empty() {
+        output.push_str("\n## Supply Chain Risk Analysis\n\n");
+
+        let mut risk_table = Builder::default();
+        risk_table.push_record(["Component", "Title", "Risk Type", "Details"]);
+
+        // Sort by risk type then by ID
+        supply_risks.sort_by(|a, b| {
+            let type_order = |t: &str| match t {
+                "No Supplier" => 0,
+                "Single Source" => 1,
+                "Long Lead Time" => 2,
+                "No Pricing" => 3,
+                _ => 4,
+            };
+            type_order(&a.risk_type)
+                .cmp(&type_order(&b.risk_type))
+                .then(a.id.cmp(&b.id))
+        });
+
+        for risk in &supply_risks {
+            risk_table.push_record([
+                risk.id.clone(),
+                if risk.title.len() > 25 {
+                    format!("{}...", &risk.title[..22])
+                } else {
+                    risk.title.clone()
+                },
+                risk.risk_type.clone(),
+                risk.details.clone(),
+            ]);
+        }
+        output.push_str(&risk_table.build().with(Style::markdown()).to_string());
+
+        // Summary
+        let no_supplier = supply_risks.iter().filter(|r| r.risk_type == "No Supplier").count();
+        let single_source = supply_risks.iter().filter(|r| r.risk_type == "Single Source").count();
+        let long_lead = supply_risks.iter().filter(|r| r.risk_type == "Long Lead Time").count();
+        let no_pricing = supply_risks.iter().filter(|r| r.risk_type == "No Pricing").count();
+
+        output.push_str(&format!(
+            "\n*{} components in BOM: {} no supplier, {} single-source, {} long lead (>{}d), {} no pricing*\n",
+            bom_components.len(), no_supplier, single_source, long_lead, long_lead_threshold, no_pricing
+        ));
     }
 
     write_output(&output, args.output)?;

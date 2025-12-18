@@ -117,11 +117,12 @@ jobs:
         run: |
           cd artifacts
           # Flatten artifact directories - each artifact is in its own subdirectory
-          find . -type f -name "*.tar.gz" -o -name "*.zip" | while read f; do
-            mv "$f" .
+          # Use -n to avoid overwriting and handle case where file is already at destination
+          for f in $(find . -mindepth 2 -type f \( -name "*.tar.gz" -o -name "*.zip" \)); do
+            mv -n "$f" . 2>/dev/null || true
           done
           # Remove empty directories
-          find . -type d -empty -delete
+          find . -type d -empty -delete 2>/dev/null || true
           # Create checksums
           sha256sum *.tar.gz *.zip 2>/dev/null > checksums.txt || true
           cat checksums.txt

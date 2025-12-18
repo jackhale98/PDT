@@ -107,7 +107,26 @@ pub fn run(args: DiffArgs) -> Result<()> {
 }
 
 fn find_entity_file(project: &Project, id: &str) -> Result<std::path::PathBuf> {
-    // Determine entity type from ID prefix and find file
+    use crate::core::cache::EntityCache;
+
+    // Try cache-based lookup first (O(1) via SQLite)
+    if let Ok(cache) = EntityCache::open(project) {
+        // Resolve short ID if needed
+        let full_id = if id.contains('@') {
+            cache.resolve_short_id(id)
+        } else {
+            None
+        };
+
+        let lookup_id = full_id.as_deref().unwrap_or(id);
+
+        // Try exact match via cache
+        if let Some(entity) = cache.get_entity(lookup_id) {
+            return Ok(entity.file_path);
+        }
+    }
+
+    // Fallback: filesystem search
     let search_dirs: Vec<(&str, &str)> = vec![
         ("REQ-", "requirements"),
         ("RISK-", "risks"),

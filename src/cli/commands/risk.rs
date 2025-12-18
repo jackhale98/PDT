@@ -1197,7 +1197,57 @@ fn run_edit(args: EditArgs) -> Result<()> {
 
 /// Find a risk by ID prefix match or short ID (@N)
 fn find_risk(project: &Project, id_query: &str) -> Result<Risk> {
-    // First, try to resolve short ID (@N) to full ID
+    use crate::core::cache::EntityCache;
+
+    // Try cache-based lookup first (O(1) via SQLite)
+    if let Ok(cache) = EntityCache::open(project) {
+        // Resolve short ID if needed
+        let full_id = if id_query.contains('@') {
+            cache.resolve_short_id(id_query)
+        } else {
+            None
+        };
+
+        let lookup_id = full_id.as_deref().unwrap_or(id_query);
+
+        // Try exact match via cache
+        if let Some(entity) = cache.get_entity(lookup_id) {
+            if entity.prefix == "RISK" {
+                if let Ok(risk) = crate::yaml::parse_yaml_file::<Risk>(&entity.file_path) {
+                    return Ok(risk);
+                }
+            }
+        }
+
+        // Try prefix match via cache
+        if lookup_id.starts_with("RISK-") {
+            let filter = crate::core::EntityFilter {
+                prefix: Some(crate::core::EntityPrefix::Risk),
+                search: Some(lookup_id.to_string()),
+                ..Default::default()
+            };
+            let matches: Vec<_> = cache.list_entities(&filter);
+            if matches.len() == 1 {
+                if let Ok(risk) = crate::yaml::parse_yaml_file::<Risk>(&matches[0].file_path) {
+                    return Ok(risk);
+                }
+            } else if matches.len() > 1 {
+                println!("{} Multiple matches found:", style("!").yellow());
+                for entity in &matches {
+                    let short_id = cache
+                        .get_short_id(&entity.id)
+                        .unwrap_or_else(|| entity.id.clone());
+                    println!("  {} - {}", short_id, entity.title);
+                }
+                return Err(miette::miette!(
+                    "Ambiguous query '{}'. Please be more specific.",
+                    id_query
+                ));
+            }
+        }
+    }
+
+    // Fallback: filesystem search (for title matches or if cache unavailable)
     let short_ids = ShortIdIndex::load(project);
     let resolved_query = short_ids
         .resolve(id_query)

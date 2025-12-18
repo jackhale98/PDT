@@ -1753,6 +1753,45 @@ fn run_mass(args: MassArgs) -> Result<()> {
 }
 
 fn find_assembly(project: &Project, id: &str) -> Result<Assembly> {
+    use crate::core::cache::EntityCache;
+
+    // Try cache-based lookup first (O(1) via SQLite)
+    if let Ok(cache) = EntityCache::open(project) {
+        // Resolve short ID if needed
+        let full_id = if id.contains('@') {
+            cache.resolve_short_id(id)
+        } else {
+            None
+        };
+
+        let lookup_id = full_id.as_deref().unwrap_or(id);
+
+        // Try exact match via cache
+        if let Some(entity) = cache.get_entity(lookup_id) {
+            if entity.prefix == "ASM" {
+                if let Ok(asm) = crate::yaml::parse_yaml_file::<Assembly>(&entity.file_path) {
+                    return Ok(asm);
+                }
+            }
+        }
+
+        // Try prefix match via cache
+        if lookup_id.starts_with("ASM-") {
+            let filter = crate::core::EntityFilter {
+                prefix: Some(crate::core::EntityPrefix::Asm),
+                search: Some(lookup_id.to_string()),
+                ..Default::default()
+            };
+            let matches: Vec<_> = cache.list_entities(&filter);
+            if matches.len() == 1 {
+                if let Ok(asm) = crate::yaml::parse_yaml_file::<Assembly>(&matches[0].file_path) {
+                    return Ok(asm);
+                }
+            }
+        }
+    }
+
+    // Fallback: filesystem search
     let asm_dir = project.root().join("bom/assemblies");
 
     if asm_dir.exists() {

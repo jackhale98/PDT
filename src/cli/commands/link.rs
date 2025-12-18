@@ -550,7 +550,32 @@ struct EntityInfo {
 /// Find any entity by ID prefix match or short ID
 /// Works with all entity types (REQ, RISK, TEST, CMP, etc.)
 fn find_entity(project: &Project, id_query: &str) -> Result<EntityInfo> {
-    // Resolve short ID (e.g., REQ@1) to full ID
+    use crate::core::cache::EntityCache;
+
+    // Try cache-based lookup first (O(1) via SQLite)
+    if let Ok(cache) = EntityCache::open(project) {
+        // Resolve short ID if needed
+        let full_id = if id_query.contains('@') {
+            cache.resolve_short_id(id_query)
+        } else {
+            None
+        };
+
+        let lookup_id = full_id.as_deref().unwrap_or(id_query);
+
+        // Try exact match via cache
+        if let Some(entity) = cache.get_entity(lookup_id) {
+            if let Ok(id) = entity.id.parse::<EntityId>() {
+                return Ok(EntityInfo {
+                    id,
+                    title: entity.title,
+                    path: entity.file_path,
+                });
+            }
+        }
+    }
+
+    // Fallback: filesystem search
     let short_ids = ShortIdIndex::load(project);
     let resolved_query = short_ids
         .resolve(id_query)

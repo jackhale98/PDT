@@ -1195,40 +1195,12 @@
     <div class="container">
       <a href="#" class="logo">
         <div class="logo-icon">
-          <svg viewBox="0 0 70 75" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#059669;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#047857;stop-opacity:1" />
-              </linearGradient>
-              <linearGradient id="grad2b" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
-              </linearGradient>
-              <linearGradient id="grad2c" x1="0%" y1="100%" x2="100%" y2="0%">
-                <stop offset="0%" style="stop-color:#34d399;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#10b981;stop-opacity:1" />
-              </linearGradient>
-            </defs>
-            <polygon points="15,25 35,25 45,40 35,55 15,55 5,40" fill="url(#grad2)"/>
-            <polygon points="5,40 15,25 35,25 25,40" fill="url(#grad2b)"/>
-            <polygon points="25,40 35,25 45,40" fill="url(#grad2c)"/>
-            <polygon points="25,40 45,40 35,55 15,55 5,40" fill="#34d399"/>
-            <polygon points="35,25 55,25 65,40 55,55 35,55 25,40" fill="url(#grad2)"/>
-            <polygon points="25,40 35,25 55,25 45,40" fill="url(#grad2b)"/>
-            <polygon points="45,40 55,25 65,40" fill="url(#grad2c)"/>
-            <polygon points="45,40 65,40 55,55 35,55 25,40" fill="#10b981"/>
-            <polygon points="25,40 45,40 55,55 45,70 25,70 15,55" fill="url(#grad2)"/>
-            <polygon points="15,55 25,40 45,40 35,55" fill="url(#grad2b)"/>
-            <polygon points="35,55 45,40 55,55" fill="url(#grad2c)"/>
-            <polygon points="35,55 55,55 45,70 25,70 15,55" fill="#059669"/>
-          </svg>
+          <img src="logo.svg" alt="TDT Logo" width="40" height="40">
         </div>
         <span class="logo-text">TDT</span>
       </a>
       <div class="nav-links">
         <a href="#features">Features</a>
-        <a href="#workflows">Workflows</a>
         <a href="#entities">Entities</a>
         <a href="#install">Install</a>
         <a href="tolerance.html">Tolerance</a>
@@ -1254,7 +1226,6 @@
 
   <div class="mobile-menu" id="mobileMenu">
     <a href="#features" onclick="closeMobileMenu()">Features</a>
-    <a href="#workflows" onclick="closeMobileMenu()">Workflows</a>
     <a href="#entities" onclick="closeMobileMenu()">Entities</a>
     <a href="#install" onclick="closeMobileMenu()">Install</a>
     <a href="tolerance.html" onclick="closeMobileMenu()">Tolerance</a>
@@ -1307,29 +1278,6 @@
     </div>
 
   </section>
-
-  <!-- Scrolling Marquee -->
-
-  <div class="marquee-section">
-    <div class="marquee">
-      <div class="marquee-item"><span>◆</span> Plain-Text YAML Files</div>
-      <div class="marquee-item"><span>◆</span> Git Version Control</div>
-      <div class="marquee-item"><span>◆</span> Full Traceability Matrices</div>
-      <div class="marquee-item"><span>◆</span> History & Blame</div>
-      <div class="marquee-item"><span>◆</span> FMEA Risk Management</div>
-      <div class="marquee-item"><span>◆</span> Release Baselines</div>
-      <div class="marquee-item"><span>◆</span> BOM Management</div>
-      <div class="marquee-item"><span>◆</span> Beautiful CLI Output</div>
-      <div class="marquee-item"><span>◆</span> Plain-Text YAML Files</div>
-      <div class="marquee-item"><span>◆</span> Git Version Control</div>
-      <div class="marquee-item"><span>◆</span> Full Traceability Matrices</div>
-      <div class="marquee-item"><span>◆</span> History & Blame</div>
-      <div class="marquee-item"><span>◆</span> FMEA Risk Management</div>
-      <div class="marquee-item"><span>◆</span> Release Baselines</div>
-      <div class="marquee-item"><span>◆</span> BOM Management</div>
-      <div class="marquee-item"><span>◆</span> Beautiful CLI Output</div>
-    </div>
-  </div>
 
   <!-- Features -->
 
@@ -1395,7 +1343,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg>
           </div>
           <h3>Design History & Baselines</h3>
-          <p>Track every change with git-powered history. Create release baselines, compare revisions, and audit design evolution.</p>
+          <p>Track every change with git-powered history. Create release baselines, compare revisions, and review design evolution.</p>
         </div>
 
         <div class="feature-card">
@@ -1412,177 +1360,6 @@
           </div>
           <h3>Domain Mapping Matrix</h3>
           <p>Analyze cross-entity relationships: components vs requirements, processes vs components. Track allocation coverage and identify gaps.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Advanced Workflows -->
-
-  <section id="workflows" class="workflows-section">
-    <div class="container">
-      <div class="section-header">
-        <div class="section-tag">// Advanced Workflows</div>
-        <h2 class="section-title">More Than Requirements</h2>
-        <p class="section-desc">TDT powers your entire product lifecycle with specialized engineering tools.</p>
-      </div>
-
-      <div class="workflow-showcase">
-        <!-- Tolerance Analysis -->
-        <div class="workflow-item">
-          <div class="workflow-header">
-            <div class="workflow-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-            </div>
-            <h3>Tolerance Stackup Analysis</h3>
-          </div>
-          <p class="workflow-desc">Define features on components, create mates, and run worst-case, RSS, and Monte Carlo analysis on tolerance chains.</p>
-          <div class="workflow-code">
-            <pre><span class="comment"># Create feature on component</span>
-<span class="symbol">$</span> <span class="cmd">tdt feat new -c CMP@1 -t internal</span>
-<span class="output">✓ Created feature FEAT@1</span>
-
-<span class="comment"># Run Monte Carlo analysis</span>
-<span class="symbol">$</span> <span class="cmd">tdt tol analyze TOL@1</span>
-<span class="output">✓ Analysis complete
-
-   Worst-Case: 0.87-1.18 <span class="status-approved">pass</span>
-   RSS: Cpk 4.56
-   Monte Carlo: 100% yield</span></pre>
-          </div>
-        </div>
-
-        <!-- FMEA Risk -->
-        <div class="workflow-item">
-          <div class="workflow-header">
-            <div class="workflow-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-            </div>
-            <h3>FMEA Risk Management</h3>
-          </div>
-          <p class="workflow-desc">Create design and process risks with severity, occurrence, and detection ratings. Auto-calculate RPN and track mitigations.</p>
-          <div class="workflow-code">
-            <pre><span class="comment"># Create a risk with FMEA ratings</span>
-<span class="symbol">$</span> <span class="cmd">tdt risk new --title "Overheating" \</span>
-    <span class="cmd">--severity 8 --occurrence 4</span>
-<span class="output">✓ Created risk RISK@1
-   RPN: <span class="priority-high">160</span> (<span class="priority-high">high</span>)</span>
-
-<span class="comment"># View risks sorted by RPN</span>
-<span class="symbol">$</span> <span class="cmd">tdt risk list --by-rpn</span>
-<span class="output">SHORT   TITLE          LEVEL   RPN
-RISK@1  Overheating    <span class="priority-high">high</span>    <span class="priority-high">160</span>
-RISK@2  Seal Issue     <span class="status-draft">medium</span>   <span class="status-draft">72</span></span></pre>
-          </div>
-        </div>
-
-        <!-- Manufacturing Quality -->
-        <div class="workflow-item">
-          <div class="workflow-header">
-            <div class="workflow-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 20h20"/><path d="M5 20V8l7-5 7 5v12"/><path d="M9 20v-6h6v6"/></svg>
-            </div>
-            <h3>Manufacturing Quality Loop</h3>
-          </div>
-          <p class="workflow-desc">Define processes, control plans, work instructions, and track NCRs back to CAPAs for continuous improvement.</p>
-          <div class="workflow-code">
-            <pre><span class="comment"># Create process</span>
-<span class="symbol">$</span> <span class="cmd">tdt proc new -t "CNC Mill"</span>
-<span class="output">✓ Created process PROC@1</span>
-
-<span class="comment"># Add SPC control</span>
-<span class="symbol">$</span> <span class="cmd">tdt ctrl new -t "Bore SPC" --critical</span>
-<span class="output">✓ Created control CTRL@1 [CTQ]</span>
-
-<span class="comment"># Log non-conformance</span>
-<span class="symbol">$</span> <span class="cmd">tdt ncr new -t "Bore OOT" -S major</span>
-<span class="output">✓ Created NCR NCR@1</span></pre>
-          </div>
-        </div>
-
-        <!-- Traceability -->
-        <div class="workflow-item">
-          <div class="workflow-header">
-            <div class="workflow-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            </div>
-            <h3>Full Traceability</h3>
-          </div>
-          <p class="workflow-desc">Link requirements to tests, risks to mitigations. Generate coverage reports and find orphaned entities.</p>
-          <div class="workflow-code">
-            <pre><span class="comment"># Link requirement to test</span>
-<span class="symbol">$</span> <span class="cmd">tdt link add REQ@1 TEST@1 -t verified_by</span>
-<span class="output">✓ Added link</span>
-
-<span class="comment"># Check verification coverage</span>
-<span class="symbol">$</span> <span class="cmd">tdt trace coverage</span>
-<span class="output">Coverage: <span class="status-approved">92%</span> (22/24 verified)</span></pre>
-          </div>
-        </div>
-
-        <!-- Version Control -->
-        <div class="workflow-item">
-          <div class="workflow-header">
-            <div class="workflow-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg>
-            </div>
-            <h3>Built-in Version Control</h3>
-          </div>
-          <p class="workflow-desc">Track changes to any entity with git-powered history, blame, and diff. Create baselines for releases and compare changes between versions.</p>
-          <div class="workflow-code">
-            <pre><span class="comment"># View change history for a requirement</span>
-<span class="symbol">$</span> <span class="cmd">tdt history REQ@1</span>
-<span class="output">a1b2c3d Update acceptance criteria
-f4e5d6c Add temperature range
-9g8h7i6 Initial requirement</span>
-
-<span class="comment"># See who changed what</span>
-<span class="symbol">$</span> <span class="cmd">tdt blame REQ@1</span>
-<span class="output">a1b2c3d (Sarah) title: "Operating Temp"
-f4e5d6c (Jack)  range: -40°C to 85°C</span>
-
-<span class="comment"># Create release baseline</span>
-<span class="symbol">$</span> <span class="cmd">tdt baseline create v1.0</span>
-<span class="output">✓ Validation passed
-✓ Created baseline <span class="highlight">v1.0</span></span>
-
-<span class="comment"># Compare baselines</span>
-<span class="symbol">$</span> <span class="cmd">tdt baseline compare v1.0 v2.0</span>
-<span class="output">Changed: REQ@3, REQ@7, RISK@2
-Added:   REQ@12, TEST@8
-Removed: (none)</span></pre>
-          </div>
-        </div>
-
-        <!-- Engineering Reports -->
-        <div class="workflow-item">
-          <div class="workflow-header">
-            <div class="workflow-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </div>
-            <h3>Engineering Reports</h3>
-          </div>
-          <p class="workflow-desc">Generate RVM, FMEA, BOM reports and more. Export to markdown, CSV, or JSON for documentation and reviews.</p>
-          <div class="workflow-code">
-            <pre><span class="comment"># Requirements Verification Matrix</span>
-<span class="symbol">$</span> <span class="cmd">tdt report rvm</span>
-<span class="output">REQ   TITLE            TEST      STATUS
-REQ@1 Operating Temp   TEST@1    <span class="status-approved">Verified</span>
-REQ@2 Battery Life     TEST@2    <span class="status-approved">Verified</span>
-REQ@3 Drop Resistance  -         <span class="status-draft">Pending</span></span>
-
-<span class="comment"># FMEA sorted by RPN</span>
-<span class="symbol">$</span> <span class="cmd">tdt report fmea</span>
-<span class="output">RISK@1 LED Overheating   RPN: <span class="priority-high">192</span>
-RISK@2 Seal Failure      RPN: <span class="status-draft">96</span></span>
-
-<span class="comment"># BOM with costs</span>
-<span class="symbol">$</span> <span class="cmd">tdt report bom ASM@1 --with-cost</span>
-<span class="output">├─ CMP@1 Housing      $12.50
-├─ CMP@2 LED Module   $3.50
-└─ CMP@3 Battery      $0.75
-Total: <span class="status-approved">$16.75</span></span></pre>
-          </div>
         </div>
       </div>
     </div>
@@ -1795,30 +1572,6 @@ REQ-01KCA9X3JQFT8BHK2VCN5M9B
 <span class="symbol">$</span> <span class="cmd">tdt completions bash > ~/.local/share/bash-completion/completions/tdt</span>
 <span class="symbol">$</span> <span class="cmd">tdt completions zsh > ~/.zfunc/_tdt</span>
 <span class="symbol">$</span> <span class="cmd">tdt completions fish > ~/.config/fish/completions/tdt.fish</span></pre>
-          </div>
-        </div>
-
-        <!-- Reports -->
-        <div class="workflow-item">
-          <div class="workflow-header">
-            <div class="workflow-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            </div>
-            <h3>Engineering Reports</h3>
-          </div>
-          <p class="workflow-desc">Generate comprehensive reports for design reviews and audits.</p>
-          <div class="workflow-code">
-            <pre><span class="comment"># Requirements Verification Matrix</span>
-<span class="symbol">$</span> <span class="cmd">tdt report rvm</span>
-
-<span class="comment"># FMEA with risk reduction tracking</span>
-<span class="symbol">$</span> <span class="cmd">tdt report fmea --min-rpn 100</span>
-
-<span class="comment"># BOM with cost/mass rollup</span>
-<span class="symbol">$</span> <span class="cmd">tdt report bom ASM@1 --with-cost</span>
-
-<span class="comment"># All open issues (NCRs, CAPAs, failed tests)</span>
-<span class="symbol">$</span> <span class="cmd">tdt report open-issues</span></pre>
           </div>
         </div>
 
@@ -2072,9 +1825,15 @@ Created baseline: <span class="highlight">tdt-v1.0</span></div>
         </div>
 
         <div class="feature-card" style="text-align: center;">
-          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">17K/s</div>
+          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">16K/s</div>
           <h3>Validation Rate</h3>
-          <p>Schema validation at ~17,000 entities per second at enterprise scale.</p>
+          <p>Schema validation at ~16,000 entities per second at enterprise scale.</p>
+        </div>
+
+        <div class="feature-card" style="text-align: center;">
+          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">0.12s</div>
+          <h3>Entity Lookup</h3>
+          <p>SQLite-cached single entity lookup via short ID - instant results at any scale.</p>
         </div>
       </div>
 
@@ -2091,16 +1850,20 @@ Created baseline: <span class="highlight">tdt-v1.0</span></div>
 <span style="color: var(--accent)">$</span> tdt req list --priority critical
 <span style="color: var(--text-muted)">1.0s</span>
 
+<span style="color: var(--text-muted)"># Single entity lookup (SQLite-cached)</span>
+<span style="color: var(--accent)">$</span> tdt req show REQ@1
+<span style="color: var(--text-muted)">0.12s</span>
+
 <span style="color: var(--text-muted)"># Project status</span>
 <span style="color: var(--accent)">$</span> tdt status
-<span style="color: var(--text-muted)">1.4s</span>
+<span style="color: var(--text-muted)">1.5s</span>
 
 <span style="color: var(--accent)">$</span> tdt validate
-<span style="color: var(--text-muted)">2.9s (17,241 entities/s)</span>
+<span style="color: var(--text-muted)">3.1s (16,129 entities/s)</span>
 
 <span style="color: var(--text-muted)"># Export to JSON</span>
 <span style="color: var(--accent)">$</span> tdt req list --format json
-<span style="color: var(--text-muted)">2.1s</span></pre>
+<span style="color: var(--text-muted)">2.2s</span></pre>
         </div>
       </div>
 
@@ -2118,7 +1881,7 @@ Created baseline: <span class="highlight">tdt-v1.0</span></div>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
           </div>
           <h3>SQLite Cache</h3>
-          <p>Automatic caching of parsed YAML into SQLite for lightning-fast queries. Invalidates on file changes.</p>
+          <p>O(1) entity lookups via SQLite cache. Single-entity queries stay fast at any project scale.</p>
         </div>
 
         <div class="feature-card">

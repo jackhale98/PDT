@@ -23,7 +23,7 @@ Mates represent 1:1 contact relationships between two features, such as a pin fi
 | `id` | string | Unique identifier (MATE-[26-char ULID]) |
 | `feature_a` | MateFeatureRef | First feature reference with cached info |
 | `feature_b` | MateFeatureRef | Second feature reference with cached info |
-| `mate_type` | enum | `clearance_fit`, `interference_fit`, `transition_fit`, `planar_contact`, `thread_engagement` |
+| `mate_type` | enum | `clearance`, `transition`, `interference` |
 | `title` | string | Short descriptive title (1-200 chars) |
 | `status` | enum | `draft`, `review`, `approved`, `released`, `obsolete` |
 | `created` | datetime | Creation timestamp (ISO 8601) |
@@ -124,7 +124,7 @@ feature_b:
   component_id: CMP-01HC2JB7SMQX7RS1Y0GFKBHPTB
   component_name: "Pin Assembly"
 
-mate_type: clearance_fit
+mate_type: clearance
 
 # Auto-calculated from feature dimensions
 fit_analysis:
@@ -160,7 +160,7 @@ entity_revision: 1
 tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --title "Pin-Hole Fit"
 
 # Specify mate type
-tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --type clearance_fit
+tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --type clearance
 
 # Create with interactive wizard
 tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 -i
@@ -178,9 +178,9 @@ tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --title "New Mate" --edit
 tdt mate list
 
 # Filter by mate type
-tdt mate list --type clearance_fit
-tdt mate list --type interference_fit
-tdt mate list --type transition_fit
+tdt mate list --type clearance
+tdt mate list --type interference
+tdt mate list --type transition
 
 # Filter by status
 tdt mate list --status approved

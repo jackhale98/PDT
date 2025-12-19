@@ -439,7 +439,7 @@ tdt feat archive FEAT@1                       # Move to archive
 ```bash
 tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --title "Pin-Hole Fit"
 tdt mate list                                 # List all mates
-tdt mate list --type clearance_fit            # Filter by mate type
+tdt mate list --type clearance                # Filter by mate type
 tdt mate show MATE@1                          # Show details with fit calculation
 tdt mate recalc MATE@1                        # Recalculate fit from features
 tdt mate edit MATE@1                          # Open in editor

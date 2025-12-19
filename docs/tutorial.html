@@ -719,6 +719,7 @@
       <div class="nav-links">
         <a href="index.html#features">Features</a>
         <a href="index.html#install">Install</a>
+        <a href="why-plain-text.html">Why Plain Text?</a>
         <a href="tolerance.html">Tolerance</a>
         <a href="reports.html">Reports</a>
         <a href="integrations.html">Integrations</a>
@@ -742,6 +743,7 @@
   <div class="mobile-menu" id="mobileMenu">
     <a href="index.html#features" onclick="closeMobileMenu()">Features</a>
     <a href="index.html#install" onclick="closeMobileMenu()">Install</a>
+    <a href="why-plain-text.html" onclick="closeMobileMenu()">Why Plain Text?</a>
     <a href="tolerance.html" onclick="closeMobileMenu()">Tolerance</a>
     <a href="reports.html" onclick="closeMobileMenu()">Reports</a>
     <a href="integrations.html" onclick="closeMobileMenu()">Integrations</a>
@@ -812,20 +814,28 @@
             </ul>
 
             <h3>Configure Your Project</h3>
-            <p>Edit <code>.tdt/config.yaml</code> to set your default author:</p>
+            <p>Use the <code>tdt config</code> command to set your default author and editor:</p>
 
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code><span class="comment"># .tdt/config.yaml</span>
-<span class="key">author:</span> <span class="string">"Your Name"</span>
-<span class="key">editor:</span> <span class="string">"code"</span>  <span class="comment"># or vim, nano, etc.</span></code></pre>
-            </div>
-
-            <p>You can also set this globally:</p>
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">git config</span> --global user.name <span class="string">"Your Name"</span></code></pre>
+              <pre><code><span class="comment"># Set author for this project</span>
+<span class="cmd">tdt config set</span> author <span class="string">"Your Name"</span>
+
+<span class="comment"># Set your preferred editor</span>
+<span class="cmd">tdt config set</span> editor <span class="string">"code --wait"</span>  <span class="comment"># or vim, nano, etc.</span>
+
+<span class="comment"># View current configuration</span>
+<span class="cmd">tdt config show</span></code></pre>
             </div>
+
+            <p>You can also set these globally (applies to all projects):</p>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt config set</span> author <span class="string">"Your Name"</span> --global
+<span class="cmd">tdt config set</span> editor <span class="string">"code --wait"</span> --global</code></pre>
+            </div>
+
+            <p>Configuration priority: environment variables > project config > global config. TDT will also fall back to your git user name if no author is configured.</p>
 
             <h3>CLI Tips</h3>
             <p>TDT commands support both long flags (readable) and short flags (efficient):</p>
@@ -858,6 +868,20 @@
 
             <h3>Create Input Requirements</h3>
 
+            <p>You can create requirements in several ways:</p>
+
+            <h4>Option 1: Interactive Wizard (Recommended for New Users)</h4>
+            <p>The interactive wizard guides you through each field:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt req new</span> -i</code></pre>
+            </div>
+
+            <p>The wizard will prompt you for title, type, priority, category, and other fields with helpful defaults.</p>
+
+            <h4>Option 2: Command Line Flags (Efficient for Bulk Creation)</h4>
+
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
               <pre><code><span class="comment"># Brightness requirement</span>
@@ -875,6 +899,10 @@
 <span class="comment"># Drop resistance requirement</span>
 <span class="cmd">tdt req new</span> --title <span class="string">"Drop Resistance"</span> --type input --priority high \
   --category durability --status approved --no-edit</code></pre>
+            </div>
+
+            <div class="tip-box">
+              <strong>Tip:</strong> Use <code>--no-edit</code> (or <code>-n</code>) to create entities without opening the editor. Omit it to open your configured editor for adding detailed content.
             </div>
 
             <h3>View Your Requirements</h3>
@@ -928,16 +956,17 @@
 <span class="key">links:</span> {}</code></pre>
             </div>
 
-            <h3>Create Derived Requirements</h3>
-            <p>Derived requirements flow down from input requirements:</p>
+            <h3>Create Output Requirements (Derived/Allocated)</h3>
+            <p>Output requirements are derived from input requirements or allocated to components. Use <code>--type output</code> and link them to their parent:</p>
 
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">tdt req new</span> --title <span class="string">"LED Selection"</span> --type derived --priority high \
+              <pre><code><span class="comment"># Create an output requirement (derived from input)</span>
+<span class="cmd">tdt req new</span> --title <span class="string">"LED Selection"</span> --type output --priority high \
   --category electrical --status approved --no-edit</code></pre>
             </div>
 
-            <p>Then link it to the parent requirement:</p>
+            <p>Then link it to the parent requirement using <code>derives_from</code>:</p>
 
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
@@ -947,6 +976,8 @@
 <span class="comment"># Long form - equivalent</span>
 <span class="cmd">tdt link add</span> REQ@5 REQ@1 --link-type derives_from</code></pre>
             </div>
+
+            <p>This creates a traceability chain from customer needs (input) → design specifications (output).</p>
           </section>
 
           <!-- Section 3: Components -->
@@ -1098,7 +1129,7 @@
               <pre><code><span class="key">id:</span> FEAT-01KCA...
 <span class="key">title:</span> LED Mounting Bore
 <span class="key">component:</span> CMP-01KCA...  <span class="comment"># Housing</span>
-<span class="key">feature_type:</span> hole
+<span class="key">feature_type:</span> internal  <span class="comment"># internal = holes/bores, external = shafts/bosses</span>
 <span class="key">description:</span> <span class="string">|
   Bore in housing front face for LED module press-fit.
   Critical for thermal contact and alignment.</span>
@@ -1139,15 +1170,15 @@
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
               <pre><code><span class="comment"># LED to Housing fit (positional syntax)</span>
-<span class="cmd">tdt mate new</span> FEAT@1 FEAT@3 -t interference_fit -T <span class="string">"LED-Housing Press Fit"</span> -n
+<span class="cmd">tdt mate new</span> FEAT@1 FEAT@3 -t interference -T <span class="string">"LED-Housing Press Fit"</span> -n
 
-<span class="comment"># End cap thread engagement (long form - equivalent)</span>
+<span class="comment"># End cap clearance fit (long form - equivalent)</span>
 <span class="cmd">tdt mate new</span> --feature-a FEAT@2 --feature-b FEAT@4 \
-  --mate-type thread_engagement --title <span class="string">"End Cap Thread Engagement"</span> --no-edit</code></pre>
+  --mate-type clearance --title <span class="string">"End Cap Thread Clearance"</span> --no-edit</code></pre>
             </div>
 
             <div class="tip-box">
-              <strong>Tip:</strong> <code>tdt mate new FEAT@1 FEAT@3 -t interference_fit -n</code> is quick shorthand. Use <code>--help</code> to see all options.
+              <strong>Mate types:</strong> <code>clearance</code> (gap between parts), <code>transition</code> (may be either), <code>interference</code> (press fit). Use <code>--help</code> to see all options.
             </div>
 
             <h3>Analyze Fit</h3>

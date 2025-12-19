@@ -1115,8 +1115,9 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
                     .map(|line| format!("  {}", line))
                     .collect::<Vec<_>>()
                     .join("\n");
+                // Replace the template's placeholder text block
                 yaml_content = yaml_content.replace(
-                    "text: |\n  # Enter requirement text here\n  # Use clear, testable language (shall, must, will)",
+                    "text: |\n  # Enter requirement text here\n  # Use clear, testable language:\n  #   - \"shall\" for mandatory requirements\n  #   - \"should\" for recommended requirements\n  #   - \"may\" for optional requirements",
                     &format!("text: |\n{}", indented_text),
                 );
             }

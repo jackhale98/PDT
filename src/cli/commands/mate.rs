@@ -47,14 +47,33 @@ pub enum MateCommands {
     RecalcAll(RecalcAllArgs),
 }
 
+/// Mate type for CLI
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliMateType {
+    /// Clearance fit - guaranteed gap between parts
+    Clearance,
+    /// Transition fit - may be clearance or interference
+    Transition,
+    /// Interference fit - press fit
+    Interference,
+}
+
+impl From<CliMateType> for MateType {
+    fn from(cli: CliMateType) -> Self {
+        match cli {
+            CliMateType::Clearance => MateType::Clearance,
+            CliMateType::Transition => MateType::Transition,
+            CliMateType::Interference => MateType::Interference,
+        }
+    }
+}
+
 /// Mate type filter
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum TypeFilter {
-    ClearanceFit,
-    InterferenceFit,
-    TransitionFit,
-    PlanarContact,
-    ThreadEngagement,
+    Clearance,
+    Transition,
+    Interference,
     All,
 }
 
@@ -156,8 +175,8 @@ pub struct NewArgs {
     pub feature_b: Option<String>,
 
     /// Mate type
-    #[arg(long, short = 't', default_value = "clearance_fit")]
-    pub mate_type: String,
+    #[arg(long, short = 't', value_enum, default_value = "clearance")]
+    pub mate_type: CliMateType,
 
     /// Title/description
     #[arg(long, short = 'T')]
@@ -282,11 +301,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let mates: Vec<Mate> = mates
         .into_iter()
         .filter(|m| match args.mate_type {
-            TypeFilter::ClearanceFit => m.mate_type == MateType::ClearanceFit,
-            TypeFilter::InterferenceFit => m.mate_type == MateType::InterferenceFit,
-            TypeFilter::TransitionFit => m.mate_type == MateType::TransitionFit,
-            TypeFilter::PlanarContact => m.mate_type == MateType::PlanarContact,
-            TypeFilter::ThreadEngagement => m.mate_type == MateType::ThreadEngagement,
+            TypeFilter::Clearance => m.mate_type == MateType::Clearance,
+            TypeFilter::Transition => m.mate_type == MateType::Transition,
+            TypeFilter::Interference => m.mate_type == MateType::Interference,
             TypeFilter::All => true,
         })
         .filter(|m| match args.status {
@@ -658,7 +675,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     let title: String;
-    let mate_type: String;
+    let mate_type: MateType;
     let description: Option<String>;
     let notes: Option<String>;
 
@@ -672,13 +689,13 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             .unwrap_or_else(|| "New Mate".to_string());
         mate_type = result
             .get_string("mate_type")
-            .map(String::from)
-            .unwrap_or_else(|| "clearance_fit".to_string());
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(MateType::Clearance);
         description = result.get_string("description").map(String::from);
         notes = result.get_string("notes").map(String::from);
     } else {
         title = args.title.unwrap_or_else(|| "New Mate".to_string());
-        mate_type = args.mate_type;
+        mate_type = args.mate_type.into();
         description = None;
         notes = None;
     }
@@ -692,7 +709,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         .with_title(&title)
         .with_feature_a(&feature_a)
         .with_feature_b(&feature_b)
-        .with_mate_type(&mate_type);
+        .with_mate_type(&mate_type.to_string());
 
     let yaml_content = generator
         .generate_mate(&ctx)
@@ -1450,14 +1467,11 @@ fn fit_matches_type(mate: &Mate) -> FitMatch {
 
     match (mate.mate_type, analysis.fit_result) {
         // Clearance fit should result in clearance
-        (MateType::ClearanceFit, FitResult::Clearance) => FitMatch::Match,
+        (MateType::Clearance, FitResult::Clearance) => FitMatch::Match,
         // Interference fit should result in interference
-        (MateType::InterferenceFit, FitResult::Interference) => FitMatch::Match,
+        (MateType::Interference, FitResult::Interference) => FitMatch::Match,
         // Transition fit can be any result
-        (MateType::TransitionFit, _) => FitMatch::Match,
-        // Planar and thread don't have fit analysis expectations
-        (MateType::PlanarContact, _) => FitMatch::Match,
-        (MateType::ThreadEngagement, _) => FitMatch::Match,
+        (MateType::Transition, _) => FitMatch::Match,
         // Any other combination is a mismatch
         _ => FitMatch::Mismatch,
     }

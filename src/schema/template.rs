@@ -863,7 +863,7 @@ entity_revision: 1
             "mate_type",
             &ctx.mate_type
                 .clone()
-                .unwrap_or_else(|| "clearance_fit".to_string()),
+                .unwrap_or_else(|| "clearance".to_string()),
         );
 
         if self
@@ -886,7 +886,7 @@ entity_revision: 1
         let mate_type = ctx
             .mate_type
             .clone()
-            .unwrap_or_else(|| "clearance_fit".to_string());
+            .unwrap_or_else(|| "clearance".to_string());
         let created = ctx.created.to_rfc3339();
 
         format!(

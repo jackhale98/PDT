@@ -11,32 +11,42 @@ use crate::core::entity::{Entity, Status};
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::entities::feature::Dimension;
 
-/// Mate type classification
+/// Mate type classification - the intended fit between mating features
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum MateType {
-    /// Clearance fit (gap between parts)
+    /// Clearance fit - guaranteed gap between parts
     #[default]
-    ClearanceFit,
-    /// Interference fit (press fit)
-    InterferenceFit,
-    /// Transition fit (may be either)
-    TransitionFit,
-    /// Planar contact (flat surfaces)
-    PlanarContact,
-    /// Thread engagement
-    ThreadEngagement,
+    Clearance,
+    /// Transition fit - may be clearance or interference
+    Transition,
+    /// Interference fit - press fit, guaranteed overlap
+    Interference,
 }
 
 impl std::fmt::Display for MateType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            MateType::ClearanceFit => write!(f, "clearance_fit"),
-            MateType::InterferenceFit => write!(f, "interference_fit"),
-            MateType::TransitionFit => write!(f, "transition_fit"),
-            MateType::PlanarContact => write!(f, "planar_contact"),
-            MateType::ThreadEngagement => write!(f, "thread_engagement"),
+            MateType::Clearance => write!(f, "clearance"),
+            MateType::Transition => write!(f, "transition"),
+            MateType::Interference => write!(f, "interference"),
+        }
+    }
+}
+
+impl std::str::FromStr for MateType {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "clearance" => Ok(MateType::Clearance),
+            "transition" => Ok(MateType::Transition),
+            "interference" => Ok(MateType::Interference),
+            _ => Err(format!(
+                "Invalid mate type: '{}'. Use 'clearance', 'transition', or 'interference'",
+                s
+            )),
         }
     }
 }
@@ -428,13 +438,13 @@ mod tests {
             "Pin-Hole Mate",
             feat_a.clone(),
             feat_b.clone(),
-            MateType::ClearanceFit,
+            MateType::Clearance,
             "Author",
         );
         assert_eq!(mate.title, "Pin-Hole Mate");
         assert_eq!(mate.feature_a.id, feat_a);
         assert_eq!(mate.feature_b.id, feat_b);
-        assert_eq!(mate.mate_type, MateType::ClearanceFit);
+        assert_eq!(mate.mate_type, MateType::Clearance);
         assert!(mate.fit_analysis.is_none());
     }
 
@@ -485,7 +495,7 @@ mod tests {
             "Test Mate",
             feat_a,
             feat_b,
-            MateType::ClearanceFit,
+            MateType::Clearance,
             "Author",
         );
         assert!(mate.id().to_string().starts_with("MATE-"));
@@ -503,7 +513,7 @@ mod tests {
             "Pin-Hole Mate",
             feat_a.clone(),
             feat_b.clone(),
-            MateType::ClearanceFit,
+            MateType::Clearance,
             "Author",
         );
         mate.description = Some("Locating pin engagement".to_string());
@@ -531,19 +541,19 @@ mod tests {
     fn test_mate_type_serialization() {
         let feat_a = EntityId::new(EntityPrefix::Feat);
         let feat_b = EntityId::new(EntityPrefix::Feat);
-        let mate = Mate::new("Test", feat_a, feat_b, MateType::InterferenceFit, "Author");
+        let mate = Mate::new("Test", feat_a, feat_b, MateType::Interference, "Author");
         let yaml = serde_yml::to_string(&mate).unwrap();
-        assert!(yaml.contains("interference_fit"));
+        assert!(yaml.contains("interference"));
 
         let parsed: Mate = serde_yml::from_str(&yaml).unwrap();
-        assert_eq!(parsed.mate_type, MateType::InterferenceFit);
+        assert_eq!(parsed.mate_type, MateType::Interference);
     }
 
     #[test]
     fn test_fit_summary() {
         let feat_a = EntityId::new(EntityPrefix::Feat);
         let feat_b = EntityId::new(EntityPrefix::Feat);
-        let mut mate = Mate::new("Test", feat_a, feat_b, MateType::ClearanceFit, "Author");
+        let mut mate = Mate::new("Test", feat_a, feat_b, MateType::Clearance, "Author");
 
         // Before calculation
         assert_eq!(mate.fit_summary(), "Not calculated");

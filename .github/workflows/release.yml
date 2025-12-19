@@ -33,11 +33,13 @@ jobs:
             musl: true
 
           # Linux i686 (musl/iSH on iOS)
+          # iSH only supports Pentium-level instructions, no SSE/SSE2
           - target: i686-unknown-linux-musl
             os: ubuntu-latest
             artifact: tdt
             archive: tdt-linux-musl-i686.tar.gz
             cross: true
+            rustflags: "-C target-cpu=pentium"
 
           # Linux ARM64
           - target: aarch64-unknown-linux-gnu
@@ -87,6 +89,8 @@ jobs:
 
       - name: Build (cross)
         if: matrix.cross
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags || '' }}
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
           cross build --release --target ${{ matrix.target }}

@@ -10,8 +10,9 @@ use crate::cli::commands::{
     history::HistoryArgs, import::ImportArgs, init::InitArgs, link::LinkCommands,
     mate::MateCommands, ncr::NcrCommands, proc::ProcCommands, quote::QuoteCommands,
     report::ReportCommands, req::ReqCommands, risk::RiskCommands, rslt::RsltCommands,
-    status::StatusArgs, sup::SupCommands, test::TestCommands, tol::TolCommands,
-    trace::TraceCommands, validate::ValidateArgs, where_used::WhereUsedArgs, work::WorkCommands,
+    schema::SchemaCommands, status::StatusArgs, sup::SupCommands, test::TestCommands,
+    tol::TolCommands, trace::TraceCommands, validate::ValidateArgs, where_used::WhereUsedArgs,
+    work::WorkCommands,
 };
 
 /// Custom help template with grouped commands
@@ -73,6 +74,7 @@ UTILITIES:
   import      Import entities from CSV files
   bulk        Bulk operations on multiple entities
   cache       Entity cache management (rebuild, sync, status, query)
+  schema      View entity schemas (list, show) - for AI agent ergonomics
   completions Generate shell completion scripts (bash, zsh, fish, powershell)
   help        Print this message or the help of the given subcommand(s)
 
@@ -272,6 +274,10 @@ pub enum Commands {
     #[command(subcommand)]
     Cache(CacheCommands),
 
+    /// View entity schemas (list, show) - for AI agent ergonomics
+    #[command(subcommand)]
+    Schema(SchemaCommands),
+
     /// Generate shell completion scripts
     Completions(CompletionsArgs),
 }
@@ -296,4 +302,6 @@ pub enum OutputFormat {
     /// Short IDs only (e.g., REQ@1) for piping between tdt commands
     #[value(name = "short-id")]
     ShortId,
+    /// File path only (for new commands - enables easy editing after creation)
+    Path,
 }

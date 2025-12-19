@@ -12,6 +12,7 @@ use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::links::add_inferred_link;
 use crate::core::Config;
 use crate::entities::result::{Result as TestResult, Verdict};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
@@ -191,6 +192,10 @@ pub struct NewArgs {
     /// Don't open in editor after creation
     #[arg(long)]
     pub no_edit: bool,
+
+    /// Link to another entity (auto-infers link type)
+    #[arg(long, short = 'L')]
+    pub link: Vec<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -231,7 +236,7 @@ pub struct SummaryArgs {
 pub fn run(cmd: RsltCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         RsltCommands::List(args) => run_list(args, global),
-        RsltCommands::New(args) => run_new(args),
+        RsltCommands::New(args) => run_new(args, global),
         RsltCommands::Show(args) => run_show(args, global),
         RsltCommands::Edit(args) => run_edit(args),
         RsltCommands::Summary(args) => run_summary(args, global),
@@ -720,7 +725,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Auto => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
@@ -872,7 +877,7 @@ fn output_cached_results(
                 );
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             unreachable!()
         }
     }
@@ -880,7 +885,7 @@ fn output_cached_results(
     Ok(())
 }
 
-fn run_new(args: NewArgs) -> Result<()> {
+fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let config = Config::load();
 
@@ -1026,21 +1031,80 @@ fn run_new(args: NewArgs) -> Result<()> {
     let short_id = short_ids.add(id.to_string());
     let _ = short_ids.save(&project);
 
-    println!(
-        "{} Created result {}",
-        style("✓").green(),
-        style(short_id.unwrap_or_else(|| format_short_id(&id))).cyan()
-    );
-    println!("   {}", style(file_path.display()).dim());
-    println!(
-        "   Test: {} | Verdict: {}",
-        style(format_short_id(&test_id)).yellow(),
-        match verdict {
-            Verdict::Pass => style(verdict.to_string()).green(),
-            Verdict::Fail => style(verdict.to_string()).red(),
-            _ => style(verdict.to_string()).yellow(),
+    // Handle --link flags
+    let mut added_links = Vec::new();
+    for link_target in &args.link {
+        let resolved_target = short_ids
+            .resolve(link_target)
+            .unwrap_or_else(|| link_target.clone());
+
+        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
+            match add_inferred_link(
+                &file_path,
+                EntityPrefix::Rslt,
+                &resolved_target,
+                target_entity_id.prefix(),
+            ) {
+                Ok(link_type) => {
+                    added_links.push((link_type, resolved_target.clone()));
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to add link to {}: {}",
+                        style("!").yellow(),
+                        link_target,
+                        e
+                    );
+                }
+            }
+        } else {
+            eprintln!(
+                "{} Invalid entity ID: {}",
+                style("!").yellow(),
+                link_target
+            );
         }
-    );
+    }
+
+    // Output based on format flag
+    match global.format {
+        OutputFormat::Id => {
+            println!("{}", id);
+        }
+        OutputFormat::ShortId => {
+            println!("{}", short_id.clone().unwrap_or_else(|| format_short_id(&id)));
+        }
+        OutputFormat::Path => {
+            println!("{}", file_path.display());
+        }
+        _ => {
+            println!(
+                "{} Created result {}",
+                style("✓").green(),
+                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
+            );
+            println!("   {}", style(file_path.display()).dim());
+            println!(
+                "   Test: {} | Verdict: {}",
+                style(format_short_id(&test_id)).yellow(),
+                match verdict {
+                    Verdict::Pass => style(verdict.to_string()).green(),
+                    Verdict::Fail => style(verdict.to_string()).red(),
+                    _ => style(verdict.to_string()).yellow(),
+                }
+            );
+
+            // Show added links
+            for (link_type, target) in &added_links {
+                println!(
+                    "   {} --[{}]--> {}",
+                    style("→").dim(),
+                    style(link_type).cyan(),
+                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
+                );
+            }
+        }
+    }
 
     // Open in editor if requested (or by default unless --no-edit)
     if args.edit || (!args.no_edit && !args.interactive) {

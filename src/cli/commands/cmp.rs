@@ -6,10 +6,12 @@ use miette::{IntoDiagnostic, Result};
 use std::collections::HashSet;
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, resolve_id_arg, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
+use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -252,12 +254,20 @@ pub struct NewArgs {
     /// Interactive mode (prompt for fields)
     #[arg(long, short = 'i')]
     pub interactive: bool,
+
+    /// Link to another entity (auto-infers link type)
+    #[arg(long, short = 'L')]
+    pub link: Vec<String>,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct ShowArgs {
     /// Component ID or short ID (CMP@N), or pipe via stdin
     pub id: Option<String>,
+
+    /// Show linked entities too
+    #[arg(long)]
+    pub with_links: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -285,7 +295,7 @@ pub struct ClearQuoteArgs {
 pub fn run(cmd: CmpCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         CmpCommands::List(args) => run_list(args, global),
-        CmpCommands::New(args) => run_new(args),
+        CmpCommands::New(args) => run_new(args, global),
         CmpCommands::Show(args) => run_show(args, global),
         CmpCommands::Edit(args) => run_edit(args),
         CmpCommands::SetQuote(args) => run_set_quote(args),
@@ -721,7 +731,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Auto => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
@@ -835,12 +845,12 @@ fn output_cached_components(
                 );
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml => unreachable!(),
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Path => unreachable!(),
     }
     Ok(())
 }
 
-fn run_new(args: NewArgs) -> Result<()> {
+fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let config = Config::load();
 
@@ -973,17 +983,71 @@ fn run_new(args: NewArgs) -> Result<()> {
     let short_id = short_ids.add(id.to_string());
     let _ = short_ids.save(&project);
 
-    println!(
-        "{} Created component {}",
-        style("✓").green(),
-        style(short_id.unwrap_or_else(|| format_short_id(&id))).cyan()
-    );
-    println!("   {}", style(file_path.display()).dim());
-    println!(
-        "   Part: {} | {}",
-        style(&part_number).yellow(),
-        style(&title).white()
-    );
+    // Handle --link flags
+    let mut added_links = Vec::new();
+    for link_target in &args.link {
+        let resolved_target = short_ids
+            .resolve(link_target)
+            .unwrap_or_else(|| link_target.clone());
+
+        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
+            match add_inferred_link(
+                &file_path,
+                EntityPrefix::Cmp,
+                &resolved_target,
+                target_entity_id.prefix(),
+            ) {
+                Ok(link_type) => {
+                    added_links.push((link_type, resolved_target.clone()));
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to add link to {}: {}",
+                        style("!").yellow(),
+                        link_target,
+                        e
+                    );
+                }
+            }
+        } else {
+            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
+        }
+    }
+
+    // Output based on format flag
+    match global.format {
+        OutputFormat::Id => {
+            println!("{}", id);
+        }
+        OutputFormat::ShortId => {
+            println!("{}", short_id.clone().unwrap_or_else(|| format_short_id(&id)));
+        }
+        OutputFormat::Path => {
+            println!("{}", file_path.display());
+        }
+        _ => {
+            println!(
+                "{} Created component {}",
+                style("✓").green(),
+                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
+            );
+            println!("   {}", style(file_path.display()).dim());
+            println!(
+                "   Part: {} | {}",
+                style(&part_number).yellow(),
+                style(&title).white()
+            );
+
+            for (link_type, target) in &added_links {
+                println!(
+                    "   {} --[{}]--> {}",
+                    style("→").dim(),
+                    style(link_type).cyan(),
+                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
+                );
+            }
+        }
+    }
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1174,6 +1238,85 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                     println!();
                     println!("{}", style("Description:").bold());
                     println!("{}", desc);
+                }
+            }
+
+            // Links (only with --with-links flag)
+            if args.with_links {
+                let cache = EntityCache::open(&project).ok();
+                let has_links = !cmp.links.related_to.is_empty()
+                    || !cmp.links.replaces.is_empty()
+                    || !cmp.links.replaced_by.is_empty()
+                    || !cmp.links.interchangeable_with.is_empty();
+
+                if has_links {
+                    println!();
+                    println!("{}", style("Links:").bold());
+
+                    if !cmp.links.related_to.is_empty() {
+                        println!(
+                            "  {}: {}",
+                            style("Related to").dim(),
+                            cmp.links
+                                .related_to
+                                .iter()
+                                .map(|id| format_link_with_title(
+                                    &id.to_string(),
+                                    &short_ids,
+                                    &cache
+                                ))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                    if !cmp.links.replaces.is_empty() {
+                        println!(
+                            "  {}: {}",
+                            style("Replaces").dim(),
+                            cmp.links
+                                .replaces
+                                .iter()
+                                .map(|id| format_link_with_title(
+                                    &id.to_string(),
+                                    &short_ids,
+                                    &cache
+                                ))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                    if !cmp.links.replaced_by.is_empty() {
+                        println!(
+                            "  {}: {}",
+                            style("Replaced by").dim(),
+                            cmp.links
+                                .replaced_by
+                                .iter()
+                                .map(|id| format_link_with_title(
+                                    &id.to_string(),
+                                    &short_ids,
+                                    &cache
+                                ))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                    if !cmp.links.interchangeable_with.is_empty() {
+                        println!(
+                            "  {}: {}",
+                            style("Interchangeable with").dim(),
+                            cmp.links
+                                .interchangeable_with
+                                .iter()
+                                .map(|id| format_link_with_title(
+                                    &id.to_string(),
+                                    &short_ids,
+                                    &cache
+                                ))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
                 }
             }
 

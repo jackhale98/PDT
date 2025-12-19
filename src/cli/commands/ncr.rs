@@ -12,6 +12,7 @@ use crate::core::cache::{CachedNcr, EntityCache};
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::links::add_inferred_link;
 use crate::core::Config;
 use crate::entities::ncr::{
     Disposition, DispositionDecision, Ncr, NcrCategory, NcrSeverity, NcrStatus, NcrType,
@@ -274,6 +275,10 @@ pub struct NewArgs {
     /// Interactive mode (prompt for fields)
     #[arg(long, short = 'i')]
     pub interactive: bool,
+
+    /// Link to another entity (auto-infers link type)
+    #[arg(long, short = 'L')]
+    pub link: Vec<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -327,7 +332,7 @@ pub struct CloseArgs {
 pub fn run(cmd: NcrCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         NcrCommands::List(args) => run_list(args, global),
-        NcrCommands::New(args) => run_new(args),
+        NcrCommands::New(args) => run_new(args, global),
         NcrCommands::Show(args) => run_show(args, global),
         NcrCommands::Edit(args) => run_edit(args),
         NcrCommands::Close(args) => run_close(args, global),
@@ -686,13 +691,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Auto => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
 }
 
-fn run_new(args: NewArgs) -> Result<()> {
+fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let config = Config::load();
 
@@ -776,24 +781,83 @@ fn run_new(args: NewArgs) -> Result<()> {
     let short_id = short_ids.add(id.to_string());
     let _ = short_ids.save(&project);
 
-    let severity_styled = match severity.as_str() {
-        "critical" => style(&severity).red().bold(),
-        "major" => style(&severity).yellow(),
-        _ => style(&severity).white(),
-    };
+    // Handle --link flags
+    let mut added_links = Vec::new();
+    for link_target in &args.link {
+        let resolved_target = short_ids
+            .resolve(link_target)
+            .unwrap_or_else(|| link_target.clone());
 
-    println!(
-        "{} Created NCR {}",
-        style("✓").green(),
-        style(short_id.unwrap_or_else(|| format_short_id(&id))).cyan()
-    );
-    println!("   {}", style(file_path.display()).dim());
-    println!(
-        "   {} | {} | {}",
-        style(&ncr_type).yellow(),
-        severity_styled,
-        style(&title).white()
-    );
+        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
+            match add_inferred_link(
+                &file_path,
+                EntityPrefix::Ncr,
+                &resolved_target,
+                target_entity_id.prefix(),
+            ) {
+                Ok(link_type) => {
+                    added_links.push((link_type, resolved_target.clone()));
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to add link to {}: {}",
+                        style("!").yellow(),
+                        link_target,
+                        e
+                    );
+                }
+            }
+        } else {
+            eprintln!(
+                "{} Invalid entity ID: {}",
+                style("!").yellow(),
+                link_target
+            );
+        }
+    }
+
+    // Output based on format flag
+    match global.format {
+        OutputFormat::Id => {
+            println!("{}", id);
+        }
+        OutputFormat::ShortId => {
+            println!("{}", short_id.clone().unwrap_or_else(|| format_short_id(&id)));
+        }
+        OutputFormat::Path => {
+            println!("{}", file_path.display());
+        }
+        _ => {
+            let severity_styled = match severity.as_str() {
+                "critical" => style(&severity).red().bold(),
+                "major" => style(&severity).yellow(),
+                _ => style(&severity).white(),
+            };
+
+            println!(
+                "{} Created NCR {}",
+                style("✓").green(),
+                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
+            );
+            println!("   {}", style(file_path.display()).dim());
+            println!(
+                "   {} | {} | {}",
+                style(&ncr_type).yellow(),
+                severity_styled,
+                style(&title).white()
+            );
+
+            // Show added links
+            for (link_type, target) in &added_links {
+                println!(
+                    "   {} --[{}]--> {}",
+                    style("→").dim(),
+                    style(link_type).cyan(),
+                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
+                );
+            }
+        }
+    }
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1160,7 +1224,7 @@ fn output_cached_ncrs(
                 );
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             // Should not reach here - cache bypassed for these formats
             unreachable!();
         }

@@ -13,6 +13,7 @@ use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::CachedQuote;
+use crate::core::links::add_inferred_link;
 use crate::core::Config;
 use crate::entities::quote::{Quote, QuoteStatus};
 use crate::schema::wizard::SchemaWizard;
@@ -198,6 +199,10 @@ pub struct NewArgs {
     /// Interactive mode (prompt for fields)
     #[arg(long, short = 'i')]
     pub interactive: bool,
+
+    /// Link to another entity (auto-infers link type)
+    #[arg(long, short = 'L')]
+    pub link: Vec<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -255,7 +260,7 @@ fn parse_price_break(input: &str) -> Result<(u32, f64, Option<u32>)> {
 pub fn run(cmd: QuoteCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         QuoteCommands::List(args) => run_list(args, global),
-        QuoteCommands::New(args) => run_new(args),
+        QuoteCommands::New(args) => run_new(args, global),
         QuoteCommands::Show(args) => run_show(args, global),
         QuoteCommands::Edit(args) => run_edit(args),
         QuoteCommands::Compare(args) => run_compare(args, global),
@@ -669,7 +674,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Auto => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
@@ -837,7 +842,7 @@ fn output_cached_quotes(
                 );
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             // Should never reach here - JSON/YAML use full YAML path
             unreachable!()
         }
@@ -846,7 +851,7 @@ fn output_cached_quotes(
     Ok(())
 }
 
-fn run_new(args: NewArgs) -> Result<()> {
+fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let config = Config::load();
 
@@ -1020,50 +1025,109 @@ fn run_new(args: NewArgs) -> Result<()> {
     let short_id = short_ids.add(id.to_string());
     let _ = short_ids.save(&project);
 
-    println!(
-        "{} Created quote {}",
-        style("✓").green(),
-        style(short_id.unwrap_or_else(|| format_short_id(&id))).cyan()
-    );
-    println!("   {}", style(file_path.display()).dim());
+    // Handle --link flags
+    let mut added_links = Vec::new();
+    for link_target in &args.link {
+        let resolved_target = short_ids
+            .resolve(link_target)
+            .unwrap_or_else(|| link_target.clone());
 
-    let linked_item = component.as_ref().or(assembly.as_ref()).unwrap();
-    let item_type = if component.is_some() {
-        "Component"
-    } else {
-        "Assembly"
-    };
-    println!(
-        "   Supplier: {} | {}: {}",
-        style(&supplier).yellow(),
-        item_type,
-        style(linked_item).dim()
-    );
+        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
+            match add_inferred_link(
+                &file_path,
+                EntityPrefix::Quot,
+                &resolved_target,
+                target_entity_id.prefix(),
+            ) {
+                Ok(link_type) => {
+                    added_links.push((link_type, resolved_target.clone()));
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to add link to {}: {}",
+                        style("!").yellow(),
+                        link_target,
+                        e
+                    );
+                }
+            }
+        } else {
+            eprintln!(
+                "{} Invalid entity ID: {}",
+                style("!").yellow(),
+                link_target
+            );
+        }
+    }
 
-    // Show price info
-    if !args.breaks.is_empty() {
-        println!(
-            "   {} Price break{}:",
-            style(args.breaks.len()).cyan(),
-            if args.breaks.len() == 1 { "" } else { "s" }
-        );
-        for break_str in &args.breaks {
-            if let Ok((qty, price, lead)) = parse_price_break(break_str) {
-                let lead_str = lead.map(|l| format!(" ({}d)", l)).unwrap_or_default();
+    // Output based on format flag
+    match global.format {
+        OutputFormat::Id => {
+            println!("{}", id);
+        }
+        OutputFormat::ShortId => {
+            println!("{}", short_id.clone().unwrap_or_else(|| format_short_id(&id)));
+        }
+        OutputFormat::Path => {
+            println!("{}", file_path.display());
+        }
+        _ => {
+            println!(
+                "{} Created quote {}",
+                style("✓").green(),
+                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
+            );
+            println!("   {}", style(file_path.display()).dim());
+
+            let linked_item = component.as_ref().or(assembly.as_ref()).unwrap();
+            let item_type = if component.is_some() {
+                "Component"
+            } else {
+                "Assembly"
+            };
+            println!(
+                "   Supplier: {} | {}: {}",
+                style(&supplier).yellow(),
+                item_type,
+                style(linked_item).dim()
+            );
+
+            // Show price info
+            if !args.breaks.is_empty() {
                 println!(
-                    "     {} @ ${:.2}{}",
-                    style(format!("{}+", qty)).white(),
-                    price,
-                    style(lead_str).dim()
+                    "   {} Price break{}:",
+                    style(args.breaks.len()).cyan(),
+                    if args.breaks.len() == 1 { "" } else { "s" }
+                );
+                for break_str in &args.breaks {
+                    if let Ok((qty, price, lead)) = parse_price_break(break_str) {
+                        let lead_str = lead.map(|l| format!(" ({}d)", l)).unwrap_or_default();
+                        println!(
+                            "     {} @ ${:.2}{}",
+                            style(format!("{}+", qty)).white(),
+                            price,
+                            style(lead_str).dim()
+                        );
+                    }
+                }
+            } else if let Some(price) = args.price {
+                println!(
+                    "   Price: ${:.2} | Lead: {}d",
+                    style(format!("{:.2}", price)).green(),
+                    style(args.lead_time.unwrap_or(0)).white()
+                );
+            }
+
+            // Show added links
+            for (link_type, target) in &added_links {
+                println!(
+                    "   {} --[{}]--> {}",
+                    style("→").dim(),
+                    style(link_type).cyan(),
+                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
                 );
             }
         }
-    } else if let Some(price) = args.price {
-        println!(
-            "   Price: ${:.2} | Lead: {}d",
-            style(format!("{:.2}", price)).green(),
-            style(args.lead_time.unwrap_or(0)).white()
-        );
     }
 
     // Open in editor if requested

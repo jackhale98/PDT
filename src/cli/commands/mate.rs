@@ -13,6 +13,7 @@ use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::links::add_inferred_link;
 use crate::core::Config;
 use crate::entities::feature::Feature;
 use crate::entities::mate::{FitAnalysis, Mate, MateType};
@@ -167,6 +168,10 @@ pub struct NewArgs {
     /// Interactive mode (prompt for fields)
     #[arg(long, short = 'i')]
     pub interactive: bool,
+
+    /// Link to another entity (auto-infers link type)
+    #[arg(long, short = 'L')]
+    pub link: Vec<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -198,7 +203,7 @@ pub struct RecalcAllArgs {
 pub fn run(cmd: MateCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         MateCommands::List(args) => run_list(args, global),
-        MateCommands::New(args) => run_new(args),
+        MateCommands::New(args) => run_new(args, global),
         MateCommands::Show(args) => run_show(args, global),
         MateCommands::Edit(args) => run_edit(args),
         MateCommands::Recalc(args) => run_recalc(args),
@@ -543,13 +548,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Auto => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
 }
 
-fn run_new(args: NewArgs) -> Result<()> {
+fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let config = Config::load();
 
@@ -688,38 +693,97 @@ fn run_new(args: NewArgs) -> Result<()> {
     let short_id = short_ids.add(id.to_string());
     let _ = short_ids.save(&project);
 
-    println!(
-        "{} Created mate {}",
-        style("✓").green(),
-        style(short_id.unwrap_or_else(|| format_short_id(&id))).cyan()
-    );
-    println!("   {}", style(file_path.display()).dim());
-    println!(
-        "   {} <-> {} | {}",
-        style(truncate_str(&feature_a, 13)).yellow(),
-        style(truncate_str(&feature_b, 13)).yellow(),
-        style(&title).white()
-    );
+    // Handle --link flags
+    let mut added_links = Vec::new();
+    for link_target in &args.link {
+        let resolved_target = short_ids
+            .resolve(link_target)
+            .unwrap_or_else(|| link_target.clone());
 
-    // Show fit analysis if calculated
-    if let Some(ref analysis) = mate.fit_analysis {
-        // Use the clearance magnitude to determine precision for display
-        let ref_precision = analysis
-            .worst_case_min_clearance
-            .abs()
-            .max(analysis.worst_case_max_clearance.abs())
-            .max(0.001); // Minimum precision for tiny values
-        let min_rounded = smart_round(analysis.worst_case_min_clearance, ref_precision);
-        let max_rounded = smart_round(analysis.worst_case_max_clearance, ref_precision);
+        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
+            match add_inferred_link(
+                &file_path,
+                EntityPrefix::Mate,
+                &resolved_target,
+                target_entity_id.prefix(),
+            ) {
+                Ok(link_type) => {
+                    added_links.push((link_type, resolved_target.clone()));
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to add link to {}: {}",
+                        style("!").yellow(),
+                        link_target,
+                        e
+                    );
+                }
+            }
+        } else {
+            eprintln!(
+                "{} Invalid entity ID: {}",
+                style("!").yellow(),
+                link_target
+            );
+        }
+    }
 
-        println!();
-        println!("   Fit Analysis:");
-        println!(
-            "     Result: {} ({} to {})",
-            style(format!("{}", analysis.fit_result)).cyan(),
-            min_rounded,
-            max_rounded
-        );
+    // Output based on format flag
+    match global.format {
+        OutputFormat::Id => {
+            println!("{}", id);
+        }
+        OutputFormat::ShortId => {
+            println!("{}", short_id.clone().unwrap_or_else(|| format_short_id(&id)));
+        }
+        OutputFormat::Path => {
+            println!("{}", file_path.display());
+        }
+        _ => {
+            println!(
+                "{} Created mate {}",
+                style("✓").green(),
+                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
+            );
+            println!("   {}", style(file_path.display()).dim());
+            println!(
+                "   {} <-> {} | {}",
+                style(truncate_str(&feature_a, 13)).yellow(),
+                style(truncate_str(&feature_b, 13)).yellow(),
+                style(&title).white()
+            );
+
+            // Show added links
+            for (link_type, target) in &added_links {
+                println!(
+                    "   {} --[{}]--> {}",
+                    style("→").dim(),
+                    style(link_type).cyan(),
+                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
+                );
+            }
+
+            // Show fit analysis if calculated
+            if let Some(ref analysis) = mate.fit_analysis {
+                // Use the clearance magnitude to determine precision for display
+                let ref_precision = analysis
+                    .worst_case_min_clearance
+                    .abs()
+                    .max(analysis.worst_case_max_clearance.abs())
+                    .max(0.001); // Minimum precision for tiny values
+                let min_rounded = smart_round(analysis.worst_case_min_clearance, ref_precision);
+                let max_rounded = smart_round(analysis.worst_case_max_clearance, ref_precision);
+
+                println!();
+                println!("   Fit Analysis:");
+                println!(
+                    "     Result: {} ({} to {})",
+                    style(format!("{}", analysis.fit_result)).cyan(),
+                    min_rounded,
+                    max_rounded
+                );
+            }
+        }
     }
 
     // Open in editor if requested

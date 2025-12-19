@@ -5,11 +5,13 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
+use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::{escape_csv, format_short_id, resolve_id_arg, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::entity::Priority;
 use crate::core::identity::{EntityId, EntityPrefix};
+use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -276,6 +278,10 @@ pub struct NewArgs {
     /// Don't open in editor after creation
     #[arg(long, short = 'n')]
     pub no_edit: bool,
+
+    /// Link to another entity (auto-infers link type)
+    #[arg(long, short = 'L')]
+    pub link: Vec<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -301,7 +307,7 @@ pub struct EditArgs {
 pub fn run(cmd: ReqCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         ReqCommands::List(args) => run_list(args, global),
-        ReqCommands::New(args) => run_new(args),
+        ReqCommands::New(args) => run_new(args, global),
         ReqCommands::Show(args) => run_show(args, global),
         ReqCommands::Edit(args) => run_edit(args),
     }
@@ -824,7 +830,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Auto => unreachable!(), // Already handled above
+        OutputFormat::Auto | OutputFormat::Path => unreachable!(), // Already handled above
     }
 
     Ok(())
@@ -939,12 +945,12 @@ fn output_cached_requirements(
                 );
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml => unreachable!(), // These require full entities
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Path => unreachable!(), // These require full entities
     }
     Ok(())
 }
 
-fn run_new(args: NewArgs) -> Result<()> {
+fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let config = Config::load();
 
@@ -1109,12 +1115,73 @@ fn run_new(args: NewArgs) -> Result<()> {
     let short_id = short_ids.add(id.to_string());
     let _ = short_ids.save(&project);
 
-    println!(
-        "{} Created requirement {}",
-        style("✓").green(),
-        style(short_id.unwrap_or_else(|| format_short_id(&id))).cyan()
-    );
-    println!("   {}", style(file_path.display()).dim());
+    // Handle --link flags
+    let mut added_links = Vec::new();
+    for link_target in &args.link {
+        // Resolve target ID
+        let resolved_target = short_ids
+            .resolve(link_target)
+            .unwrap_or_else(|| link_target.clone());
+
+        // Parse target to get prefix
+        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
+            match add_inferred_link(
+                &file_path,
+                EntityPrefix::Req,
+                &resolved_target,
+                target_entity_id.prefix(),
+            ) {
+                Ok(link_type) => {
+                    added_links.push((link_type, resolved_target.clone()));
+                }
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to add link to {}: {}",
+                        style("!").yellow(),
+                        link_target,
+                        e
+                    );
+                }
+            }
+        } else {
+            eprintln!(
+                "{} Invalid entity ID: {}",
+                style("!").yellow(),
+                link_target
+            );
+        }
+    }
+
+    // Output based on format flag
+    match global.format {
+        OutputFormat::Id => {
+            println!("{}", id);
+        }
+        OutputFormat::ShortId => {
+            println!("{}", short_id.clone().unwrap_or_else(|| format_short_id(&id)));
+        }
+        OutputFormat::Path => {
+            println!("{}", file_path.display());
+        }
+        _ => {
+            println!(
+                "{} Created requirement {}",
+                style("✓").green(),
+                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
+            );
+            println!("   {}", style(file_path.display()).dim());
+
+            // Show added links
+            for (link_type, target) in &added_links {
+                println!(
+                    "   {} --[{}]--> {}",
+                    style("→").dim(),
+                    style(link_type).cyan(),
+                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
+                );
+            }
+        }
+    }
 
     // Open in editor if requested (or by default unless --no-edit)
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1150,6 +1217,10 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", req.id);
         }
         _ => {
+            // Load cache and short IDs for link lookups
+            let short_ids = ShortIdIndex::load(&project);
+            let cache = EntityCache::open(&project).ok();
+
             // Human-readable format (default for terminal)
             println!("{}", style("─".repeat(60)).dim());
             println!(
@@ -1190,6 +1261,72 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                     if !criterion.is_empty() {
                         println!("  • {}", criterion);
                     }
+                }
+                println!();
+            }
+
+            // Links section
+            if args.with_links {
+                println!("{}", style("Links:").bold());
+                if !req.links.satisfied_by.is_empty() {
+                    println!(
+                        "  {}: {}",
+                        style("Satisfied by").dim(),
+                        req.links
+                            .satisfied_by
+                            .iter()
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+                if !req.links.verified_by.is_empty() {
+                    println!(
+                        "  {}: {}",
+                        style("Verified by").dim(),
+                        req.links
+                            .verified_by
+                            .iter()
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+                if !req.links.derives_from.is_empty() {
+                    println!(
+                        "  {}: {}",
+                        style("Derives from").dim(),
+                        req.links
+                            .derives_from
+                            .iter()
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+                if !req.links.derived_by.is_empty() {
+                    println!(
+                        "  {}: {}",
+                        style("Derived by").dim(),
+                        req.links
+                            .derived_by
+                            .iter()
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
+                }
+                if !req.links.allocated_to.is_empty() {
+                    println!(
+                        "  {}: {}",
+                        style("Allocated to").dim(),
+                        req.links
+                            .allocated_to
+                            .iter()
+                            .map(|id| format_link_with_title(&id.to_string(), &short_ids, &cache))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    );
                 }
                 println!();
             }

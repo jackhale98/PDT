@@ -27,6 +27,7 @@ pub mod report;
 pub mod req;
 pub mod risk;
 pub mod rslt;
+pub mod schema;
 pub mod status;
 pub mod sup;
 pub mod test;

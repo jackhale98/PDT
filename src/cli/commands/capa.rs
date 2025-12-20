@@ -504,7 +504,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         }
         OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
             // Build column list from args
-            let columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
 
             // Build rows
             let rows: Vec<TableRow> = capas.iter().map(|c| capa_to_row(c, &short_ids)).collect();
@@ -513,8 +517,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter = TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA")
-                .with_config(config);
+            let formatter = TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -916,8 +919,7 @@ fn output_cached_capas(
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter =
-                TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA").with_config(config);
+            let formatter = TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {

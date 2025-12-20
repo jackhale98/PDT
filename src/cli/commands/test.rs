@@ -625,8 +625,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // For last_failed: find most recent result per test and check if it's Fail
     let last_failed_tests: HashSet<&crate::core::identity::EntityId> = {
         // Group results by test_id, keeping only the most recent
-        let mut latest_by_test: HashMap<&crate::core::identity::EntityId, &crate::entities::result::Result> =
-            HashMap::new();
+        let mut latest_by_test: HashMap<
+            &crate::core::identity::EntityId,
+            &crate::entities::result::Result,
+        > = HashMap::new();
         for r in &results {
             latest_by_test
                 .entry(&r.test_id)
@@ -890,7 +892,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         }
         OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
             // Build column list from args
-            let mut columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
 
             // Add Id column if --show-id flag is set
             if args.show_id && !columns.contains(&"id") {
@@ -904,8 +910,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST")
-                .with_config(config);
+            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -948,7 +953,11 @@ fn output_cached_tests(
     match format {
         OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
             // Build column list from args
-            let mut columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
 
             // Add Id column if --show-id flag is set
             if args.show_id && !columns.contains(&"id") {
@@ -956,14 +965,16 @@ fn output_cached_tests(
             }
 
             // Build rows
-            let rows: Vec<TableRow> = tests.iter().map(|t| cached_test_to_row(t, short_ids)).collect();
+            let rows: Vec<TableRow> = tests
+                .iter()
+                .map(|t| cached_test_to_row(t, short_ids))
+                .collect();
 
             let config = TableConfig {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST")
-                .with_config(config);
+            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -990,18 +1001,21 @@ fn test_to_row(test: &Test, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(test.id.to_string(), short_ids)
         .cell("id", CellValue::Id(test.id.to_string()))
         .cell("type", CellValue::Type(test.test_type.to_string()))
-        .cell("level", CellValue::Text(
-            test.test_level.map_or("-".to_string(), |l| l.to_string())
-        ))
-        .cell("method", CellValue::Text(
-            test.test_method.map_or("-".to_string(), |m| m.to_string())
-        ))
+        .cell(
+            "level",
+            CellValue::Text(test.test_level.map_or("-".to_string(), |l| l.to_string())),
+        )
+        .cell(
+            "method",
+            CellValue::Text(test.test_method.map_or("-".to_string(), |m| m.to_string())),
+        )
         .cell("title", CellValue::Text(test.title.clone()))
         .cell("status", CellValue::Status(test.status))
         .cell("priority", CellValue::Priority(test.priority))
-        .cell("category", CellValue::Text(
-            test.category.as_deref().unwrap_or("-").to_string()
-        ))
+        .cell(
+            "category",
+            CellValue::Text(test.category.as_deref().unwrap_or("-").to_string()),
+        )
         .cell("author", CellValue::Text(test.author.clone()))
         .cell("created", CellValue::Date(test.created))
 }
@@ -1010,21 +1024,25 @@ fn test_to_row(test: &Test, short_ids: &ShortIdIndex) -> TableRow {
 fn cached_test_to_row(test: &CachedTest, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(test.id.clone(), short_ids)
         .cell("id", CellValue::Id(test.id.clone()))
-        .cell("type", CellValue::Type(
-            test.test_type.as_deref().unwrap_or("-").to_string()
-        ))
-        .cell("level", CellValue::Text(
-            test.level.as_deref().unwrap_or("-").to_string()
-        ))
-        .cell("method", CellValue::Text(
-            test.method.as_deref().unwrap_or("-").to_string()
-        ))
+        .cell(
+            "type",
+            CellValue::Type(test.test_type.as_deref().unwrap_or("-").to_string()),
+        )
+        .cell(
+            "level",
+            CellValue::Text(test.level.as_deref().unwrap_or("-").to_string()),
+        )
+        .cell(
+            "method",
+            CellValue::Text(test.method.as_deref().unwrap_or("-").to_string()),
+        )
         .cell("title", CellValue::Text(test.title.clone()))
         .cell("status", CellValue::Status(test.status))
         .cell("priority", CellValue::OptionalPriority(test.priority))
-        .cell("category", CellValue::Text(
-            test.category.as_deref().unwrap_or("-").to_string()
-        ))
+        .cell(
+            "category",
+            CellValue::Text(test.category.as_deref().unwrap_or("-").to_string()),
+        )
         .cell("author", CellValue::Text(test.author.clone()))
         .cell("created", CellValue::Date(test.created))
 }

@@ -27,7 +27,9 @@ pub trait Entity: Serialize + DeserializeOwned {
 }
 
 /// Status values common across entity types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum Status {
@@ -67,7 +69,9 @@ impl std::str::FromStr for Status {
 }
 
 /// Priority values common across entity types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum Priority {

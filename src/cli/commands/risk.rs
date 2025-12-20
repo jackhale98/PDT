@@ -713,9 +713,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&risks).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Id
+        | OutputFormat::ShortId => {
             // Build visible columns list
-            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut visible: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
             if args.show_id && !visible.contains(&"id") {
                 visible.insert(0, "id");
             }
@@ -733,8 +741,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 TableConfig::default()
             };
 
-            let formatter = TableFormatter::new(RISK_COLUMNS, "risk", "RISK")
-                .with_config(config);
+            let formatter = TableFormatter::new(RISK_COLUMNS, "risk", "RISK").with_config(config);
             formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -750,22 +757,33 @@ fn risk_to_row(risk: &Risk, short_ids: &ShortIdIndex) -> TableRow {
         .cell("type", CellValue::Type(risk.risk_type.to_string()))
         .cell("title", CellValue::Text(risk.title.clone()))
         .cell("status", CellValue::Status(risk.status))
-        .cell("risk-level", CellValue::Text(
-            risk.get_risk_level().map_or("-".to_string(), |l| l.to_string())
-        ))
-        .cell("severity", CellValue::Text(
-            risk.severity.map_or("-".to_string(), |s| s.to_string())
-        ))
-        .cell("occurrence", CellValue::Text(
-            risk.occurrence.map_or("-".to_string(), |o| o.to_string())
-        ))
-        .cell("detection", CellValue::Text(
-            risk.detection.map_or("-".to_string(), |d| d.to_string())
-        ))
-        .cell("rpn", CellValue::Text(
-            risk.get_rpn().map_or("-".to_string(), |r| r.to_string())
-        ))
-        .cell("category", CellValue::Text(risk.category.clone().unwrap_or_default()))
+        .cell(
+            "risk-level",
+            CellValue::Text(
+                risk.get_risk_level()
+                    .map_or("-".to_string(), |l| l.to_string()),
+            ),
+        )
+        .cell(
+            "severity",
+            CellValue::Text(risk.severity.map_or("-".to_string(), |s| s.to_string())),
+        )
+        .cell(
+            "occurrence",
+            CellValue::Text(risk.occurrence.map_or("-".to_string(), |o| o.to_string())),
+        )
+        .cell(
+            "detection",
+            CellValue::Text(risk.detection.map_or("-".to_string(), |d| d.to_string())),
+        )
+        .cell(
+            "rpn",
+            CellValue::Text(risk.get_rpn().map_or("-".to_string(), |r| r.to_string())),
+        )
+        .cell(
+            "category",
+            CellValue::Text(risk.category.clone().unwrap_or_default()),
+        )
         .cell("author", CellValue::Text(risk.author.clone()))
         .cell("created", CellValue::Date(risk.created))
 }

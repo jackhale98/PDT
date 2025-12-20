@@ -2429,10 +2429,7 @@ entity_revision: 1
             .category
             .clone()
             .unwrap_or_else(|| "material".to_string());
-        let risk_level = ctx
-            .risk_level
-            .clone()
-            .unwrap_or_else(|| "low".to_string());
+        let risk_level = ctx.risk_level.clone().unwrap_or_else(|| "low".to_string());
         let deviation_number = ctx.deviation_number.clone();
         let created = ctx.created.to_rfc3339();
 

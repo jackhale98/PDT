@@ -201,10 +201,18 @@ impl CellValue {
                 None => format!("{:<width$}", "-", width = width),
             },
             CellValue::Type(t) => {
-                format!("{:<width$}", truncate_str(t, width.saturating_sub(2)), width = width)
+                format!(
+                    "{:<width$}",
+                    truncate_str(t, width.saturating_sub(2)),
+                    width = width
+                )
             }
             CellValue::Verdict(v) => {
-                let display = if v.to_lowercase() == "not_applicable" { "n/a".to_string() } else { v.clone() };
+                let display = if v.to_lowercase() == "not_applicable" {
+                    "n/a".to_string()
+                } else {
+                    v.clone()
+                };
                 let styled = match v.to_lowercase().as_str() {
                     "pass" => style(&display).green(),
                     "fail" => style(&display).red().bold(),
@@ -310,7 +318,11 @@ impl CellValue {
             }
             CellValue::Tags(tags) => {
                 let joined = tags.join(", ");
-                format!("{:<width$}", truncate_str(&joined, width.saturating_sub(2)), width = width)
+                format!(
+                    "{:<width$}",
+                    truncate_str(&joined, width.saturating_sub(2)),
+                    width = width
+                )
             }
             CellValue::Empty => format!("{:<width$}", "-", width = width),
         }
@@ -324,9 +336,7 @@ impl CellValue {
             CellValue::Text(s) => escape_csv(s),
             CellValue::Status(status) => status.to_string(),
             CellValue::Priority(priority) => priority.to_string(),
-            CellValue::OptionalPriority(opt) => {
-                opt.map_or(String::new(), |p| p.to_string())
-            }
+            CellValue::OptionalPriority(opt) => opt.map_or(String::new(), |p| p.to_string()),
             CellValue::Type(t) => escape_csv(t),
             CellValue::Verdict(v) => escape_csv(v),
             CellValue::NcrSeverity(s) => escape_csv(s),
@@ -339,7 +349,13 @@ impl CellValue {
             CellValue::AnalysisResult(s) => s.clone(),
             CellValue::Cpk(opt) => opt.map(|c| format!("{:.2}", c)).unwrap_or_default(),
             CellValue::YieldPct(opt) => opt.map(|y| format!("{:.1}", y)).unwrap_or_default(),
-            CellValue::Critical(b) => if *b { "yes".to_string() } else { "no".to_string() },
+            CellValue::Critical(b) => {
+                if *b {
+                    "yes".to_string()
+                } else {
+                    "no".to_string()
+                }
+            }
             CellValue::Date(dt) => {
                 let local: DateTime<Local> = dt.with_timezone(&Local);
                 local.format("%Y-%m-%d").to_string()
@@ -363,9 +379,7 @@ impl CellValue {
             CellValue::Text(s) => s.clone(),
             CellValue::Status(status) => status.to_string(),
             CellValue::Priority(priority) => priority.to_string(),
-            CellValue::OptionalPriority(opt) => {
-                opt.map_or("-".to_string(), |p| p.to_string())
-            }
+            CellValue::OptionalPriority(opt) => opt.map_or("-".to_string(), |p| p.to_string()),
             CellValue::Type(t) => t.clone(),
             CellValue::Verdict(v) => v.clone(),
             CellValue::NcrSeverity(s) => s.clone(),
@@ -387,9 +401,19 @@ impl CellValue {
                 _ => "-".to_string(),
             },
             CellValue::AnalysisResult(s) => s.clone(),
-            CellValue::Cpk(opt) => opt.map(|c| format!("{:.2}", c)).unwrap_or_else(|| "-".to_string()),
-            CellValue::YieldPct(opt) => opt.map(|y| format!("{:.1}%", y)).unwrap_or_else(|| "-".to_string()),
-            CellValue::Critical(b) => if *b { "**yes**".to_string() } else { "no".to_string() },
+            CellValue::Cpk(opt) => opt
+                .map(|c| format!("{:.2}", c))
+                .unwrap_or_else(|| "-".to_string()),
+            CellValue::YieldPct(opt) => opt
+                .map(|y| format!("{:.1}%", y))
+                .unwrap_or_else(|| "-".to_string()),
+            CellValue::Critical(b) => {
+                if *b {
+                    "**yes**".to_string()
+                } else {
+                    "no".to_string()
+                }
+            }
             CellValue::Empty => "-".to_string(),
         };
         // Escape pipe characters for markdown tables
@@ -404,9 +428,7 @@ impl CellValue {
             CellValue::Text(s) => s.clone(),
             CellValue::Status(status) => status.to_string(),
             CellValue::Priority(priority) => priority.to_string(),
-            CellValue::OptionalPriority(opt) => {
-                opt.map_or(String::new(), |p| p.to_string())
-            }
+            CellValue::OptionalPriority(opt) => opt.map_or(String::new(), |p| p.to_string()),
             CellValue::Type(t) => t.clone(),
             CellValue::Verdict(v) => v.clone(),
             CellValue::NcrSeverity(s) => s.clone(),
@@ -415,7 +437,13 @@ impl CellValue {
             CellValue::AnalysisResult(s) => s.clone(),
             CellValue::Cpk(opt) => opt.map(|c| format!("{:.2}", c)).unwrap_or_default(),
             CellValue::YieldPct(opt) => opt.map(|y| format!("{:.1}%", y)).unwrap_or_default(),
-            CellValue::Critical(b) => if *b { "yes".to_string() } else { "no".to_string() },
+            CellValue::Critical(b) => {
+                if *b {
+                    "yes".to_string()
+                } else {
+                    "no".to_string()
+                }
+            }
             CellValue::Date(dt) => {
                 let local: DateTime<Local> = dt.with_timezone(&Local);
                 local.format("%Y-%m-%d").to_string()
@@ -455,9 +483,7 @@ pub struct TableRow {
 
 impl TableRow {
     pub fn new(full_id: String, short_ids: &ShortIdIndex) -> Self {
-        let short_id = short_ids
-            .get_short_id(&full_id)
-            .unwrap_or_default();
+        let short_id = short_ids.get_short_id(&full_id).unwrap_or_default();
         Self {
             short_id,
             full_id,
@@ -535,7 +561,11 @@ impl<'a> TableFormatter<'a> {
 
         for col in self.columns {
             if visible_columns.contains(&col.key) {
-                header_parts.push(format!("{:<width$}", style(col.header).bold(), width = col.width));
+                header_parts.push(format!(
+                    "{:<width$}",
+                    style(col.header).bold(),
+                    width = col.width
+                ));
                 widths.push(col.width);
             }
         }
@@ -656,10 +686,7 @@ impl<'a> TableFormatter<'a> {
 
         // Data rows
         for row in rows {
-            let mut values = vec![
-                escape_csv(&row.short_id),
-                escape_csv(&row.full_id),
-            ];
+            let mut values = vec![escape_csv(&row.short_id), escape_csv(&row.full_id)];
             for col in self.columns {
                 if visible_columns.contains(&col.key) {
                     if let Some(value) = row.get(col.key) {
@@ -839,11 +866,10 @@ mod tests {
     fn test_wrap_text_multiple_lines() {
         let text = "The quick brown fox jumps over the lazy dog";
         let result = wrap_text(text, 15);
-        assert_eq!(result, vec![
-            "The quick brown",
-            "fox jumps over",
-            "the lazy dog"
-        ]);
+        assert_eq!(
+            result,
+            vec!["The quick brown", "fox jumps over", "the lazy dog"]
+        );
     }
 
     #[test]

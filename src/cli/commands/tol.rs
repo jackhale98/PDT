@@ -574,8 +574,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter =
-                TableFormatter::new(TOL_COLUMNS, "stackup", "TOL").with_config(config);
+            let formatter = TableFormatter::new(TOL_COLUMNS, "stackup", "TOL").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {

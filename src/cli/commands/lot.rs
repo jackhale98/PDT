@@ -528,9 +528,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                         }
                         ListColumn::LotStatus => {
                             let status_styled = match lot.lot_status {
-                                LotStatus::InProgress => {
-                                    style(lot.lot_status.to_string()).green()
-                                }
+                                LotStatus::InProgress => style(lot.lot_status.to_string()).green(),
                                 LotStatus::OnHold => style(lot.lot_status.to_string()).yellow(),
                                 LotStatus::Completed => style(lot.lot_status.to_string()).cyan(),
                                 LotStatus::Scrapped => style(lot.lot_status.to_string()).red(),
@@ -578,7 +576,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     format_short_id(&lot.id),
                     lot.title,
                     lot.lot_number.as_deref().unwrap_or("-"),
-                    lot.quantity.map(|q| q.to_string()).unwrap_or("-".to_string()),
+                    lot.quantity
+                        .map(|q| q.to_string())
+                        .unwrap_or("-".to_string()),
                     lot.lot_status,
                     lot.author
                 );
@@ -642,10 +642,8 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         // Resolve short ID if needed
         let short_ids = ShortIdIndex::load(&project);
         let resolved = short_ids.resolve(prod).unwrap_or_else(|| prod.clone());
-        yaml_content = yaml_content.replace(
-            "  product: null",
-            &format!("  product: \"{}\"", resolved),
-        );
+        yaml_content =
+            yaml_content.replace("  product: null", &format!("  product: \"{}\"", resolved));
     }
 
     // Write file
@@ -866,9 +864,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{}", style("Links:").bold());
 
                 if let Some(ref prod) = lot.links.product {
-                    let display = short_ids
-                        .get_short_id(prod)
-                        .unwrap_or_else(|| prod.clone());
+                    let display = short_ids.get_short_id(prod).unwrap_or_else(|| prod.clone());
                     println!("  {}: {}", style("Product").dim(), style(&display).cyan());
                 }
                 if !lot.links.processes.is_empty() {
@@ -876,11 +872,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         .links
                         .processes
                         .iter()
-                        .map(|p| {
-                            short_ids
-                                .get_short_id(p)
-                                .unwrap_or_else(|| p.clone())
-                        })
+                        .map(|p| short_ids.get_short_id(p).unwrap_or_else(|| p.clone()))
                         .collect();
                     println!(
                         "  {}: {}",
@@ -893,11 +885,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         .links
                         .ncrs
                         .iter()
-                        .map(|n| {
-                            short_ids
-                                .get_short_id(n)
-                                .unwrap_or_else(|| n.clone())
-                        })
+                        .map(|n| short_ids.get_short_id(n).unwrap_or_else(|| n.clone()))
                         .collect();
                     println!(
                         "  {}: {}",
@@ -974,8 +962,7 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No lot found matching '{}'", args.lot))?;
+    let path = found_path.ok_or_else(|| miette::miette!("No lot found matching '{}'", args.lot))?;
 
     // Read and parse lot
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -992,13 +979,17 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
         let resolved_proc = short_ids.resolve(proc).unwrap_or_else(|| proc.clone());
         lot.execution
             .iter()
-            .position(|s| s.process.as_ref().is_some_and(|p| p.contains(&resolved_proc)))
+            .position(|s| {
+                s.process
+                    .as_ref()
+                    .is_some_and(|p| p.contains(&resolved_proc))
+            })
             .or_else(|| proc.parse::<usize>().ok().map(|i| i.saturating_sub(1)))
     } else {
         // Find first non-completed step
-        lot.execution
-            .iter()
-            .position(|s| s.status == ExecutionStatus::Pending || s.status == ExecutionStatus::InProgress)
+        lot.execution.iter().position(|s| {
+            s.status == ExecutionStatus::Pending || s.status == ExecutionStatus::InProgress
+        })
     };
 
     let step_idx = step_idx.ok_or_else(|| {
@@ -1026,11 +1017,7 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
         println!();
         println!("{}", style("Update Execution Step").bold().cyan());
         println!("{}", style("─".repeat(50)).dim());
-        println!(
-            "Lot: {} \"{}\"",
-            style(&display_id).cyan(),
-            &lot.title
-        );
+        println!("Lot: {} \"{}\"", style(&display_id).cyan(), &lot.title);
         println!(
             "Step {}: {}",
             step_idx + 1,
@@ -1039,10 +1026,7 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
                 .as_deref()
                 .unwrap_or("(unlinked)")
         );
-        println!(
-            "Current Status: {}",
-            lot.execution[step_idx].status
-        );
+        println!("Current Status: {}", lot.execution[step_idx].status);
         println!();
 
         // Simple prompts
@@ -1060,7 +1044,9 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
         print!("Operator [{}]: ", config.author());
         std::io::Write::flush(&mut std::io::stdout()).into_diagnostic()?;
         let mut op_input = String::new();
-        std::io::stdin().read_line(&mut op_input).into_diagnostic()?;
+        std::io::stdin()
+            .read_line(&mut op_input)
+            .into_diagnostic()?;
         operator = if op_input.trim().is_empty() {
             config.author().to_string()
         } else {
@@ -1070,7 +1056,9 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
         print!("Notes (optional): ");
         std::io::Write::flush(&mut std::io::stdout()).into_diagnostic()?;
         let mut notes_input = String::new();
-        std::io::stdin().read_line(&mut notes_input).into_diagnostic()?;
+        std::io::stdin()
+            .read_line(&mut notes_input)
+            .into_diagnostic()?;
         notes = if notes_input.trim().is_empty() {
             None
         } else {
@@ -1081,9 +1069,7 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
             .status
             .map(ExecutionStatus::from)
             .unwrap_or(ExecutionStatus::Completed);
-        operator = args
-            .operator
-            .unwrap_or_else(|| config.author().to_string());
+        operator = args.operator.unwrap_or_else(|| config.author().to_string());
         notes = args.notes;
     }
 
@@ -1113,7 +1099,10 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
                 "status": new_status.to_string(),
                 "operator": operator,
             });
-            println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).unwrap_or_default()
+            );
         }
         OutputFormat::Yaml => {
             let result = serde_json::json!({
@@ -1170,8 +1159,7 @@ fn run_complete(args: CompleteArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
 
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No lot found matching '{}'", args.lot))?;
+    let path = found_path.ok_or_else(|| miette::miette!("No lot found matching '{}'", args.lot))?;
 
     // Read and parse lot
     let content = fs::read_to_string(&path).into_diagnostic()?;
@@ -1187,7 +1175,10 @@ fn run_complete(args: CompleteArgs, global: &GlobalOpts) -> Result<()> {
         return Err(miette::miette!("Lot {} is already completed", display_id));
     }
     if lot.lot_status == LotStatus::Scrapped {
-        return Err(miette::miette!("Lot {} is scrapped and cannot be completed", display_id));
+        return Err(miette::miette!(
+            "Lot {} is scrapped and cannot be completed",
+            display_id
+        ));
     }
 
     // Check for incomplete steps
@@ -1195,7 +1186,9 @@ fn run_complete(args: CompleteArgs, global: &GlobalOpts) -> Result<()> {
         .execution
         .iter()
         .enumerate()
-        .filter(|(_, s)| s.status != ExecutionStatus::Completed && s.status != ExecutionStatus::Skipped)
+        .filter(|(_, s)| {
+            s.status != ExecutionStatus::Completed && s.status != ExecutionStatus::Skipped
+        })
         .collect();
 
     if !incomplete_steps.is_empty() && !args.yes {
@@ -1238,7 +1231,10 @@ fn run_complete(args: CompleteArgs, global: &GlobalOpts) -> Result<()> {
                 "lot_status": "completed",
                 "completion_date": lot.completion_date,
             });
-            println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).unwrap_or_default()
+            );
         }
         OutputFormat::Yaml => {
             let result = serde_json::json!({

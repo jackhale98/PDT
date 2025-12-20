@@ -587,10 +587,18 @@ mod tests {
 
         // Check they are Number type
         if let Some(mass) = mass_field {
-            assert!(matches!(mass.field_type, FieldType::Number { .. }), "mass_kg should be Number type, got {:?}", mass.field_type);
+            assert!(
+                matches!(mass.field_type, FieldType::Number { .. }),
+                "mass_kg should be Number type, got {:?}",
+                mass.field_type
+            );
         }
         if let Some(cost) = cost_field {
-            assert!(matches!(cost.field_type, FieldType::Number { .. }), "unit_cost should be Number type, got {:?}", cost.field_type);
+            assert!(
+                matches!(cost.field_type, FieldType::Number { .. }),
+                "unit_cost should be Number type, got {:?}",
+                cost.field_type
+            );
         }
     }
 
@@ -623,7 +631,10 @@ mod tests {
             (EntityPrefix::Req, vec!["title", "type"]),
             (EntityPrefix::Risk, vec!["title", "severity", "occurrence"]),
             (EntityPrefix::Test, vec!["title", "type"]),
-            (EntityPrefix::Cmp, vec!["title", "part_number", "make_buy", "mass_kg", "unit_cost"]),
+            (
+                EntityPrefix::Cmp,
+                vec!["title", "part_number", "make_buy", "mass_kg", "unit_cost"],
+            ),
             (EntityPrefix::Asm, vec!["title", "part_number"]),
             (EntityPrefix::Feat, vec!["title", "feature_type"]),
             (EntityPrefix::Proc, vec!["title"]),

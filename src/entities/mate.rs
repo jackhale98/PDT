@@ -491,13 +491,7 @@ mod tests {
     fn test_entity_trait_implementation() {
         let feat_a = EntityId::new(EntityPrefix::Feat);
         let feat_b = EntityId::new(EntityPrefix::Feat);
-        let mate = Mate::new(
-            "Test Mate",
-            feat_a,
-            feat_b,
-            MateType::Clearance,
-            "Author",
-        );
+        let mate = Mate::new("Test Mate", feat_a, feat_b, MateType::Clearance, "Author");
         assert!(mate.id().to_string().starts_with("MATE-"));
         assert_eq!(mate.title(), "Test Mate");
         assert_eq!(mate.author(), "Author");

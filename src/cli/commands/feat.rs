@@ -645,8 +645,7 @@ fn cached_feat_to_row(
     short_ids: &ShortIdIndex,
     component_info: &std::collections::HashMap<String, (String, String)>,
 ) -> TableRow {
-    let component_display =
-        format_component_display(&feat.component_id, short_ids, component_info);
+    let component_display = format_component_display(&feat.component_id, short_ids, component_info);
 
     TableRow::new(feat.id.clone(), short_ids)
         .cell("id", CellValue::Id(feat.id.clone()))

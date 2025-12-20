@@ -396,10 +396,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Pre-compute HashSets for O(1) lookups instead of O(n) iterations
     // This changes O(n*m) filter to O(n+m) where n=requirements, m=results
     use std::collections::HashSet;
-    let tested_test_ids: HashSet<&crate::core::identity::EntityId> = results
-        .iter()
-        .map(|r| &r.test_id)
-        .collect();
+    let tested_test_ids: HashSet<&crate::core::identity::EntityId> =
+        results.iter().map(|r| &r.test_id).collect();
     let failed_test_ids: HashSet<&crate::core::identity::EntityId> = results
         .iter()
         .filter(|r| r.verdict == crate::entities::result::Verdict::Fail)
@@ -500,7 +498,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     Some(Priority::Low) => 3,
                     None => 4,
                 };
-                cached_reqs.sort_by(|a, b| priority_order(a.priority).cmp(&priority_order(b.priority)));
+                cached_reqs
+                    .sort_by(|a, b| priority_order(a.priority).cmp(&priority_order(b.priority)));
             }
             ListColumn::Category => cached_reqs.sort_by(|a, b| a.category.cmp(&b.category)),
             ListColumn::Author => cached_reqs.sort_by(|a, b| a.author.cmp(&b.author)),
@@ -575,7 +574,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         // Status filter (for full entity mode and Active filter)
-        let status_match = crate::cli::entity_cmd::status_enum_matches_filter(&req.status, args.status);
+        let status_match =
+            crate::cli::entity_cmd::status_enum_matches_filter(&req.status, args.status);
 
         // Priority filter (for full entity mode and Urgent filter)
         let priority_match = match args.priority {
@@ -771,9 +771,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&reqs).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Id
+        | OutputFormat::ShortId => {
             // Build visible columns list
-            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut visible: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
             if args.show_id && !visible.contains(&"id") {
                 visible.insert(0, "id");
             }
@@ -791,8 +799,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 TableConfig::default()
             };
 
-            let formatter = TableFormatter::new(REQ_COLUMNS, "requirement", "REQ")
-                .with_config(config);
+            let formatter =
+                TableFormatter::new(REQ_COLUMNS, "requirement", "REQ").with_config(config);
             formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(), // Already handled above
@@ -809,7 +817,10 @@ fn requirement_to_row(req: &Requirement, short_ids: &ShortIdIndex) -> TableRow {
         .cell("title", CellValue::Text(req.title.clone()))
         .cell("status", CellValue::Status(req.status))
         .cell("priority", CellValue::Priority(req.priority))
-        .cell("category", CellValue::Text(req.category.clone().unwrap_or_default()))
+        .cell(
+            "category",
+            CellValue::Text(req.category.clone().unwrap_or_default()),
+        )
         .cell("author", CellValue::Text(req.author.clone()))
         .cell("created", CellValue::Date(req.created))
         .cell("tags", CellValue::Tags(req.tags.clone()))
@@ -823,7 +834,11 @@ fn output_cached_requirements(
     format: OutputFormat,
 ) -> Result<()> {
     // Build visible columns list
-    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    let mut visible: Vec<&str> = args
+        .columns
+        .iter()
+        .map(|c| c.to_string().leak() as &str)
+        .collect();
     if args.show_id && !visible.contains(&"id") {
         visible.insert(0, "id");
     }
@@ -841,22 +856,30 @@ fn output_cached_requirements(
         TableConfig::default()
     };
 
-    let formatter = TableFormatter::new(REQ_COLUMNS, "requirement", "REQ")
-        .with_config(config);
+    let formatter = TableFormatter::new(REQ_COLUMNS, "requirement", "REQ").with_config(config);
     formatter.output(rows, format, &visible);
 
     Ok(())
 }
 
 /// Convert a CachedRequirement to a TableRow
-fn cached_requirement_to_row(req: &crate::core::CachedRequirement, short_ids: &ShortIdIndex) -> TableRow {
+fn cached_requirement_to_row(
+    req: &crate::core::CachedRequirement,
+    short_ids: &ShortIdIndex,
+) -> TableRow {
     TableRow::new(req.id.clone(), short_ids)
         .cell("id", CellValue::Id(req.id.clone()))
-        .cell("type", CellValue::Type(req.req_type.clone().unwrap_or_else(|| "input".to_string())))
+        .cell(
+            "type",
+            CellValue::Type(req.req_type.clone().unwrap_or_else(|| "input".to_string())),
+        )
         .cell("title", CellValue::Text(req.title.clone()))
         .cell("status", CellValue::Status(req.status))
         .cell("priority", CellValue::OptionalPriority(req.priority))
-        .cell("category", CellValue::Text(req.category.clone().unwrap_or_default()))
+        .cell(
+            "category",
+            CellValue::Text(req.category.clone().unwrap_or_default()),
+        )
         .cell("author", CellValue::Text(req.author.clone()))
         .cell("created", CellValue::Date(req.created))
         .cell("tags", CellValue::Tags(req.tags.clone()))

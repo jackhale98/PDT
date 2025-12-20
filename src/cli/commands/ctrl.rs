@@ -461,9 +461,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&controls).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Id
+        | OutputFormat::ShortId => {
             // Build visible columns list
-            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut visible: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
             if args.show_id && !visible.contains(&"id") {
                 visible.insert(0, "id");
             }
@@ -481,8 +489,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 TableConfig::default()
             };
 
-            let formatter = TableFormatter::new(CTRL_COLUMNS, "control", "CTRL")
-                .with_config(config);
+            let formatter =
+                TableFormatter::new(CTRL_COLUMNS, "control", "CTRL").with_config(config);
             formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -496,7 +504,10 @@ fn control_to_row(ctrl: &Control, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(ctrl.id.to_string(), short_ids)
         .cell("id", CellValue::Id(ctrl.id.to_string()))
         .cell("title", CellValue::Text(ctrl.title.clone()))
-        .cell("control-type", CellValue::Type(ctrl.control_type.to_string()))
+        .cell(
+            "control-type",
+            CellValue::Type(ctrl.control_type.to_string()),
+        )
         .cell("status", CellValue::Status(ctrl.status))
         .cell("author", CellValue::Text(ctrl.author.clone()))
         .cell("created", CellValue::DateTime(ctrl.created))
@@ -520,7 +531,11 @@ fn output_cached_controls(
     }
 
     // Build visible columns list
-    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    let mut visible: Vec<&str> = args
+        .columns
+        .iter()
+        .map(|c| c.to_string().leak() as &str)
+        .collect();
     if args.show_id && !visible.contains(&"id") {
         visible.insert(0, "id");
     }
@@ -538,8 +553,7 @@ fn output_cached_controls(
         TableConfig::default()
     };
 
-    let formatter = TableFormatter::new(CTRL_COLUMNS, "control", "CTRL")
-        .with_config(config);
+    let formatter = TableFormatter::new(CTRL_COLUMNS, "control", "CTRL").with_config(config);
     formatter.output(rows, format, &visible);
 
     Ok(())

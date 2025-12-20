@@ -10,9 +10,9 @@ use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, Table
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::CachedSupplier;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::CachedSupplier;
 use crate::core::Config;
 use crate::entities::supplier::Supplier;
 use crate::schema::template::{TemplateContext, TemplateGenerator};
@@ -372,9 +372,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 print!("{}", yaml);
             }
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Id
+        | OutputFormat::ShortId => {
             // Build visible columns list
-            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut visible: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
             if args.show_id && !visible.contains(&"id") {
                 visible.insert(0, "id");
             }
@@ -392,8 +400,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 TableConfig::default()
             };
 
-            let formatter = TableFormatter::new(SUP_COLUMNS, "supplier", "SUP")
-                .with_config(config);
+            let formatter = TableFormatter::new(SUP_COLUMNS, "supplier", "SUP").with_config(config);
             formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -403,10 +410,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 /// Convert a cached supplier to a TableRow
-fn cached_supplier_to_row(
-    sup: &CachedSupplier,
-    short_ids: &ShortIdIndex,
-) -> TableRow {
+fn cached_supplier_to_row(sup: &CachedSupplier, short_ids: &ShortIdIndex) -> TableRow {
     // Format capabilities display
     let caps_display = if sup.capabilities.len() > 2 {
         let first_two: Vec<_> = sup.capabilities.iter().take(2).cloned().collect();
@@ -418,9 +422,15 @@ fn cached_supplier_to_row(
     TableRow::new(sup.id.clone(), short_ids)
         .cell("id", CellValue::Id(sup.id.clone()))
         .cell("name", CellValue::Text(sup.name.clone()))
-        .cell("short-name", CellValue::Text(sup.short_name.clone().unwrap_or_else(|| "-".to_string())))
+        .cell(
+            "short-name",
+            CellValue::Text(sup.short_name.clone().unwrap_or_else(|| "-".to_string())),
+        )
         .cell("status", CellValue::Status(sup.status))
-        .cell("website", CellValue::Text(sup.website.clone().unwrap_or_else(|| "-".to_string())))
+        .cell(
+            "website",
+            CellValue::Text(sup.website.clone().unwrap_or_else(|| "-".to_string())),
+        )
         .cell("capabilities", CellValue::Text(caps_display))
         .cell("author", CellValue::Text(sup.author.clone()))
         .cell("created", CellValue::Date(sup.created))
@@ -508,8 +518,12 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let added_links =
-        crate::cli::entity_cmd::process_link_flags(&file_path, EntityPrefix::Sup, &args.link, &short_ids);
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Sup,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     crate::cli::entity_cmd::output_new_entity(

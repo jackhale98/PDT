@@ -663,9 +663,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&components).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Id
+        | OutputFormat::ShortId => {
             // Build visible columns list
-            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut visible: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
             if args.show_id && !visible.contains(&"id") {
                 visible.insert(0, "id");
             }
@@ -683,8 +691,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 TableConfig::default()
             };
 
-            let formatter = TableFormatter::new(CMP_COLUMNS, "component", "CMP")
-                .with_config(config);
+            let formatter =
+                TableFormatter::new(CMP_COLUMNS, "component", "CMP").with_config(config);
             formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -698,7 +706,10 @@ fn component_to_row(cmp: &Component, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(cmp.id.to_string(), short_ids)
         .cell("id", CellValue::Id(cmp.id.to_string()))
         .cell("part-number", CellValue::Text(cmp.part_number.clone()))
-        .cell("revision", CellValue::Text(cmp.revision.clone().unwrap_or_else(|| "-".to_string())))
+        .cell(
+            "revision",
+            CellValue::Text(cmp.revision.clone().unwrap_or_else(|| "-".to_string())),
+        )
         .cell("title", CellValue::Text(cmp.title.clone()))
         .cell("make-buy", CellValue::Type(cmp.make_buy.to_string()))
         .cell("category", CellValue::Type(cmp.category.to_string()))
@@ -715,7 +726,11 @@ fn output_cached_components(
     format: OutputFormat,
 ) -> Result<()> {
     // Build visible columns list
-    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    let mut visible: Vec<&str> = args
+        .columns
+        .iter()
+        .map(|c| c.to_string().leak() as &str)
+        .collect();
     if args.show_id && !visible.contains(&"id") {
         visible.insert(0, "id");
     }
@@ -733,22 +748,36 @@ fn output_cached_components(
         TableConfig::default()
     };
 
-    let formatter = TableFormatter::new(CMP_COLUMNS, "component", "CMP")
-        .with_config(config);
+    let formatter = TableFormatter::new(CMP_COLUMNS, "component", "CMP").with_config(config);
     formatter.output(rows, format, &visible);
 
     Ok(())
 }
 
 /// Convert a CachedComponent to a TableRow
-fn cached_component_to_row(cmp: &crate::core::CachedComponent, short_ids: &ShortIdIndex) -> TableRow {
+fn cached_component_to_row(
+    cmp: &crate::core::CachedComponent,
+    short_ids: &ShortIdIndex,
+) -> TableRow {
     TableRow::new(cmp.id.clone(), short_ids)
         .cell("id", CellValue::Id(cmp.id.clone()))
-        .cell("part-number", CellValue::Text(cmp.part_number.clone().unwrap_or_default()))
-        .cell("revision", CellValue::Text(cmp.revision.clone().unwrap_or_else(|| "-".to_string())))
+        .cell(
+            "part-number",
+            CellValue::Text(cmp.part_number.clone().unwrap_or_default()),
+        )
+        .cell(
+            "revision",
+            CellValue::Text(cmp.revision.clone().unwrap_or_else(|| "-".to_string())),
+        )
         .cell("title", CellValue::Text(cmp.title.clone()))
-        .cell("make-buy", CellValue::Type(cmp.make_buy.clone().unwrap_or_else(|| "buy".to_string())))
-        .cell("category", CellValue::Type(cmp.category.clone().unwrap_or_default()))
+        .cell(
+            "make-buy",
+            CellValue::Type(cmp.make_buy.clone().unwrap_or_else(|| "buy".to_string())),
+        )
+        .cell(
+            "category",
+            CellValue::Type(cmp.category.clone().unwrap_or_default()),
+        )
         .cell("status", CellValue::Status(cmp.status))
         .cell("author", CellValue::Text(cmp.author.clone()))
         .cell("created", CellValue::Date(cmp.created))

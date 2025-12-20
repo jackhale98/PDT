@@ -22,11 +22,12 @@ impl ToSql for Status {
 impl FromSql for Status {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let s = value.as_str()?;
-        s.parse()
-            .map_err(|e: String| FromSqlError::Other(Box::new(std::io::Error::new(
+        s.parse().map_err(|e: String| {
+            FromSqlError::Other(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 e,
-            ))))
+            )))
+        })
     }
 }
 
@@ -43,11 +44,12 @@ impl ToSql for Priority {
 impl FromSql for Priority {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let s = value.as_str()?;
-        s.parse()
-            .map_err(|e: String| FromSqlError::Other(Box::new(std::io::Error::new(
+        s.parse().map_err(|e: String| {
+            FromSqlError::Other(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 e,
-            ))))
+            )))
+        })
     }
 }
 
@@ -92,11 +94,12 @@ impl ToSql for LinkType {
 impl FromSql for LinkType {
     fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
         let s = value.as_str()?;
-        s.parse()
-            .map_err(|e: String| FromSqlError::Other(Box::new(std::io::Error::new(
+        s.parse().map_err(|e: String| {
+            FromSqlError::Other(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 e,
-            ))))
+            )))
+        })
     }
 }
 

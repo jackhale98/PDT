@@ -302,10 +302,7 @@ mod tests {
             "completed".parse::<LotStatus>().unwrap(),
             LotStatus::Completed
         );
-        assert_eq!(
-            "on_hold".parse::<LotStatus>().unwrap(),
-            LotStatus::OnHold
-        );
+        assert_eq!("on_hold".parse::<LotStatus>().unwrap(), LotStatus::OnHold);
         assert_eq!(
             "scrapped".parse::<LotStatus>().unwrap(),
             LotStatus::Scrapped

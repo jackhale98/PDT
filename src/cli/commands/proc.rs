@@ -524,13 +524,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&processes).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md
-        | OutputFormat::Id | OutputFormat::ShortId => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Id
+        | OutputFormat::ShortId => {
             // Convert visible columns to keys, optionally including ID
-            let mut visible_columns: Vec<&str> = args.columns
-                .iter()
-                .map(|c| c.key())
-                .collect();
+            let mut visible_columns: Vec<&str> = args.columns.iter().map(|c| c.key()).collect();
             if args.show_id && !visible_columns.contains(&"id") {
                 visible_columns.insert(0, "id");
             }
@@ -548,8 +548,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             };
 
             // Output using TableFormatter
-            let formatter = TableFormatter::new(PROC_COLUMNS, "process", "PROC")
-                .with_config(config);
+            let formatter =
+                TableFormatter::new(PROC_COLUMNS, "process", "PROC").with_config(config);
             formatter.output(rows, format, &visible_columns);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -563,10 +563,14 @@ fn process_to_row(proc: &Process, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(proc.id.to_string(), short_ids)
         .cell("id", CellValue::Id(proc.id.to_string()))
         .cell("title", CellValue::Text(proc.title.clone()))
-        .cell("process-type", CellValue::Type(proc.process_type.to_string()))
-        .cell("operation", CellValue::Text(
-            proc.operation_number.as_deref().unwrap_or("-").to_string()
-        ))
+        .cell(
+            "process-type",
+            CellValue::Type(proc.process_type.to_string()),
+        )
+        .cell(
+            "operation",
+            CellValue::Text(proc.operation_number.as_deref().unwrap_or("-").to_string()),
+        )
         .cell("status", CellValue::Status(proc.status))
         .cell("author", CellValue::Text(proc.author.clone()))
         .cell("created", CellValue::DateTime(proc.created))
@@ -657,8 +661,12 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let added_links =
-        crate::cli::entity_cmd::process_link_flags(&file_path, EntityPrefix::Proc, &args.link, &short_ids);
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Proc,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     crate::cli::entity_cmd::output_new_entity(
@@ -845,9 +853,10 @@ fn cached_entity_to_row(entity: &CachedEntity, short_ids: &ShortIdIndex) -> Tabl
     TableRow::new(entity.id.clone(), short_ids)
         .cell("id", CellValue::Id(entity.id.clone()))
         .cell("title", CellValue::Text(entity.title.clone()))
-        .cell("process-type", CellValue::Type(
-            entity.entity_type.as_deref().unwrap_or("").to_string()
-        ))
+        .cell(
+            "process-type",
+            CellValue::Type(entity.entity_type.as_deref().unwrap_or("").to_string()),
+        )
         .cell("operation", CellValue::Empty) // Not in cache
         .cell("status", CellValue::Status(entity.status))
         .cell("author", CellValue::Text(entity.author.clone()))
@@ -874,10 +883,7 @@ fn output_cached_processes(
     }
 
     // Convert visible columns to keys, optionally including ID
-    let mut visible_columns: Vec<&str> = args.columns
-        .iter()
-        .map(|c| c.key())
-        .collect();
+    let mut visible_columns: Vec<&str> = args.columns.iter().map(|c| c.key()).collect();
     if args.show_id && !visible_columns.contains(&"id") {
         visible_columns.insert(0, "id");
     }
@@ -895,8 +901,7 @@ fn output_cached_processes(
     };
 
     // Output using TableFormatter
-    let formatter = TableFormatter::new(PROC_COLUMNS, "process", "PROC")
-        .with_config(config);
+    let formatter = TableFormatter::new(PROC_COLUMNS, "process", "PROC").with_config(config);
     formatter.output(rows, format, &visible_columns);
 
     Ok(())

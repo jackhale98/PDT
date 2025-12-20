@@ -638,21 +638,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         }
         OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
             // Build column list from args (filter out "short" since it's added automatically)
-            let columns: Vec<&str> = args.columns
+            let columns: Vec<&str> = args
+                .columns
                 .iter()
                 .filter(|c| !matches!(c, ListColumn::Short))
                 .map(|c| c.to_string().leak() as &str)
                 .collect();
 
             // Build rows
-            let rows: Vec<TableRow> = results.iter().map(|r| result_to_row(r, &short_ids)).collect();
+            let rows: Vec<TableRow> = results
+                .iter()
+                .map(|r| result_to_row(r, &short_ids))
+                .collect();
 
             let config = TableConfig {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT")
-                .with_config(config);
+            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -695,21 +698,24 @@ fn output_cached_results(
     match format {
         OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
             // Build column list from args (filter out "short" since it's added automatically)
-            let columns: Vec<&str> = args.columns
+            let columns: Vec<&str> = args
+                .columns
                 .iter()
                 .filter(|c| !matches!(c, ListColumn::Short))
                 .map(|c| c.to_string().leak() as &str)
                 .collect();
 
             // Build rows
-            let rows: Vec<TableRow> = results.iter().map(|r| cached_result_to_row(r, short_ids)).collect();
+            let rows: Vec<TableRow> = results
+                .iter()
+                .map(|r| cached_result_to_row(r, short_ids))
+                .collect();
 
             let config = TableConfig {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT")
-                .with_config(config);
+            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -738,9 +744,10 @@ fn result_to_row(result: &TestResult, short_ids: &ShortIdIndex) -> TableRow {
 
     TableRow::new(result.id.to_string(), short_ids)
         .cell("id", CellValue::Id(result.id.to_string()))
-        .cell("title", CellValue::Text(
-            result.title.as_deref().unwrap_or("Untitled").to_string()
-        ))
+        .cell(
+            "title",
+            CellValue::Text(result.title.as_deref().unwrap_or("Untitled").to_string()),
+        )
         .cell("test", CellValue::ShortId(test_short))
         .cell("verdict", CellValue::Verdict(result.verdict.to_string()))
         .cell("status", CellValue::Status(result.status))
@@ -749,8 +756,12 @@ fn result_to_row(result: &TestResult, short_ids: &ShortIdIndex) -> TableRow {
 }
 
 /// Convert a CachedResult to a TableRow
-fn cached_result_to_row(result: &crate::core::cache::CachedResult, short_ids: &ShortIdIndex) -> TableRow {
-    let test_short = result.test_id
+fn cached_result_to_row(
+    result: &crate::core::cache::CachedResult,
+    short_ids: &ShortIdIndex,
+) -> TableRow {
+    let test_short = result
+        .test_id
         .as_ref()
         .and_then(|t| short_ids.get_short_id(t))
         .unwrap_or_else(|| result.test_id.as_deref().unwrap_or("-").to_string());
@@ -759,9 +770,10 @@ fn cached_result_to_row(result: &crate::core::cache::CachedResult, short_ids: &S
         .cell("id", CellValue::Id(result.id.clone()))
         .cell("title", CellValue::Text(result.title.clone()))
         .cell("test", CellValue::ShortId(test_short))
-        .cell("verdict", CellValue::Verdict(
-            result.verdict.as_deref().unwrap_or("-").to_string()
-        ))
+        .cell(
+            "verdict",
+            CellValue::Verdict(result.verdict.as_deref().unwrap_or("-").to_string()),
+        )
         .cell("status", CellValue::Status(result.status))
         .cell("author", CellValue::Text(result.author.clone()))
         .cell("created", CellValue::Date(result.created))

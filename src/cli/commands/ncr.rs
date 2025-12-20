@@ -637,7 +637,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         }
         OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
             // Build column list from args
-            let columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
 
             // Build rows
             let rows: Vec<TableRow> = ncrs.iter().map(|n| ncr_to_row(n, &short_ids)).collect();
@@ -646,8 +650,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter = TableFormatter::new(NCR_COLUMNS, "NCR", "NCR")
-                .with_config(config);
+            let formatter = TableFormatter::new(NCR_COLUMNS, "NCR", "NCR").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -1034,17 +1037,23 @@ fn output_cached_ncrs(
     match format {
         OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
             // Build column list from args
-            let columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
 
             // Build rows
-            let rows: Vec<TableRow> = ncrs.iter().map(|n| cached_ncr_to_row(n, short_ids)).collect();
+            let rows: Vec<TableRow> = ncrs
+                .iter()
+                .map(|n| cached_ncr_to_row(n, short_ids))
+                .collect();
 
             let config = TableConfig {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter = TableFormatter::new(NCR_COLUMNS, "NCR", "NCR")
-                .with_config(config);
+            let formatter = TableFormatter::new(NCR_COLUMNS, "NCR", "NCR").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -1083,15 +1092,18 @@ fn cached_ncr_to_row(ncr: &CachedNcr, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(ncr.id.clone(), short_ids)
         .cell("id", CellValue::Id(ncr.id.clone()))
         .cell("title", CellValue::Text(ncr.title.clone()))
-        .cell("ncr-type", CellValue::Type(
-            ncr.ncr_type.as_deref().unwrap_or("-").to_string()
-        ))
-        .cell("severity", CellValue::NcrSeverity(
-            ncr.severity.as_deref().unwrap_or("-").to_string()
-        ))
-        .cell("status", CellValue::Type(
-            ncr.ncr_status.as_deref().unwrap_or("-").to_string()
-        ))
+        .cell(
+            "ncr-type",
+            CellValue::Type(ncr.ncr_type.as_deref().unwrap_or("-").to_string()),
+        )
+        .cell(
+            "severity",
+            CellValue::NcrSeverity(ncr.severity.as_deref().unwrap_or("-").to_string()),
+        )
+        .cell(
+            "status",
+            CellValue::Type(ncr.ncr_status.as_deref().unwrap_or("-").to_string()),
+        )
         .cell("author", CellValue::Text(ncr.author.clone()))
         .cell("created", CellValue::DateTime(ncr.created))
 }

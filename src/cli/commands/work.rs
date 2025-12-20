@@ -408,9 +408,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&work_instructions).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Id
+        | OutputFormat::ShortId => {
             // Build visible columns list
-            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            let mut visible: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
             if args.show_id && !visible.contains(&"id") {
                 visible.insert(0, "id");
             }
@@ -428,8 +436,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 TableConfig::default()
             };
 
-            let formatter = TableFormatter::new(WORK_COLUMNS, "work instruction", "WORK")
-                .with_config(config);
+            let formatter =
+                TableFormatter::new(WORK_COLUMNS, "work instruction", "WORK").with_config(config);
             formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -442,7 +450,14 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 fn work_instruction_to_row(work: &WorkInstruction, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(work.id.to_string(), short_ids)
         .cell("id", CellValue::Id(work.id.to_string()))
-        .cell("doc-number", CellValue::Text(work.document_number.clone().unwrap_or_else(|| "-".to_string())))
+        .cell(
+            "doc-number",
+            CellValue::Text(
+                work.document_number
+                    .clone()
+                    .unwrap_or_else(|| "-".to_string()),
+            ),
+        )
         .cell("title", CellValue::Text(work.title.clone()))
         .cell("status", CellValue::Status(work.status))
         .cell("author", CellValue::Text(work.author.clone()))
@@ -467,7 +482,11 @@ fn output_cached_work_instructions(
     }
 
     // Build visible columns list
-    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    let mut visible: Vec<&str> = args
+        .columns
+        .iter()
+        .map(|c| c.to_string().leak() as &str)
+        .collect();
     if args.show_id && !visible.contains(&"id") {
         visible.insert(0, "id");
     }
@@ -485,8 +504,8 @@ fn output_cached_work_instructions(
         TableConfig::default()
     };
 
-    let formatter = TableFormatter::new(WORK_COLUMNS, "work instruction", "WORK")
-        .with_config(config);
+    let formatter =
+        TableFormatter::new(WORK_COLUMNS, "work instruction", "WORK").with_config(config);
     formatter.output(rows, format, &visible);
 
     Ok(())
@@ -582,12 +601,20 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let added_links =
-        crate::cli::entity_cmd::process_link_flags(&file_path, EntityPrefix::Work, &args.link, &short_ids);
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Work,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     let extra_info = if let Some(ref doc_num) = args.doc_number {
-        format!("{}\n   Doc: {}", style(&title).white(), style(doc_num).yellow())
+        format!(
+            "{}\n   Doc: {}",
+            style(&title).white(),
+            style(doc_num).yellow()
+        )
     } else {
         format!("{}", style(&title).white())
     };

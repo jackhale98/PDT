@@ -437,17 +437,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 .iter()
                 .map(|c| c.to_string().leak() as &str)
                 .collect();
-            let rows: Vec<TableRow> = mates
-                .iter()
-                .map(|m| mate_to_row(m, &short_ids))
-                .collect();
+            let rows: Vec<TableRow> = mates.iter().map(|m| mate_to_row(m, &short_ids)).collect();
 
             let config = TableConfig {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter =
-                TableFormatter::new(MATE_COLUMNS, "mate", "MATE").with_config(config);
+            let formatter = TableFormatter::new(MATE_COLUMNS, "mate", "MATE").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {

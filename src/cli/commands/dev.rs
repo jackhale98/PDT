@@ -561,7 +561,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             ListColumn::Id => a.id.to_string().cmp(&b.id.to_string()),
             ListColumn::Title => a.title.cmp(&b.title),
             ListColumn::DevNumber => a.deviation_number.cmp(&b.deviation_number),
-            ListColumn::DevType => a.deviation_type.to_string().cmp(&b.deviation_type.to_string()),
+            ListColumn::DevType => a
+                .deviation_type
+                .to_string()
+                .cmp(&b.deviation_type.to_string()),
             ListColumn::Category => a.category.to_string().cmp(&b.category.to_string()),
             ListColumn::Risk => {
                 let a_ord = match a.risk.level {
@@ -678,10 +681,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                     let value = match col {
                         ListColumn::Id => dev.id.to_string(),
                         ListColumn::Title => truncate_str(&dev.title, widths[i]),
-                        ListColumn::DevNumber => dev
-                            .deviation_number
-                            .clone()
-                            .unwrap_or_default(),
+                        ListColumn::DevNumber => dev.deviation_number.clone().unwrap_or_default(),
                         ListColumn::DevType => dev.deviation_type.to_string(),
                         ListColumn::Category => dev.category.to_string(),
                         ListColumn::Risk => {
@@ -732,7 +732,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             println!("| {} |", headers.join(" | "));
             println!(
                 "| {} |",
-                headers.iter().map(|_| "---").collect::<Vec<_>>().join(" | ")
+                headers
+                    .iter()
+                    .map(|_| "---")
+                    .collect::<Vec<_>>()
+                    .join(" | ")
             );
 
             for dev in &deviations {
@@ -937,7 +941,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", content);
         }
         OutputFormat::Csv => {
-            let short_id = short_ids.get_short_id(&dev.id.to_string()).unwrap_or_default();
+            let short_id = short_ids
+                .get_short_id(&dev.id.to_string())
+                .unwrap_or_default();
             println!("id,title,type,category,risk,dev_status,author,created");
             println!(
                 "{},{},{},{},{},{},{},{}",
@@ -952,7 +958,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             );
         }
         OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Md => {
-            let short_id = short_ids.get_short_id(&dev.id.to_string()).unwrap_or_default();
+            let short_id = short_ids
+                .get_short_id(&dev.id.to_string())
+                .unwrap_or_default();
 
             println!("{}", style("Deviation").bold());
             println!("{}", style("─".repeat(60)).dim());
@@ -1046,7 +1054,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", dev.id);
         }
         OutputFormat::ShortId => {
-            let short_id = short_ids.get_short_id(&dev.id.to_string()).unwrap_or_default();
+            let short_id = short_ids
+                .get_short_id(&dev.id.to_string())
+                .unwrap_or_default();
             println!("{}", short_id);
         }
         OutputFormat::Path => {
@@ -1113,7 +1123,9 @@ fn run_approve(args: ApproveArgs, global: &GlobalOpts) -> Result<()> {
 
     // Confirm
     if !args.yes && !global.quiet {
-        let short_id = short_ids.get_short_id(&dev.id.to_string()).unwrap_or_default();
+        let short_id = short_ids
+            .get_short_id(&dev.id.to_string())
+            .unwrap_or_default();
         println!(
             "Approve deviation {} by {}?",
             style(&short_id).cyan(),
@@ -1146,7 +1158,9 @@ fn run_approve(args: ApproveArgs, global: &GlobalOpts) -> Result<()> {
     fs::write(&path, updated_content).into_diagnostic()?;
 
     if !global.quiet {
-        let short_id = short_ids.get_short_id(&dev.id.to_string()).unwrap_or_default();
+        let short_id = short_ids
+            .get_short_id(&dev.id.to_string())
+            .unwrap_or_default();
         println!(
             "{} Approved deviation {} by {}",
             style("✓").green(),
@@ -1200,7 +1214,9 @@ fn run_expire(args: ExpireArgs, global: &GlobalOpts) -> Result<()> {
 
     // Confirm
     if !args.yes && !global.quiet {
-        let short_id = short_ids.get_short_id(&dev.id.to_string()).unwrap_or_default();
+        let short_id = short_ids
+            .get_short_id(&dev.id.to_string())
+            .unwrap_or_default();
         println!("Close deviation {}?", style(&short_id).cyan());
         print!("Continue? [y/N] ");
         use std::io::{self, Write};
@@ -1228,7 +1244,9 @@ fn run_expire(args: ExpireArgs, global: &GlobalOpts) -> Result<()> {
     fs::write(&path, updated_content).into_diagnostic()?;
 
     if !global.quiet {
-        let short_id = short_ids.get_short_id(&dev.id.to_string()).unwrap_or_default();
+        let short_id = short_ids
+            .get_short_id(&dev.id.to_string())
+            .unwrap_or_default();
         println!(
             "{} Closed deviation {}",
             style("✓").green(),

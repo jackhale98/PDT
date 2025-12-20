@@ -588,17 +588,13 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 .iter()
                 .map(|c| c.to_string().leak() as &str)
                 .collect();
-            let rows: Vec<TableRow> = quotes
-                .iter()
-                .map(|q| quote_to_row(q, &short_ids))
-                .collect();
+            let rows: Vec<TableRow> = quotes.iter().map(|q| quote_to_row(q, &short_ids)).collect();
 
             let config = TableConfig {
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter =
-                TableFormatter::new(QUOTE_COLUMNS, "quote", "QUOT").with_config(config);
+            let formatter = TableFormatter::new(QUOTE_COLUMNS, "quote", "QUOT").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
@@ -652,8 +648,7 @@ fn output_cached_quotes(
                 wrap_width: args.wrap,
                 show_summary: true,
             };
-            let formatter =
-                TableFormatter::new(QUOTE_COLUMNS, "quote", "QUOT").with_config(config);
+            let formatter = TableFormatter::new(QUOTE_COLUMNS, "quote", "QUOT").with_config(config);
             formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {

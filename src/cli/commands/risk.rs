@@ -828,18 +828,18 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             .unwrap_or_default();
 
         let severity = result
-            .get_string("severity")
-            .and_then(|s| s.parse().ok())
+            .get_i64("severity")
+            .map(|n| n as u8)
             .unwrap_or(5);
 
         let occurrence = result
-            .get_string("occurrence")
-            .and_then(|s| s.parse().ok())
+            .get_i64("occurrence")
+            .map(|n| n as u8)
             .unwrap_or(5);
 
         let detection = result
-            .get_string("detection")
-            .and_then(|s| s.parse().ok())
+            .get_i64("detection")
+            .map(|n| n as u8)
             .unwrap_or(5);
 
         // Extract FMEA text fields

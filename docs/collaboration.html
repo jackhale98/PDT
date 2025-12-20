@@ -43,7 +43,7 @@
       font-family: 'IBM Plex Sans', -apple-system, sans-serif;
       background: var(--bg-primary);
       color: var(--text-primary);
-      line-height: 1.7;
+      line-height: 1.6;
       overflow-x: hidden;
     }
 
@@ -79,11 +79,18 @@
 
     /* Layout */
     .container {
-      max-width: 900px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 0 24px;
       position: relative;
       z-index: 1;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    section {
+      padding: 80px 0;
+      overflow-x: hidden;
     }
 
     /* Navigation */
@@ -93,15 +100,12 @@
       left: 0;
       right: 0;
       z-index: 100;
-      background: rgba(10, 14, 20, 0.95);
+      background: rgba(10, 14, 20, 0.85);
       backdrop-filter: blur(12px);
       border-bottom: 1px solid var(--border);
     }
 
-    nav .nav-container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 24px;
+    nav .container {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -114,6 +118,7 @@
       gap: 10px;
       text-decoration: none;
       color: var(--text-primary);
+      flex-shrink: 0;
     }
 
     .logo-icon {
@@ -122,7 +127,7 @@
       flex-shrink: 0;
     }
 
-    .logo-icon svg {
+    .logo-icon img {
       width: 100%;
       height: 100%;
     }
@@ -179,14 +184,72 @@
       height: 18px;
     }
 
-    /* Main Content */
-    main {
-      padding-top: 120px;
-      padding-bottom: 80px;
+    /* Mobile Menu Button */
+    .mobile-menu-btn {
+      display: none;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      z-index: 101;
     }
 
+    .mobile-menu-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .mobile-menu-btn svg {
+      width: 20px;
+      height: 20px;
+      display: block;
+      pointer-events: none;
+    }
+
+    /* Mobile Menu Overlay */
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 64px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(10, 14, 20, 0.98);
+      backdrop-filter: blur(12px);
+      z-index: 99;
+      padding: 24px;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .mobile-menu.active {
+      display: flex;
+    }
+
+    .mobile-menu a {
+      display: block;
+      padding: 16px 20px;
+      color: var(--text-primary);
+      text-decoration: none;
+      font-size: 18px;
+      font-weight: 500;
+      border-radius: 8px;
+      transition: all 0.2s;
+    }
+
+    .mobile-menu a:hover {
+      background: var(--bg-elevated);
+      color: var(--accent);
+    }
+
+    /* Page Header */
     .page-header {
-      margin-bottom: 60px;
+      padding-top: 120px;
+      padding-bottom: 40px;
       text-align: center;
     }
 
@@ -206,28 +269,22 @@
       margin: 0 auto;
     }
 
-    /* Sections */
-    section {
-      margin-bottom: 80px;
+    /* Section Headers */
+    .section-header {
+      text-align: center;
+      margin-bottom: 48px;
     }
 
-    section h2 {
+    .section-title {
       font-size: 32px;
-      margin-bottom: 24px;
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      margin-bottom: 12px;
     }
 
-    section h2 .icon {
-      font-size: 28px;
-    }
-
-    section h3 {
-      font-size: 22px;
-      margin: 32px 0 16px 0;
-      color: var(--text-primary);
+    .section-desc {
+      color: var(--text-secondary);
+      font-size: 16px;
+      max-width: 600px;
+      margin: 0 auto;
     }
 
     p {
@@ -238,7 +295,7 @@
     /* Concept Cards */
     .concept-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 24px;
       margin: 32px 0;
     }
@@ -277,18 +334,19 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 32px;
+      padding: 32px 24px;
       margin: 32px 0;
       text-align: center;
+      overflow-x: auto;
     }
 
     .workflow-steps {
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      flex-wrap: wrap;
       gap: 16px;
       margin: 24px 0;
+      min-width: min-content;
     }
 
     .workflow-step {
@@ -296,6 +354,7 @@
       flex-direction: column;
       align-items: center;
       gap: 8px;
+      flex-shrink: 0;
     }
 
     .step-icon {
@@ -325,6 +384,7 @@
     .workflow-arrow {
       font-size: 24px;
       color: var(--text-muted);
+      flex-shrink: 0;
     }
 
     /* Code Blocks */
@@ -332,15 +392,15 @@
       background: var(--code-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 20px;
+      padding: 16px;
       overflow-x: auto;
-      margin: 16px 0 24px 0;
-      font-size: 14px;
+      margin: 16px 0;
+      font-size: 13px;
       line-height: 1.6;
     }
 
     code {
-      font-size: 14px;
+      font-size: 13px;
     }
 
     .inline-code {
@@ -373,7 +433,7 @@
     }
 
     .command-body {
-      padding: 20px;
+      padding: 16px;
     }
 
     .command-body pre {
@@ -392,17 +452,9 @@
       margin: 24px 0;
     }
 
-    .callout.info {
-      border-left-color: var(--info);
-    }
-
-    .callout.warning {
-      border-left-color: var(--warning);
-    }
-
-    .callout.success {
-      border-left-color: var(--success);
-    }
+    .callout.info { border-left-color: var(--info); }
+    .callout.warning { border-left-color: var(--warning); }
+    .callout.success { border-left-color: var(--success); }
 
     .callout-title {
       font-weight: 600;
@@ -418,33 +470,33 @@
       font-size: 14px;
     }
 
-    /* Comparison Table */
-    .comparison-table {
+    /* Table */
+    .data-table {
       width: 100%;
       border-collapse: collapse;
       margin: 24px 0;
       font-size: 14px;
     }
 
-    .comparison-table th,
-    .comparison-table td {
+    .data-table th,
+    .data-table td {
       padding: 16px;
       text-align: left;
       border: 1px solid var(--border);
     }
 
-    .comparison-table th {
+    .data-table th {
       background: var(--bg-elevated);
       color: var(--text-primary);
       font-weight: 600;
     }
 
-    .comparison-table td {
+    .data-table td {
       background: var(--bg-card);
       color: var(--text-secondary);
     }
 
-    .comparison-table tr:hover td {
+    .data-table tr:hover td {
       background: var(--bg-elevated);
     }
 
@@ -476,11 +528,10 @@
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 12px;
+      align-items: flex-start;
     }
 
-    .quick-start-step::before {
-      counter-increment: step;
-      content: counter(step);
+    .step-number {
       display: flex;
       align-items: center;
       justify-content: center;
@@ -495,8 +546,14 @@
       flex-shrink: 0;
     }
 
+    .step-content {
+      flex: 1;
+      min-width: 0;
+    }
+
     .step-content h4 {
       margin-bottom: 8px;
+      color: var(--text-primary);
     }
 
     .step-content p {
@@ -525,22 +582,70 @@
       text-decoration: underline;
     }
 
-    /* Responsive */
+    /* Responsive - Mobile */
     @media (max-width: 768px) {
       .nav-links {
         display: none;
       }
 
+      .mobile-menu-btn {
+        display: block;
+      }
+
+      section {
+        padding: 40px 0;
+      }
+
+      .container {
+        padding: 0 16px;
+      }
+
+      .page-header {
+        padding-top: 100px;
+      }
+
       .page-header h1 {
-        font-size: 32px;
+        font-size: 28px;
+      }
+
+      .page-header .subtitle {
+        font-size: 16px;
+      }
+
+      .section-title {
+        font-size: 24px;
       }
 
       .workflow-steps {
         flex-direction: column;
+        gap: 12px;
       }
 
       .workflow-arrow {
         transform: rotate(90deg);
+      }
+
+      .concept-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-start-step {
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      pre {
+        font-size: 12px;
+        padding: 12px;
+      }
+
+      .data-table {
+        font-size: 12px;
+      }
+
+      .data-table th,
+      .data-table td {
+        padding: 12px 8px;
       }
     }
   </style>
@@ -549,7 +654,7 @@
   <div class="grid-bg"></div>
 
   <nav>
-    <div class="nav-container">
+    <div class="container">
       <a href="index.html" class="logo">
         <div class="logo-icon">
           <img src="logo.svg" alt="TDT Logo" width="40" height="40">
@@ -563,6 +668,7 @@
         <a href="tolerance.html">Tolerance</a>
         <a href="reports.html">Reports</a>
         <a href="collaboration.html" class="active">Collaboration</a>
+        <a href="integrations.html">Integrations</a>
         <a href="tutorial.html">Tutorial</a>
         <a href="https://github.com/jackhale98/TDT" class="nav-btn">
           <svg viewBox="0 0 16 16" fill="currentColor">
@@ -571,22 +677,45 @@
           GitHub
         </a>
       </div>
+      <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
     </div>
   </nav>
 
-  <main class="container">
-    <header class="page-header">
-      <h1>Team Collaboration</h1>
-      <p class="subtitle">Simple workflow commands for teams who want structured reviews without being git experts</p>
-    </header>
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="index.html#features" onclick="closeMobileMenu()">Features</a>
+    <a href="index.html#install" onclick="closeMobileMenu()">Install</a>
+    <a href="why-plain-text.html" onclick="closeMobileMenu()">Why Plain Text?</a>
+    <a href="tolerance.html" onclick="closeMobileMenu()">Tolerance</a>
+    <a href="reports.html" onclick="closeMobileMenu()">Reports</a>
+    <a href="collaboration.html" onclick="closeMobileMenu()">Collaboration</a>
+    <a href="integrations.html" onclick="closeMobileMenu()">Integrations</a>
+    <a href="tutorial.html" onclick="closeMobileMenu()">Tutorial</a>
+    <a href="https://github.com/jackhale98/TDT" onclick="closeMobileMenu()">GitHub</a>
+  </div>
 
+  <header class="page-header container">
+    <h1>Team Collaboration</h1>
+    <p class="subtitle">Simple workflow commands for teams who want structured reviews without being git experts</p>
+  </header>
+
+  <main class="container">
     <!-- Introduction -->
     <section id="intro">
-      <h2><span class="icon">&#x1F91D;</span> Collaboration Made Simple</h2>
-      <p>
-        TDT includes optional workflow commands that let your team review and approve design changes
-        using simple commands. You don't need to be a git expert&mdash;TDT handles the complexity behind the scenes.
-      </p>
+      <div class="section-header">
+        <h2 class="section-title">Collaboration Made Simple</h2>
+        <p class="section-desc">
+          TDT includes optional workflow commands that let your team review and approve design changes
+          using simple commands. You don't need to be a git expert.
+        </p>
+      </div>
+
       <p>
         This feature is <strong>completely opt-in</strong>. If you prefer managing git yourself,
         these commands won't get in your way. But if you want a guided experience with built-in
@@ -594,9 +723,9 @@
       </p>
 
       <div class="callout info">
-        <div class="callout-title">&#x1F4A1; What This Enables</div>
+        <div class="callout-title">What This Enables</div>
         <p>
-          With workflow enabled, you can submit requirements for review, get approval from qualified teammates,
+          With workflow enabled, you can submit requirements for review, get approval from teammates,
           and release changes&mdash;all with simple <code class="inline-code">tdt</code> commands that create
           proper GitHub/GitLab pull requests automatically.
         </p>
@@ -605,8 +734,10 @@
 
     <!-- Key Concepts -->
     <section id="concepts">
-      <h2><span class="icon">&#x1F4D6;</span> Key Concepts</h2>
-      <p>Before diving in, here are a few concepts that will help:</p>
+      <div class="section-header">
+        <h2 class="section-title">Key Concepts</h2>
+        <p class="section-desc">Before diving in, here are a few concepts that will help</p>
+      </div>
 
       <div class="concept-grid">
         <div class="concept-card">
@@ -617,7 +748,7 @@
         <div class="concept-card">
           <div class="icon">&#x1F465;</div>
           <h4>Team Roster</h4>
-          <p>A simple file that lists who's on your team, their roles, and what they can approve. This is how TDT knows who has permission to sign off on changes.</p>
+          <p>An optional file that lists who's on your team and their roles. Define your own approval rules based on your team's needs.</p>
         </div>
         <div class="concept-card">
           <div class="icon">&#x1F4E5;</div>
@@ -634,8 +765,10 @@
 
     <!-- The Workflow -->
     <section id="workflow">
-      <h2><span class="icon">&#x1F504;</span> The Review Workflow</h2>
-      <p>Here's how changes flow through the system:</p>
+      <div class="section-header">
+        <h2 class="section-title">The Review Workflow</h2>
+        <p class="section-desc">Here's how changes flow through the system</p>
+      </div>
 
       <div class="workflow-diagram">
         <div class="workflow-steps">
@@ -660,12 +793,12 @@
           </div>
         </div>
         <p style="margin-top: 24px; color: var(--text-secondary); font-size: 14px;">
-          &#x1F4A1; If changes are rejected during review, they go back to Draft for revision.
+          If changes are rejected during review, they go back to Draft for revision.
         </p>
       </div>
 
-      <h3>What happens at each step</h3>
-      <table class="comparison-table">
+      <h3 style="margin-bottom: 16px; font-size: 20px;">What happens at each step</h3>
+      <table class="data-table">
         <thead>
           <tr>
             <th>Status</th>
@@ -682,17 +815,17 @@
           <tr>
             <td><strong>Review</strong></td>
             <td>Submitted for review. A pull request is open and awaiting approval.</td>
-            <td>Qualified reviewer approves or rejects</td>
+            <td>Any authorized reviewer</td>
           </tr>
           <tr>
             <td><strong>Approved</strong></td>
             <td>Reviewed and approved. Ready to be released.</td>
-            <td>Management releases to production</td>
+            <td>Authorized releaser</td>
           </tr>
           <tr>
             <td><strong>Released</strong></td>
             <td>Official version. This is the controlled document.</td>
-            <td>Final state (can be made obsolete)</td>
+            <td>Final state</td>
           </tr>
         </tbody>
       </table>
@@ -700,36 +833,40 @@
 
     <!-- Quick Start -->
     <section id="quickstart">
-      <h2><span class="icon">&#x26A1;</span> Quick Start</h2>
-      <p>Get your team set up in just a few minutes:</p>
+      <div class="section-header">
+        <h2 class="section-title">Quick Start</h2>
+        <p class="section-desc">Get your team set up in just a few minutes</p>
+      </div>
 
       <div class="quick-start">
         <div class="quick-start-step">
+          <div class="step-number">1</div>
           <div class="step-content">
             <h4>Enable Workflow in Config</h4>
             <p>Add these lines to your <code class="inline-code">.tdt/config.yaml</code> file:</p>
             <pre><code>workflow:
   enabled: true
   provider: github    # or: gitlab, none
-  base_branch: main   # your default branch</code></pre>
+  base_branch: main</code></pre>
           </div>
         </div>
 
         <div class="quick-start-step">
+          <div class="step-number">2</div>
           <div class="step-content">
-            <h4>Create Your Team Roster</h4>
-            <p>Initialize a team roster file that defines who can approve what:</p>
-            <pre><code>tdt team init</code></pre>
-            <p>Then add your team members:</p>
-            <pre><code>tdt team add --name "Jane Smith" --email jane@example.com \
+            <h4>Create Your Team Roster (Optional)</h4>
+            <p>Initialize a team roster file to define approval permissions:</p>
+            <pre><code>tdt team init
+tdt team add --name "Jane Smith" --email jane@example.com \
     --username jsmith --roles engineering,quality</code></pre>
           </div>
         </div>
 
         <div class="quick-start-step">
+          <div class="step-number">3</div>
           <div class="step-content">
             <h4>Submit Work for Review</h4>
-            <p>When you're ready, submit your changes. TDT creates a branch and pull request:</p>
+            <p>When you're ready, submit your changes:</p>
             <pre><code># Submit a specific requirement
 tdt submit REQ@1
 
@@ -739,6 +876,7 @@ tdt submit --type req --all</code></pre>
         </div>
 
         <div class="quick-start-step">
+          <div class="step-number">4</div>
           <div class="step-content">
             <h4>Review and Approve</h4>
             <p>Reviewers check the pull request, then approve:</p>
@@ -754,38 +892,46 @@ tdt approve REQ@1</code></pre>
 
     <!-- Team Roles -->
     <section id="roles">
-      <h2><span class="icon">&#x1F3AD;</span> Team Roles</h2>
-      <p>TDT uses a simple role system to control who can approve what:</p>
+      <div class="section-header">
+        <h2 class="section-title">Team Roles</h2>
+        <p class="section-desc">Customize approval permissions to match your team's structure</p>
+      </div>
+
+      <p>
+        TDT provides a flexible role system. You define what roles exist and which entity types they can approve.
+        This is entirely customizable to fit your organization's needs.
+      </p>
 
       <div class="concept-grid">
         <div class="concept-card">
           <span class="role-badge engineering">Engineering</span>
           <h4>Engineering</h4>
-          <p>Can approve requirements, components, features, and other technical entities.</p>
+          <p>Typically assigned to engineers and technical leads. Configure what they can approve in the team file.</p>
         </div>
         <div class="concept-card">
           <span class="role-badge quality">Quality</span>
           <h4>Quality</h4>
-          <p>Can approve tests, NCRs, CAPAs, risks, and quality-related documentation.</p>
+          <p>Typically assigned to QA engineers and quality managers. Define their approval scope based on your processes.</p>
         </div>
         <div class="concept-card">
           <span class="role-badge management">Management</span>
           <h4>Management</h4>
-          <p>Can approve risks and release approved entities to production status.</p>
+          <p>Typically assigned to team leads and project managers. Often used for release authorization.</p>
         </div>
         <div class="concept-card">
           <span class="role-badge admin">Admin</span>
           <h4>Admin</h4>
-          <p>Can approve any entity type. Use sparingly for team leads or project managers.</p>
+          <p>Full approval authority. Use sparingly for administrators or emergency situations.</p>
         </div>
       </div>
 
-      <p>Team members can have multiple roles. For example, a senior engineer might have both
-         <span class="role-badge engineering">Engineering</span> and
-         <span class="role-badge quality">Quality</span> roles.</p>
+      <p style="margin-top: 24px;">
+        Team members can have multiple roles. The approval matrix in your team file determines which roles
+        can approve which entity types. <strong>You define these rules</strong>&mdash;TDT just enforces them.
+      </p>
 
       <div class="callout">
-        <div class="callout-title">&#x1F4CB; Example Team File</div>
+        <div class="callout-title">Example Team File</div>
         <p>Your <code class="inline-code">.tdt/team.yaml</code> might look like this:</p>
       </div>
 
@@ -803,20 +949,23 @@ members:
     roles: [quality, management]
     active: true
 
+# Define your own approval rules here
 approval_matrix:
-  REQ: [engineering, quality]
-  RISK: [quality, management]
-  TEST: [quality]
-  _release: [management]</code></pre>
+  REQ: [engineering, quality]    # Your choice
+  RISK: [quality, management]    # Your choice
+  TEST: [quality]                # Your choice
+  _release: [management]         # Your choice</code></pre>
     </section>
 
     <!-- Commands Reference -->
     <section id="commands">
-      <h2><span class="icon">&#x1F4BB;</span> Command Reference</h2>
-      <p>Here are all the workflow commands you'll use:</p>
+      <div class="section-header">
+        <h2 class="section-title">Command Reference</h2>
+        <p class="section-desc">All the workflow commands you'll use</p>
+      </div>
 
       <div class="command-block">
-        <div class="command-header">&#x1F4E4; Submit for Review</div>
+        <div class="command-header">Submit for Review</div>
         <div class="command-body">
           <pre><code># Submit specific items
 tdt submit REQ@1 REQ@2
@@ -833,7 +982,7 @@ tdt submit REQ@1 --dry-run</code></pre>
       </div>
 
       <div class="command-block">
-        <div class="command-header">&#x2705; Approve Items</div>
+        <div class="command-header">Approve Items</div>
         <div class="command-body">
           <pre><code># Approve specific items
 tdt approve REQ@1
@@ -847,7 +996,7 @@ tdt approve REQ@1 --merge</code></pre>
       </div>
 
       <div class="command-block">
-        <div class="command-header">&#x274C; Reject Items</div>
+        <div class="command-header">Reject Items</div>
         <div class="command-body">
           <pre><code># Reject with a reason (required)
 tdt reject REQ@1 -r "Values need to be verified against spec"</code></pre>
@@ -855,7 +1004,7 @@ tdt reject REQ@1 -r "Values need to be verified against spec"</code></pre>
       </div>
 
       <div class="command-block">
-        <div class="command-header">&#x1F680; Release Approved Items</div>
+        <div class="command-header">Release Approved Items</div>
         <div class="command-body">
           <pre><code># Release specific items
 tdt release REQ@1
@@ -866,21 +1015,18 @@ tdt release --type req</code></pre>
       </div>
 
       <div class="command-block">
-        <div class="command-header">&#x1F440; Review Queue</div>
+        <div class="command-header">Review Queue</div>
         <div class="command-body">
           <pre><code># See what's waiting for your review
 tdt review list
 
 # See all pending reviews (not just yours)
-tdt review list --all
-
-# Get a summary of workflow status
-tdt review summary</code></pre>
+tdt review list --all</code></pre>
         </div>
       </div>
 
       <div class="command-block">
-        <div class="command-header">&#x1F465; Team Management</div>
+        <div class="command-header">Team Management</div>
         <div class="command-body">
           <pre><code># Initialize team roster
 tdt team init
@@ -889,45 +1035,33 @@ tdt team init
 tdt team list
 
 # See your own role
-tdt team whoami
-
-# Add a team member
-tdt team add --name "Jane Smith" --email jane@co.com \
-    --username jsmith --roles engineering,quality
-
-# Remove a team member
-tdt team remove jsmith</code></pre>
+tdt team whoami</code></pre>
         </div>
       </div>
     </section>
 
     <!-- GitHub/GitLab Integration -->
     <section id="providers">
-      <h2><span class="icon">&#x1F517;</span> GitHub &amp; GitLab Integration</h2>
-      <p>
-        TDT integrates with GitHub and GitLab to create real pull/merge requests.
-        This means your review workflow shows up in your normal code review tools.
-      </p>
+      <div class="section-header">
+        <h2 class="section-title">GitHub &amp; GitLab Integration</h2>
+        <p class="section-desc">Creates real pull/merge requests in your existing tools</p>
+      </div>
 
-      <h3>Setting Up GitHub</h3>
+      <h3 style="margin-bottom: 16px; font-size: 18px;">Setting Up GitHub</h3>
       <p>First, install and authenticate the GitHub CLI:</p>
       <pre><code># Install GitHub CLI (macOS)
 brew install gh
-
-# Install GitHub CLI (Windows)
-winget install GitHub.cli
 
 # Login to GitHub
 gh auth login</code></pre>
 
       <p>Then configure TDT to use GitHub:</p>
-      <pre><code># In .tdt/config.yaml
-workflow:
+      <pre><code>workflow:
   enabled: true
   provider: github
   base_branch: main</code></pre>
 
-      <h3>Setting Up GitLab</h3>
+      <h3 style="margin: 32px 0 16px 0; font-size: 18px;">Setting Up GitLab</h3>
       <p>For GitLab, use the GitLab CLI:</p>
       <pre><code># Install GitLab CLI
 brew install glab
@@ -935,98 +1069,44 @@ brew install glab
 # Login to GitLab
 glab auth login</code></pre>
 
-      <pre><code># In .tdt/config.yaml
-workflow:
-  enabled: true
-  provider: gitlab
-  base_branch: main</code></pre>
-
-      <h3>No Provider (Manual Mode)</h3>
+      <h3 style="margin: 32px 0 16px 0; font-size: 18px;">No Provider (Manual Mode)</h3>
       <p>
-        If you're using a different git host, or prefer to create pull requests manually,
-        set provider to <code class="inline-code">none</code>:
+        If you're using a different git host, set provider to <code class="inline-code">none</code>.
+        TDT will create branches and commits, but you'll create pull requests yourself.
       </p>
-      <pre><code>workflow:
-  enabled: true
-  provider: none    # Creates branches but no PRs</code></pre>
-      <p>TDT will still create branches and commits, but you'll create pull requests yourself.</p>
-    </section>
-
-    <!-- Tips -->
-    <section id="tips">
-      <h2><span class="icon">&#x1F4A1;</span> Tips for Success</h2>
-
-      <div class="callout success">
-        <div class="callout-title">&#x2705; Use Dry Run First</div>
-        <p>
-          Not sure what a command will do? Add <code class="inline-code">--dry-run</code> to see
-          exactly what git commands would run without actually doing anything.
-        </p>
-      </div>
-
-      <div class="callout success">
-        <div class="callout-title">&#x2705; Verbose Mode Shows Details</div>
-        <p>
-          Add <code class="inline-code">-v</code> or <code class="inline-code">--verbose</code> to any
-          command to see the git commands as they execute.
-        </p>
-      </div>
-
-      <div class="callout warning">
-        <div class="callout-title">&#x26A0;&#xFE0F; Username Must Match Git</div>
-        <p>
-          Your username in the team roster must match your <code class="inline-code">git config user.name</code>.
-          Run <code class="inline-code">tdt team whoami</code> to verify you're recognized.
-        </p>
-      </div>
-
-      <div class="callout info">
-        <div class="callout-title">&#x1F4A1; Batch Reviews Are All-or-Nothing</div>
-        <p>
-          When you submit multiple items together, they create one pull request.
-          The reviewer must approve or reject all of them together.
-        </p>
-      </div>
     </section>
 
     <!-- FAQ -->
     <section id="faq">
-      <h2><span class="icon">&#x2753;</span> Common Questions</h2>
+      <div class="section-header">
+        <h2 class="section-title">Common Questions</h2>
+      </div>
 
-      <h3>Do I have to use these workflow commands?</h3>
+      <h3 style="margin-bottom: 8px; font-size: 18px;">Do I have to use these workflow commands?</h3>
       <p>
         No! The workflow is completely opt-in. If <code class="inline-code">workflow.enabled</code> is
-        <code class="inline-code">false</code> (the default), these commands won't even appear in help.
-        You can always manage git manually if you prefer.
+        <code class="inline-code">false</code> (the default), you can manage git manually.
       </p>
 
-      <h3>What if I don't have a team roster?</h3>
+      <h3 style="margin: 24px 0 8px 0; font-size: 18px;">What if I don't have a team roster?</h3>
       <p>
         Without a team roster, there are no permission checks. Anyone can approve anything.
         This is fine for solo projects or small teams without formal processes.
       </p>
 
-      <h3>Can I still use git directly?</h3>
+      <h3 style="margin: 24px 0 8px 0; font-size: 18px;">Can I still use git directly?</h3>
       <p>
-        Absolutely. These commands are just convenient wrappers. You can always use
+        Absolutely. These commands are convenient wrappers. You can always use
         <code class="inline-code">git</code>, <code class="inline-code">gh</code>, or
-        <code class="inline-code">glab</code> directly. TDT stores everything in plain YAML files,
-        so there's no lock-in.
+        <code class="inline-code">glab</code> directly.
       </p>
 
-      <h3>What if the reviewer is on vacation?</h3>
-      <p>
-        If someone with the right role isn't available, use <code class="inline-code">--force</code>
-        to bypass authorization checks. This is logged in the entity file for traceability.
-      </p>
-
-      <h3>How do I see the git commands TDT runs?</h3>
+      <h3 style="margin: 24px 0 8px 0; font-size: 18px;">How do I see the git commands TDT runs?</h3>
       <p>
         Use <code class="inline-code">--verbose</code> on any command to see each git command as it runs,
         or use <code class="inline-code">--dry-run</code> to preview without executing.
       </p>
     </section>
-
   </main>
 
   <footer>
@@ -1039,5 +1119,37 @@ workflow:
       </p>
     </div>
   </footer>
+
+  <script>
+    function toggleMobileMenu() {
+      const menu = document.getElementById('mobileMenu');
+      const btn = document.querySelector('.mobile-menu-btn');
+      menu.classList.toggle('active');
+
+      if (menu.classList.contains('active')) {
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>`;
+      } else {
+        btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>`;
+      }
+    }
+
+    function closeMobileMenu() {
+      const menu = document.getElementById('mobileMenu');
+      const btn = document.querySelector('.mobile-menu-btn');
+      menu.classList.remove('active');
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>`;
+    }
+  </script>
 </body>
 </html>

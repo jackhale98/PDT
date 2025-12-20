@@ -29,6 +29,16 @@ impl WizardResult {
     pub fn get_string(&self, key: &str) -> Option<&str> {
         self.values.get(key).and_then(|v| v.as_str())
     }
+
+    /// Get an integer value
+    pub fn get_i64(&self, key: &str) -> Option<i64> {
+        self.values.get(key).and_then(|v| v.as_i64())
+    }
+
+    /// Get a number value (f64)
+    pub fn get_f64(&self, key: &str) -> Option<f64> {
+        self.values.get(key).and_then(|v| v.as_f64())
+    }
 }
 
 /// Field information extracted from schema
@@ -225,7 +235,7 @@ impl SchemaWizard {
                 "defect",
                 "disposition",
                 "cost_impact",
-                "detection",
+                // Note: "detection" (FMEA field) is NOT skipped - it's a simple integer
                 "safety",
                 "tools_required",
                 "materials_required",

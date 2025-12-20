@@ -89,7 +89,7 @@
     },
     "mate_type": {
       "type": "string",
-      "enum": ["clearance_fit", "interference_fit", "transition_fit", "planar_contact", "thread_engagement"],
+      "enum": ["clearance", "transition", "interference"],
       "description": "Mate type classification"
     },
     "fit_analysis": {

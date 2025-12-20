@@ -619,16 +619,13 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             .map(String::from)
             .unwrap_or_else(|| "Target".to_string());
         target_nominal = result
-            .get_string("target.nominal")
-            .and_then(|s| s.parse().ok())
+            .get_f64("target.nominal")
             .unwrap_or(0.0);
         target_upper = result
-            .get_string("target.upper_limit")
-            .and_then(|s| s.parse().ok())
+            .get_f64("target.upper_limit")
             .unwrap_or(0.0);
         target_lower = result
-            .get_string("target.lower_limit")
-            .and_then(|s| s.parse().ok())
+            .get_f64("target.lower_limit")
             .unwrap_or(0.0);
         description = result.get_string("description").map(String::from);
     } else {

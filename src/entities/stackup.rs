@@ -11,6 +11,43 @@ use crate::core::entity::{Entity, Status};
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::entities::feature::Feature;
 
+/// Standard normal cumulative distribution function (CDF)
+/// Φ(z) = probability that a standard normal random variable is ≤ z
+/// Uses Hastings approximation (error < 7.5e-8)
+fn normal_cdf(z: f64) -> f64 {
+    if z.is_nan() {
+        return 0.5;
+    }
+    if z >= 8.0 {
+        return 1.0;
+    }
+    if z <= -8.0 {
+        return 0.0;
+    }
+
+    // Handle negative z by symmetry: Φ(-z) = 1 - Φ(z)
+    let (z_abs, negate) = if z < 0.0 { (-z, true) } else { (z, false) };
+
+    // Hastings approximation constants (A&S 26.2.17)
+    const B0: f64 = 0.2316419;
+    const B1: f64 = 0.319381530;
+    const B2: f64 = -0.356563782;
+    const B3: f64 = 1.781477937;
+    const B4: f64 = -1.821255978;
+    const B5: f64 = 1.330274429;
+
+    let t = 1.0 / (1.0 + B0 * z_abs);
+    let t2 = t * t;
+    let t3 = t2 * t;
+    let t4 = t3 * t;
+    let t5 = t4 * t;
+
+    let pdf = (-0.5 * z_abs * z_abs).exp() / (2.0 * std::f64::consts::PI).sqrt();
+    let cdf = 1.0 - pdf * (B1 * t + B2 * t2 + B3 * t3 + B4 * t4 + B5 * t5);
+
+    if negate { 1.0 - cdf } else { cdf }
+}
+
 /// Target/gap specification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Target {
@@ -556,22 +593,21 @@ impl Stackup {
             f64::INFINITY
         };
 
-        // Estimate yield from Cpk (simplified)
-        let yield_percent = if cpk >= 2.0 {
-            99.9999
-        } else if cpk >= 1.67 {
-            99.9997
-        } else if cpk >= 1.33 {
-            99.99
-        } else if cpk >= 1.0 {
-            99.73
-        } else if cpk >= 0.67 {
-            95.45
-        } else if cpk >= 0.33 {
-            68.27
+        // Calculate yield using normal distribution CDF
+        // Φ(z) = probability that a standard normal random variable is ≤ z
+        let z_upper = if sigma > 0.0 {
+            upper_margin / sigma
         } else {
-            50.0
+            f64::INFINITY
         };
+        let z_lower = if sigma > 0.0 {
+            -lower_margin / sigma
+        } else {
+            f64::NEG_INFINITY
+        };
+
+        // Yield = Φ(z_upper) - Φ(z_lower)
+        let yield_percent = (normal_cdf(z_upper) - normal_cdf(z_lower)) * 100.0;
 
         // Margin at 3σ
         let margin = (self.target.upper_limit - (mean + sigma_3))
@@ -703,6 +739,54 @@ impl Stackup {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_normal_cdf() {
+        // Test known values from standard normal distribution table
+        // Φ(0) = 0.5
+        let v0 = normal_cdf(0.0);
+        assert!(
+            (v0 - 0.5).abs() < 1e-6,
+            "Φ(0) = {}, expected 0.5",
+            v0
+        );
+
+        // Φ(1) ≈ 0.8413
+        let v1 = normal_cdf(1.0);
+        assert!(
+            (v1 - 0.8413).abs() < 0.01,
+            "Φ(1) = {}, expected 0.8413",
+            v1
+        );
+
+        // Φ(-1) ≈ 0.1587
+        let v_neg1 = normal_cdf(-1.0);
+        assert!(
+            (v_neg1 - 0.1587).abs() < 0.01,
+            "Φ(-1) = {}, expected 0.1587",
+            v_neg1
+        );
+
+        // Φ(2) ≈ 0.9772
+        let v2 = normal_cdf(2.0);
+        assert!(
+            (v2 - 0.9772).abs() < 0.01,
+            "Φ(2) = {}, expected 0.9772",
+            v2
+        );
+
+        // Φ(3) ≈ 0.9987 (corresponds to ±3σ covering 99.73%)
+        let v3 = normal_cdf(3.0);
+        assert!(
+            (v3 - 0.9987).abs() < 0.01,
+            "Φ(3) = {}, expected 0.9987",
+            v3
+        );
+
+        // Extreme values
+        assert!((normal_cdf(10.0) - 1.0).abs() < 1e-6);
+        assert!((normal_cdf(-10.0) - 0.0).abs() < 1e-6);
+    }
 
     #[test]
     fn test_stackup_creation() {

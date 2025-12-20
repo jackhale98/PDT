@@ -11,6 +11,7 @@
 
 mod queries;
 mod schema;
+mod serialize;
 mod sync;
 mod types;
 

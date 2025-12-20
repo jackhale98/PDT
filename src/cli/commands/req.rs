@@ -6,12 +6,13 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, resolve_id_arg, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{format_short_id, resolve_id_arg};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::entity::Priority;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -104,19 +105,6 @@ pub enum ReqTypeFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Obsolete,
-    /// All active (not obsolete)
-    Active,
-    /// All statuses
-    All,
-}
-
 /// Priority filter
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum PriorityFilter {
@@ -159,6 +147,19 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for requirement list output
+const REQ_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("type", "TYPE", 8),
+    ColumnDef::new("title", "TITLE", 35),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("priority", "PRI", 10),
+    ColumnDef::new("category", "CATEGORY", 12),
+    ColumnDef::new("author", "AUTHOR", 16),
+    ColumnDef::new("created", "CREATED", 12),
+    ColumnDef::new("tags", "TAGS", 20),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -226,7 +227,6 @@ pub struct ListArgs {
     // ========== OUTPUT CONTROL ==========
     /// Columns to display (can specify multiple)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
-        ListColumn::Id,
         ListColumn::Type,
         ListColumn::Title,
         ListColumn::Status,
@@ -249,6 +249,14 @@ pub struct ListArgs {
     /// Show count only, not the items
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text at specified width (for mobile-friendly display)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show full ID column (hidden by default since SHORT is always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -341,6 +349,14 @@ pub struct ArchiveArgs {
 /// Directories where requirements are stored
 const REQ_DIRS: &[&str] = &["requirements/inputs", "requirements/outputs"];
 
+/// Entity configuration for requirements
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Req,
+    dirs: REQ_DIRS,
+    name: "requirement",
+    name_plural: "requirements",
+};
+
 pub fn run(cmd: ReqCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         ReqCommands::List(args) => run_list(args, global),
@@ -377,18 +393,30 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             Vec::new()
         };
 
+    // Pre-compute HashSets for O(1) lookups instead of O(n) iterations
+    // This changes O(n*m) filter to O(n+m) where n=requirements, m=results
+    use std::collections::HashSet;
+    let tested_test_ids: HashSet<&crate::core::identity::EntityId> = results
+        .iter()
+        .map(|r| &r.test_id)
+        .collect();
+    let failed_test_ids: HashSet<&crate::core::identity::EntityId> = results
+        .iter()
+        .filter(|r| r.verdict == crate::entities::result::Verdict::Fail)
+        .map(|r| &r.test_id)
+        .collect();
+    let passing_test_ids: HashSet<&crate::core::identity::EntityId> = results
+        .iter()
+        .filter(|r| r.verdict == crate::entities::result::Verdict::Pass)
+        .map(|r| &r.test_id)
+        .collect();
+
     // Fast path: use cache directly for simple list outputs without complex filters
     if !needs_full_entities {
         let cache = EntityCache::open(&project)?;
 
         // Convert filters to cache-compatible format
-        let status_filter = match args.status {
-            StatusFilter::Draft => Some("draft"),
-            StatusFilter::Review => Some("review"),
-            StatusFilter::Approved => Some("approved"),
-            StatusFilter::Obsolete => Some("obsolete"),
-            StatusFilter::Active | StatusFilter::All => None,
-        };
+        let status_filter = crate::cli::entity_cmd::status_filter_to_str(args.status);
 
         let priority_filter = match args.priority {
             PriorityFilter::Low => Some("low"),
@@ -416,15 +444,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         );
 
         // Apply post-filters for Active status and Urgent priority
+        use crate::core::entity::{Priority, Status};
         cached_reqs.retain(|r| {
             let status_match = match args.status {
-                StatusFilter::Active => r.status != "obsolete",
+                StatusFilter::Active => r.status != Status::Obsolete,
                 _ => true,
             };
             let priority_match = match args.priority {
                 PriorityFilter::Urgent => {
-                    r.priority.as_deref() == Some("high")
-                        || r.priority.as_deref() == Some("critical")
+                    r.priority == Some(Priority::High) || r.priority == Some(Priority::Critical)
                 }
                 _ => true,
             };
@@ -438,7 +466,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 r.created >= cutoff
             });
             let needs_review_match = if args.needs_review {
-                r.status == "draft" || r.status == "review"
+                r.status == Status::Draft || r.status == Status::Review
             } else {
                 true
             };
@@ -465,17 +493,14 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             ListColumn::Title => cached_reqs.sort_by(|a, b| a.title.cmp(&b.title)),
             ListColumn::Status => cached_reqs.sort_by(|a, b| a.status.cmp(&b.status)),
             ListColumn::Priority => {
-                let priority_order = |p: Option<&str>| match p {
-                    Some("critical") => 0,
-                    Some("high") => 1,
-                    Some("medium") => 2,
-                    Some("low") => 3,
-                    _ => 4,
+                let priority_order = |p: Option<Priority>| match p {
+                    Some(Priority::Critical) => 0,
+                    Some(Priority::High) => 1,
+                    Some(Priority::Medium) => 2,
+                    Some(Priority::Low) => 3,
+                    None => 4,
                 };
-                cached_reqs.sort_by(|a, b| {
-                    priority_order(a.priority.as_deref())
-                        .cmp(&priority_order(b.priority.as_deref()))
-                });
+                cached_reqs.sort_by(|a, b| priority_order(a.priority).cmp(&priority_order(b.priority)));
             }
             ListColumn::Category => cached_reqs.sort_by(|a, b| a.category.cmp(&b.category)),
             ListColumn::Author => cached_reqs.sort_by(|a, b| a.author.cmp(&b.author)),
@@ -494,7 +519,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Update short ID index
         let mut short_ids = ShortIdIndex::load(&project);
         short_ids.ensure_all(cached_reqs.iter().map(|r| r.id.clone()));
-        let _ = short_ids.save(&project);
+        super::utils::save_short_ids(&mut short_ids, &project);
 
         // Output from cached data (no YAML parsing needed!)
         return output_cached_requirements(&cached_reqs, &short_ids, &args, output_format);
@@ -550,14 +575,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         // Status filter (for full entity mode and Active filter)
-        let status_match = match args.status {
-            StatusFilter::Draft => req.status == crate::core::entity::Status::Draft,
-            StatusFilter::Review => req.status == crate::core::entity::Status::Review,
-            StatusFilter::Approved => req.status == crate::core::entity::Status::Approved,
-            StatusFilter::Obsolete => req.status == crate::core::entity::Status::Obsolete,
-            StatusFilter::Active => req.status != crate::core::entity::Status::Obsolete,
-            StatusFilter::All => true,
-        };
+        let status_match = crate::cli::entity_cmd::status_enum_matches_filter(&req.status, args.status);
 
         // Priority filter (for full entity mode and Urgent filter)
         let priority_match = match args.priority {
@@ -626,45 +644,34 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             true
         };
 
-        // For untested/failed/passing, check test results
-        let test_ids: Vec<_> = req.links.verified_by.iter().collect();
+        // For untested/failed/passing, use pre-computed HashSets for O(1) lookups
+        let test_ids = &req.links.verified_by;
 
         // Untested: has tests linked but no results for those tests
         let untested_match = if args.untested {
             if test_ids.is_empty() {
                 false // No tests linked, not "untested" - it's unverified
             } else {
-                // Check if any linked test has a result
-                !test_ids
-                    .iter()
-                    .any(|tid| results.iter().any(|r| &r.test_id == *tid))
+                // Check if any linked test has a result (O(1) per test)
+                !test_ids.iter().any(|tid| tested_test_ids.contains(tid))
             }
         } else {
             true
         };
 
-        // Failed: has test results with verdict=fail
+        // Failed: has test results with verdict=fail (O(1) per test)
         let failed_match = if args.failed {
-            test_ids.iter().any(|tid| {
-                results.iter().any(|r| {
-                    &r.test_id == *tid && r.verdict == crate::entities::result::Verdict::Fail
-                })
-            })
+            test_ids.iter().any(|tid| failed_test_ids.contains(tid))
         } else {
             true
         };
 
-        // Passing: all linked tests have results with pass verdict
+        // Passing: all linked tests have results with pass verdict (O(1) per test)
         let passing_match = if args.passing {
             if test_ids.is_empty() {
                 false // No tests = can't be passing
             } else {
-                // All linked tests must have at least one passing result
-                test_ids.iter().all(|tid| {
-                    results.iter().any(|r| {
-                        &r.test_id == *tid && r.verdict == crate::entities::result::Verdict::Pass
-                    })
-                })
+                test_ids.iter().all(|tid| passing_test_ids.contains(tid))
             }
         } else {
             true
@@ -747,7 +754,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index with current requirements (preserves other entity types)
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(reqs.iter().map(|r| r.id.to_string()));
-    let _ = short_ids.save(&project); // Ignore save errors
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {
@@ -764,115 +771,48 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&reqs).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,type,title,status,priority,category,author,created");
-            for req in &reqs {
-                let short_id = short_ids
-                    .get_short_id(&req.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{},{},{}",
-                    short_id,
-                    req.id,
-                    req.req_type,
-                    escape_csv(&req.title),
-                    req.status,
-                    req.priority,
-                    req.category.as_deref().unwrap_or(""),
-                    req.author,
-                    req.created.format("%Y-%m-%dT%H:%M:%SZ")
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<16}", style("ID").bold()),
-                    ListColumn::Type => format!("{:<8}", style("TYPE").bold()),
-                    ListColumn::Title => format!("{:<34}", style("TITLE").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::Priority => format!("{:<10}", style("PRIORITY").bold()),
-                    ListColumn::Category => format!("{:<16}", style("CATEGORY").bold()),
-                    ListColumn::Author => format!("{:<16}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                    ListColumn::Tags => format!("{:<20}", style("TAGS").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(90));
-
-            for req in &reqs {
-                let short_id = short_ids
-                    .get_short_id(&req.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<16}", format_short_id(&req.id)),
-                        ListColumn::Type => format!("{:<8}", req.req_type),
-                        ListColumn::Title => format!("{:<34}", truncate_str(&req.title, 32)),
-                        ListColumn::Status => format!("{:<10}", req.status),
-                        ListColumn::Priority => format!("{:<10}", req.priority),
-                        ListColumn::Category => format!(
-                            "{:<16}",
-                            truncate_str(req.category.as_deref().unwrap_or(""), 14)
-                        ),
-                        ListColumn::Author => format!("{:<16}", truncate_str(&req.author, 14)),
-                        ListColumn::Created => format!("{:<12}", req.created.format("%Y-%m-%d")),
-                        ListColumn::Tags => {
-                            format!("{:<20}", truncate_str(&req.tags.join(", "), 18))
-                        }
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+            // Build visible columns list
+            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            if args.show_id && !visible.contains(&"id") {
+                visible.insert(0, "id");
             }
 
-            println!();
-            println!(
-                "{} requirement(s) found. Use {} to reference by short ID.",
-                style(reqs.len()).cyan(),
-                style("REQ@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for req in &reqs {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&req.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", req.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Type | Title | Status | Priority |");
-            println!("|---|---|---|---|---|---|");
-            for req in &reqs {
-                let short_id = short_ids
-                    .get_short_id(&req.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&req.id),
-                    req.req_type,
-                    req.title,
-                    req.status,
-                    req.priority
-                );
-            }
+            // Convert to TableRows
+            let rows: Vec<TableRow> = reqs
+                .iter()
+                .map(|req| requirement_to_row(req, &short_ids))
+                .collect();
+
+            // Configure table
+            let config = if let Some(width) = args.wrap {
+                TableConfig::with_wrap(width)
+            } else {
+                TableConfig::default()
+            };
+
+            let formatter = TableFormatter::new(REQ_COLUMNS, "requirement", "REQ")
+                .with_config(config);
+            formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(), // Already handled above
     }
 
     Ok(())
+}
+
+/// Convert a Requirement to a TableRow
+fn requirement_to_row(req: &Requirement, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(req.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(req.id.to_string()))
+        .cell("type", CellValue::Type(req.req_type.to_string()))
+        .cell("title", CellValue::Text(req.title.clone()))
+        .cell("status", CellValue::Status(req.status))
+        .cell("priority", CellValue::Priority(req.priority))
+        .cell("category", CellValue::Text(req.category.clone().unwrap_or_default()))
+        .cell("author", CellValue::Text(req.author.clone()))
+        .cell("created", CellValue::Date(req.created))
+        .cell("tags", CellValue::Tags(req.tags.clone()))
 }
 
 /// Output requirements from cached data (fast path - no YAML parsing)
@@ -882,111 +822,44 @@ fn output_cached_requirements(
     args: &ListArgs,
     format: OutputFormat,
 ) -> Result<()> {
-    match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,type,title,status,priority,category,author,created");
-            for req in reqs {
-                let short_id = short_ids.get_short_id(&req.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{},{},{}",
-                    short_id,
-                    req.id,
-                    req.req_type.as_deref().unwrap_or("input"),
-                    escape_csv(&req.title),
-                    req.status,
-                    req.priority.as_deref().unwrap_or("medium"),
-                    req.category.as_deref().unwrap_or(""),
-                    req.author,
-                    req.created.format("%Y-%m-%dT%H:%M:%SZ")
-                );
-            }
-        }
-        OutputFormat::Tsv | OutputFormat::Auto => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<16}", style("ID").bold()),
-                    ListColumn::Type => format!("{:<8}", style("TYPE").bold()),
-                    ListColumn::Title => format!("{:<34}", style("TITLE").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::Priority => format!("{:<10}", style("PRIORITY").bold()),
-                    ListColumn::Category => format!("{:<16}", style("CATEGORY").bold()),
-                    ListColumn::Author => format!("{:<16}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                    ListColumn::Tags => format!("{:<20}", style("TAGS").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(90));
-
-            for req in reqs {
-                let short_id = short_ids.get_short_id(&req.id).unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<16}", truncate_str(&req.id, 14)),
-                        ListColumn::Type => {
-                            format!("{:<8}", req.req_type.as_deref().unwrap_or("input"))
-                        }
-                        ListColumn::Title => format!("{:<34}", truncate_str(&req.title, 32)),
-                        ListColumn::Status => format!("{:<10}", req.status),
-                        ListColumn::Priority => {
-                            format!("{:<10}", req.priority.as_deref().unwrap_or("medium"))
-                        }
-                        ListColumn::Category => format!(
-                            "{:<16}",
-                            truncate_str(req.category.as_deref().unwrap_or(""), 14)
-                        ),
-                        ListColumn::Author => format!("{:<16}", truncate_str(&req.author, 14)),
-                        ListColumn::Created => format!("{:<12}", req.created.format("%Y-%m-%d")),
-                        ListColumn::Tags => {
-                            format!("{:<20}", truncate_str(&req.tags.join(", "), 18))
-                        }
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} requirement(s) found. Use {} to reference by short ID.",
-                style(reqs.len()).cyan(),
-                style("REQ@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for req in reqs {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&req.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", req.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Type | Title | Status | Priority |");
-            println!("|---|---|---|---|---|---|");
-            for req in reqs {
-                let short_id = short_ids.get_short_id(&req.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&req.id, 14),
-                    req.req_type.as_deref().unwrap_or("input"),
-                    req.title,
-                    req.status,
-                    req.priority.as_deref().unwrap_or("medium")
-                );
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Path => unreachable!(), // These require full entities
+    // Build visible columns list
+    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    if args.show_id && !visible.contains(&"id") {
+        visible.insert(0, "id");
     }
+
+    // Convert to TableRows
+    let rows: Vec<TableRow> = reqs
+        .iter()
+        .map(|req| cached_requirement_to_row(req, short_ids))
+        .collect();
+
+    // Configure table
+    let config = if let Some(width) = args.wrap {
+        TableConfig::with_wrap(width)
+    } else {
+        TableConfig::default()
+    };
+
+    let formatter = TableFormatter::new(REQ_COLUMNS, "requirement", "REQ")
+        .with_config(config);
+    formatter.output(rows, format, &visible);
+
     Ok(())
+}
+
+/// Convert a CachedRequirement to a TableRow
+fn cached_requirement_to_row(req: &crate::core::CachedRequirement, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(req.id.clone(), short_ids)
+        .cell("id", CellValue::Id(req.id.clone()))
+        .cell("type", CellValue::Type(req.req_type.clone().unwrap_or_else(|| "input".to_string())))
+        .cell("title", CellValue::Text(req.title.clone()))
+        .cell("status", CellValue::Status(req.status))
+        .cell("priority", CellValue::OptionalPriority(req.priority))
+        .cell("category", CellValue::Text(req.category.clone().unwrap_or_default()))
+        .cell("author", CellValue::Text(req.author.clone()))
+        .cell("created", CellValue::Date(req.created))
+        .cell("tags", CellValue::Tags(req.tags.clone()))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -1153,74 +1026,27 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        // Resolve target ID
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        // Parse target to get prefix
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Req,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Req,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
-        }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created requirement {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-
-            // Show added links
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &title,
+        None,
+        &added_links,
+        global,
+    );
 
     // Open in editor if requested (or by default unless --no-edit)
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1387,37 +1213,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
     // Resolve ID from argument or stdin
     let id = resolve_id_arg(&args.id).map_err(|e| miette::miette!("{}", e))?;
-
-    // Find the requirement by ID prefix match
-    let req = find_requirement(&project, &id)?;
-
-    // Get the file path
-    let req_type = match req.req_type {
-        RequirementType::Input => "inputs",
-        RequirementType::Output => "outputs",
-    };
-    let file_path = project
-        .root()
-        .join(format!("requirements/{}/{}.tdt.yaml", req_type, req.id));
-
-    if !file_path.exists() {
-        return Err(miette::miette!("File not found: {}", file_path.display()));
-    }
-
-    println!(
-        "Opening {} in {}...",
-        style(format_short_id(&req.id)).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&file_path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&id, &ENTITY_CONFIG)
 }
 
 /// Find a requirement by ID prefix match or short ID (@N)

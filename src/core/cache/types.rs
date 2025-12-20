@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
 
+use crate::core::entity::{Priority, Status};
 use crate::core::identity::EntityPrefix;
 
 // =========================================================================
@@ -84,12 +85,12 @@ pub struct CachedEntity {
     pub id: String,
     pub prefix: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub author: String,
     pub created: DateTime<Utc>,
     pub file_path: PathBuf,
     // Extended fields
-    pub priority: Option<String>,
+    pub priority: Option<Priority>,
     pub entity_type: Option<String>,
     pub category: Option<String>,
     pub tags: Vec<String>,
@@ -100,7 +101,7 @@ pub struct CachedEntity {
 pub struct CachedFeature {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub component_id: String,
     pub feature_type: String,
     pub dim_name: Option<String>,
@@ -119,7 +120,7 @@ pub struct CachedSupplier {
     pub id: String,
     pub name: String,
     pub short_name: Option<String>,
-    pub status: String,
+    pub status: Status,
     pub author: String,
     pub created: DateTime<Utc>,
     pub website: Option<String>,
@@ -133,8 +134,8 @@ pub struct CachedSupplier {
 pub struct CachedRequirement {
     pub id: String,
     pub title: String,
-    pub status: String,
-    pub priority: Option<String>,
+    pub status: Status,
+    pub priority: Option<Priority>,
     pub req_type: Option<String>,
     pub category: Option<String>,
     pub author: String,
@@ -148,7 +149,7 @@ pub struct CachedRequirement {
 pub struct CachedRisk {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub risk_type: Option<String>,
     pub severity: Option<i32>,
     pub occurrence: Option<i32>,
@@ -166,11 +167,11 @@ pub struct CachedRisk {
 pub struct CachedTest {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub test_type: Option<String>,
     pub level: Option<String>,
     pub method: Option<String>,
-    pub priority: Option<String>,
+    pub priority: Option<Priority>,
     pub category: Option<String>,
     pub author: String,
     pub created: DateTime<Utc>,
@@ -182,7 +183,7 @@ pub struct CachedTest {
 pub struct CachedComponent {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub part_number: Option<String>,
     pub revision: Option<String>,
     pub make_buy: Option<String>,
@@ -197,7 +198,7 @@ pub struct CachedComponent {
 pub struct CachedQuote {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub quote_status: Option<String>,
     pub supplier_id: Option<String>,
     pub component_id: Option<String>,
@@ -216,7 +217,7 @@ pub struct CachedQuote {
 pub struct CachedNcr {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub ncr_type: Option<String>,
     pub severity: Option<String>,
     pub ncr_status: Option<String>,
@@ -231,7 +232,7 @@ pub struct CachedNcr {
 pub struct CachedCapa {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub capa_type: Option<String>,
     pub capa_status: Option<String>,
     pub author: String,
@@ -244,7 +245,7 @@ pub struct CachedCapa {
 pub struct CachedLot {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub lot_number: Option<String>,
     pub quantity: Option<i64>,
     pub lot_status: Option<String>,
@@ -259,7 +260,7 @@ pub struct CachedLot {
 pub struct CachedDeviation {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub deviation_number: Option<String>,
     pub deviation_type: Option<String>,
     pub category: Option<String>,
@@ -279,7 +280,7 @@ pub struct CachedDeviation {
 pub struct CachedProcess {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub process_type: Option<String>,
     pub category: Option<String>,
     pub author: String,
@@ -292,7 +293,7 @@ pub struct CachedProcess {
 pub struct CachedControl {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub control_type: Option<String>,
     pub process_id: Option<String>,
     pub category: Option<String>,
@@ -306,7 +307,7 @@ pub struct CachedControl {
 pub struct CachedWork {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub process_id: Option<String>,
     pub author: String,
     pub created: DateTime<Utc>,
@@ -318,7 +319,7 @@ pub struct CachedWork {
 pub struct CachedResult {
     pub id: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub test_id: Option<String>,
     pub verdict: Option<String>,
     pub executed_by: Option<String>,
@@ -402,11 +403,11 @@ pub struct CacheStats {
 #[derive(Debug, Default)]
 pub struct EntityFilter {
     pub prefix: Option<EntityPrefix>,
-    pub status: Option<String>,
+    pub status: Option<Status>,
     pub author: Option<String>,
     pub search: Option<String>,
     pub limit: Option<usize>,
-    pub priority: Option<String>,
+    pub priority: Option<Priority>,
     pub entity_type: Option<String>,
     pub category: Option<String>,
 }
@@ -417,6 +418,6 @@ pub struct SearchResult {
     pub id: String,
     pub entity_type: String,
     pub title: String,
-    pub status: String,
+    pub status: Status,
     pub author: String,
 }

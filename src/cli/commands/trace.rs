@@ -121,7 +121,7 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     let short_ids = if !args.ids || args.rvm {
         let mut idx = ShortIdIndex::load(&project);
         idx.ensure_all(entities.iter().map(|e| e.id.clone()));
-        let _ = idx.save(&project);
+        super::utils::save_short_ids(&mut idx, &project);
         Some(idx)
     } else {
         None
@@ -446,7 +446,7 @@ fn run_from(args: FromArgs) -> Result<()> {
     let mut short_ids = ShortIdIndex::load(&project);
     if !args.ids {
         short_ids.ensure_all(entities.iter().map(|e| e.id.clone()));
-        let _ = short_ids.save(&project);
+        super::utils::save_short_ids(&mut short_ids, &project);
     }
 
     let resolved_id = short_ids
@@ -554,7 +554,7 @@ fn run_to(args: ToArgs) -> Result<()> {
     let mut short_ids = ShortIdIndex::load(&project);
     if !args.ids {
         short_ids.ensure_all(entities.iter().map(|e| e.id.clone()));
-        let _ = short_ids.save(&project);
+        super::utils::save_short_ids(&mut short_ids, &project);
     }
 
     let resolved_id = short_ids
@@ -798,6 +798,10 @@ fn load_all_entities(project: &Project) -> Result<Vec<GenericEntity>> {
         }
     }
 
+    // Build HashSet of existing IDs for O(1) duplicate checking
+    use std::collections::HashSet;
+    let mut seen_ids: HashSet<String> = entities.iter().map(|e| e.id.clone()).collect();
+
     // Also check additional directories that may not be covered by iter_entity_files
     let additional_dirs = [
         ("requirements/outputs", EntityPrefix::Req),
@@ -816,8 +820,8 @@ fn load_all_entities(project: &Project) -> Result<Vec<GenericEntity>> {
                 .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
             {
                 if let Ok(entity) = load_generic_entity(&entry.path().to_path_buf(), prefix) {
-                    // Avoid duplicates
-                    if !entities.iter().any(|e| e.id == entity.id) {
+                    // Avoid duplicates - O(1) lookup instead of O(n)
+                    if seen_ids.insert(entity.id.clone()) {
                         entities.push(entity);
                     }
                 }

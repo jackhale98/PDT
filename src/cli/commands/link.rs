@@ -282,7 +282,13 @@ fn run_add(args: AddLinkArgs) -> Result<()> {
 
     // Update cache to reflect new links
     if let Ok(mut cache) = EntityCache::open(&project) {
-        let _ = cache.sync();
+        if let Err(e) = cache.sync() {
+            eprintln!(
+                "{} Warning: Failed to update cache: {}",
+                console::style("!").yellow(),
+                e
+            );
+        }
     }
 
     Ok(())
@@ -326,7 +332,13 @@ fn run_remove(args: RemoveLinkArgs) -> Result<()> {
 
     // Update cache to reflect removed links
     if let Ok(mut cache) = EntityCache::open(&project) {
-        let _ = cache.sync();
+        if let Err(e) = cache.sync() {
+            eprintln!(
+                "{} Warning: Failed to update cache: {}",
+                console::style("!").yellow(),
+                e
+            );
+        }
     }
 
     Ok(())

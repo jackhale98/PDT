@@ -6,11 +6,12 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, format_short_id_str, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{format_short_id, format_short_id_str, truncate_str};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -56,20 +57,6 @@ pub enum VerdictFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    /// All active (not obsolete)
-    Active,
-    /// All statuses
-    All,
-}
-
 /// Columns to display in list output
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum ListColumn {
@@ -97,6 +84,18 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for result list output
+const RSLT_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("short", "SHORT", 8),
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("title", "TITLE", 25),
+    ColumnDef::new("test", "TEST", 8),
+    ColumnDef::new("verdict", "VERDICT", 12),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 15),
+    ColumnDef::new("created", "CREATED", 12),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -163,6 +162,10 @@ pub struct ListArgs {
     /// Show count only, not the items
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -342,7 +345,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             // Apply filters that need post-processing
             // Status: Active filter (all non-obsolete)
             if matches!(args.status, StatusFilter::Active) {
-                cached_results.retain(|r| r.status != "obsolete");
+                cached_results.retain(|r| r.status != crate::core::entity::Status::Obsolete);
             }
 
             // Verdict: Issues filter (fail, conditional, incomplete)
@@ -622,7 +625,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     // Update short ID index with current results (preserves other entity types)
     short_ids.ensure_all(results.iter().map(|r| r.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     match format {
         OutputFormat::Json => {
@@ -633,105 +636,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&results).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,test_id,verdict,status,executed_by,executed_date");
-            for result in &results {
-                let short_id = short_ids
-                    .get_short_id(&result.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    result.id,
-                    format_short_id(&result.test_id),
-                    result.verdict,
-                    result.status,
-                    escape_csv(&result.executed_by),
-                    result.executed_date.format("%Y-%m-%d")
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header parts based on columns
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
-
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Short => ("SHORT", 8),
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 25),
-                    ListColumn::Test => ("TEST", 8),
-                    ListColumn::Verdict => ("VERDICT", 12),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Author => ("AUTHOR", 15),
-                    ListColumn::Created => ("CREATED", 12),
-                };
-                header_parts.push(style(header).bold().to_string());
-                widths.push(width);
-            }
-
-            // Print header
-            let header_line = header_parts
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            // Build column list from args (filter out "short" since it's added automatically)
+            let columns: Vec<&str> = args.columns
                 .iter()
-                .zip(&widths)
-                .map(|(h, w)| format!("{:<width$}", h, width = w))
-                .collect::<Vec<_>>()
-                .join(" ");
-            println!("{}", header_line);
+                .filter(|c| !matches!(c, ListColumn::Short))
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
 
-            let total_width: usize = widths.iter().sum::<usize>() + (widths.len() - 1);
-            println!("{}", "-".repeat(total_width));
+            // Build rows
+            let rows: Vec<TableRow> = results.iter().map(|r| result_to_row(r, &short_ids)).collect();
 
-            for result in &results {
-                // Build row parts based on columns
-                let mut row_parts = Vec::new();
-
-                for col in &args.columns {
-                    let part = match col {
-                        ListColumn::Short => short_ids
-                            .get_short_id(&result.id.to_string())
-                            .unwrap_or_else(|| "?".to_string()),
-                        ListColumn::Id => format_short_id(&result.id),
-                        ListColumn::Title => {
-                            let title = result.title.as_deref().unwrap_or("Untitled");
-                            truncate_str(title, 23)
-                        }
-                        ListColumn::Test => short_ids
-                            .get_short_id(&result.test_id.to_string())
-                            .unwrap_or_else(|| format_short_id(&result.test_id)),
-                        ListColumn::Verdict => match result.verdict {
-                            Verdict::Pass => style(result.verdict.to_string()).green().to_string(),
-                            Verdict::Fail => {
-                                style(result.verdict.to_string()).red().bold().to_string()
-                            }
-                            Verdict::Conditional => {
-                                style(result.verdict.to_string()).yellow().to_string()
-                            }
-                            Verdict::Incomplete => {
-                                style(result.verdict.to_string()).yellow().to_string()
-                            }
-                            Verdict::NotApplicable => style("n/a").dim().to_string(),
-                        },
-                        ListColumn::Status => result.status.to_string(),
-                        ListColumn::Author => truncate_str(&result.author, 13),
-                        ListColumn::Created => result.created.format("%Y-%m-%d").to_string(),
-                    };
-                    row_parts.push(part);
-                }
-
-                // Print row
-                let row_line = row_parts
-                    .iter()
-                    .zip(&widths)
-                    .map(|(p, w)| format!("{:<width$}", p, width = w))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                println!("{}", row_line);
-            }
-
-            println!();
-            println!("{} result(s) found.", style(results.len()).cyan());
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT")
+                .with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for result in &results {
@@ -743,25 +665,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", result.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Test | Verdict | Status | Executed By | Date |");
-            println!("|---|---|---|---|---|---|---|");
-            for result in &results {
-                let short_id = short_ids
-                    .get_short_id(&result.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&result.id),
-                    format_short_id(&result.test_id),
-                    result.verdict,
-                    result.status,
-                    result.executed_by,
-                    result.executed_date.format("%Y-%m-%d")
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -790,104 +693,24 @@ fn output_cached_results(
     }
 
     match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,test_id,verdict,status,executed_by,executed_date");
-            for result in results {
-                let short_id = short_ids.get_short_id(&result.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    result.id,
-                    result.test_id.as_deref().unwrap_or(""),
-                    result.verdict.as_deref().unwrap_or(""),
-                    result.status,
-                    escape_csv(result.executed_by.as_deref().unwrap_or("")),
-                    result.executed_date.as_deref().unwrap_or("")
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header parts based on columns
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
-
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Short => ("SHORT", 8),
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 25),
-                    ListColumn::Test => ("TEST", 8),
-                    ListColumn::Verdict => ("VERDICT", 12),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Author => ("AUTHOR", 15),
-                    ListColumn::Created => ("CREATED", 12),
-                };
-                header_parts.push(style(header).bold().to_string());
-                widths.push(width);
-            }
-
-            // Print header
-            let header_line = header_parts
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            // Build column list from args (filter out "short" since it's added automatically)
+            let columns: Vec<&str> = args.columns
                 .iter()
-                .zip(&widths)
-                .map(|(h, w)| format!("{:<width$}", h, width = w))
-                .collect::<Vec<_>>()
-                .join(" ");
-            println!("{}", header_line);
+                .filter(|c| !matches!(c, ListColumn::Short))
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
 
-            let total_width: usize = widths.iter().sum::<usize>() + (widths.len() - 1);
-            println!("{}", "-".repeat(total_width));
+            // Build rows
+            let rows: Vec<TableRow> = results.iter().map(|r| cached_result_to_row(r, short_ids)).collect();
 
-            for result in results {
-                let mut row_parts = Vec::new();
-
-                for col in &args.columns {
-                    let part = match col {
-                        ListColumn::Short => short_ids
-                            .get_short_id(&result.id)
-                            .unwrap_or_else(|| "?".to_string()),
-                        ListColumn::Id => truncate_str(&result.id, 15),
-                        ListColumn::Title => truncate_str(&result.title, 23),
-                        ListColumn::Test => result
-                            .test_id
-                            .as_ref()
-                            .and_then(|t| short_ids.get_short_id(t))
-                            .unwrap_or_else(|| {
-                                result
-                                    .test_id
-                                    .as_ref()
-                                    .map(|t| truncate_str(t, 6))
-                                    .unwrap_or_else(|| "-".to_string())
-                            }),
-                        ListColumn::Verdict => {
-                            let v = result.verdict.as_deref().unwrap_or("");
-                            match v {
-                                "pass" => style(v).green().to_string(),
-                                "fail" => style(v).red().bold().to_string(),
-                                "conditional" | "incomplete" => style(v).yellow().to_string(),
-                                "not_applicable" => style("n/a").dim().to_string(),
-                                _ => v.to_string(),
-                            }
-                        }
-                        ListColumn::Status => result.status.clone(),
-                        ListColumn::Author => truncate_str(&result.author, 13),
-                        ListColumn::Created => result.created.format("%Y-%m-%d").to_string(),
-                    };
-                    row_parts.push(part);
-                }
-
-                // Print row
-                let row_line = row_parts
-                    .iter()
-                    .zip(&widths)
-                    .map(|(p, w)| format!("{:<width$}", p, width = w))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                println!("{}", row_line);
-            }
-
-            println!();
-            println!("{} result(s) found.", style(results.len()).cyan());
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT")
+                .with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for result in results {
@@ -899,29 +722,49 @@ fn output_cached_results(
                 }
             }
         }
-        OutputFormat::Md => {
-            println!("| Short | ID | Test | Verdict | Status | Executed By | Date |");
-            println!("|---|---|---|---|---|---|---|");
-            for result in results {
-                let short_id = short_ids.get_short_id(&result.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&result.id, 15),
-                    result.test_id.as_deref().unwrap_or("-"),
-                    result.verdict.as_deref().unwrap_or("-"),
-                    result.status,
-                    result.executed_by.as_deref().unwrap_or("-"),
-                    result.executed_date.as_deref().unwrap_or("-")
-                );
-            }
-        }
         OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             unreachable!()
         }
     }
 
     Ok(())
+}
+
+/// Convert a TestResult to a TableRow
+fn result_to_row(result: &TestResult, short_ids: &ShortIdIndex) -> TableRow {
+    let test_short = short_ids
+        .get_short_id(&result.test_id.to_string())
+        .unwrap_or_else(|| format_short_id(&result.test_id));
+
+    TableRow::new(result.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(result.id.to_string()))
+        .cell("title", CellValue::Text(
+            result.title.as_deref().unwrap_or("Untitled").to_string()
+        ))
+        .cell("test", CellValue::ShortId(test_short))
+        .cell("verdict", CellValue::Verdict(result.verdict.to_string()))
+        .cell("status", CellValue::Status(result.status))
+        .cell("author", CellValue::Text(result.author.clone()))
+        .cell("created", CellValue::Date(result.created))
+}
+
+/// Convert a CachedResult to a TableRow
+fn cached_result_to_row(result: &crate::core::cache::CachedResult, short_ids: &ShortIdIndex) -> TableRow {
+    let test_short = result.test_id
+        .as_ref()
+        .and_then(|t| short_ids.get_short_id(t))
+        .unwrap_or_else(|| result.test_id.as_deref().unwrap_or("-").to_string());
+
+    TableRow::new(result.id.clone(), short_ids)
+        .cell("id", CellValue::Id(result.id.clone()))
+        .cell("title", CellValue::Text(result.title.clone()))
+        .cell("test", CellValue::ShortId(test_short))
+        .cell("verdict", CellValue::Verdict(
+            result.verdict.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("status", CellValue::Status(result.status))
+        .cell("author", CellValue::Text(result.author.clone()))
+        .cell("created", CellValue::Date(result.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -1068,38 +911,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Rslt,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Rslt,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {

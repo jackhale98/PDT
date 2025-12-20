@@ -6,11 +6,11 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::helpers::format_short_id;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::{CachedCapa, EntityCache};
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -87,6 +87,16 @@ impl std::fmt::Display for ListColumn {
     }
 }
 
+/// Column definitions for CAPA list output
+const CAPA_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("title", "TITLE", 30),
+    ColumnDef::new("capa-type", "TYPE", 12),
+    ColumnDef::new("status", "STATUS", 14),
+    ColumnDef::new("author", "AUTHOR", 20),
+    ColumnDef::new("created", "CREATED", 20),
+];
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by CAPA type
@@ -141,6 +151,10 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -220,6 +234,14 @@ pub struct ArchiveArgs {
 
 /// Directories where CAPAs are stored
 const CAPA_DIRS: &[&str] = &["manufacturing/capas"];
+
+/// Entity configuration for CAPAs
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Capa,
+    dirs: CAPA_DIRS,
+    name: "CAPA",
+    name_plural: "CAPAs",
+};
 
 /// Verification result CLI option
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -342,7 +364,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             // Update short ID index
             let mut short_ids = ShortIdIndex::load(&project);
             short_ids.ensure_all(capas.iter().map(|c| c.id.clone()));
-            let _ = short_ids.save(&project);
+            super::utils::save_short_ids(&mut short_ids, &project);
 
             return output_cached_capas(&capas, &args, &short_ids, format);
         }
@@ -468,7 +490,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(capas.iter().map(|c| c.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     match format {
@@ -480,114 +502,20 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&capas).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,title,type,actions,capa_status");
-            for capa in &capas {
-                let short_id = short_ids
-                    .get_short_id(&capa.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{}",
-                    short_id,
-                    capa.id,
-                    escape_csv(&capa.title),
-                    capa.capa_type,
-                    capa.actions.len(),
-                    capa.capa_status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header dynamically based on columns
-            let mut headers = vec![style("SHORT").bold().dim().to_string()];
-            let mut widths = vec![8];
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            // Build column list from args
+            let columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
 
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 30),
-                    ListColumn::CapaType => ("TYPE", 12),
-                    ListColumn::Status => ("STATUS", 14),
-                    ListColumn::Author => ("AUTHOR", 20),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                headers.push(style(header).bold().to_string());
-                widths.push(width);
-            }
+            // Build rows
+            let rows: Vec<TableRow> = capas.iter().map(|c| capa_to_row(c, &short_ids)).collect();
 
-            // Print header
-            for (i, header) in headers.iter().enumerate() {
-                if i > 0 {
-                    print!(" ");
-                }
-                print!("{:<width$}", header, width = widths[i]);
-            }
-            println!();
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
-
-            // Print rows
-            for capa in &capas {
-                let short_id = short_ids
-                    .get_short_id(&capa.id.to_string())
-                    .unwrap_or_default();
-
-                // Print SHORT column
-                print!("{:<8}", style(&short_id).cyan());
-
-                // Print selected columns
-                for col in &args.columns {
-                    print!(" ");
-                    match col {
-                        ListColumn::Id => {
-                            let id_display = format_short_id(&capa.id);
-                            print!("{:<17}", id_display);
-                        }
-                        ListColumn::Title => {
-                            let title_truncated = truncate_str(&capa.title, 28);
-                            print!("{:<30}", title_truncated);
-                        }
-                        ListColumn::CapaType => {
-                            print!("{:<12}", capa.capa_type);
-                        }
-                        ListColumn::Status => {
-                            // Check if overdue
-                            let is_overdue = capa
-                                .timeline
-                                .as_ref()
-                                .and_then(|t| t.target_date)
-                                .is_some_and(|target| {
-                                    target < today && capa.capa_status != CapaStatus::Closed
-                                });
-
-                            let status_styled = if is_overdue {
-                                style(format!("{} !", capa.capa_status)).red().bold()
-                            } else {
-                                style(capa.capa_status.to_string()).white()
-                            };
-                            print!("{:<14}", status_styled);
-                        }
-                        ListColumn::Author => {
-                            let author_truncated = truncate_str(&capa.author, 18);
-                            print!("{:<20}", author_truncated);
-                        }
-                        ListColumn::Created => {
-                            let created_str = capa.created.format("%Y-%m-%d %H:%M").to_string();
-                            print!("{:<20}", created_str);
-                        }
-                    }
-                }
-                println!();
-            }
-
-            println!();
-            println!(
-                "{} CAPA(s) found. Use {} to reference by short ID.",
-                style(capas.len()).cyan(),
-                style("CAPA@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA")
+                .with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for capa in &capas {
@@ -599,24 +527,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", capa.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Actions | Status |");
-            println!("|---|---|---|---|---|---|");
-            for capa in &capas {
-                let short_id = short_ids
-                    .get_short_id(&capa.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&capa.id),
-                    capa.title,
-                    capa.capa_type,
-                    capa.actions.len(),
-                    capa.capa_status
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -720,38 +630,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Capa,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Capa,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {
@@ -983,45 +870,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the CAPA file
-    let capa_dir = project.root().join("manufacturing/capas");
-    let mut found_path = None;
-
-    if capa_dir.exists() {
-        for entry in fs::read_dir(&capa_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path = found_path.ok_or_else(|| miette::miette!("No CAPA found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {
@@ -1052,74 +901,24 @@ fn output_cached_capas(
     }
 
     match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,title,type,capa_status");
-            for capa in capas {
-                let short_id = short_ids.get_short_id(&capa.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{}",
-                    short_id,
-                    capa.id,
-                    escape_csv(&capa.title),
-                    capa.capa_type.as_deref().unwrap_or(""),
-                    capa.capa_status.as_deref().unwrap_or("")
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header
-            let mut headers = vec![];
-            let mut widths = vec![];
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
+            let rows: Vec<TableRow> = capas
+                .iter()
+                .map(|c| cached_capa_to_row(c, short_ids))
+                .collect();
 
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 30),
-                    ListColumn::CapaType => ("TYPE", 12),
-                    ListColumn::Status => ("STATUS", 14),
-                    ListColumn::Author => ("AUTHOR", 16),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                headers.push((header, *col));
-                widths.push(width);
-            }
-
-            // Print header
-            print!("{:<8} ", style("SHORT").bold().dim());
-            for (i, (header, _)) in headers.iter().enumerate() {
-                print!("{:<width$} ", style(header).bold(), width = widths[i]);
-            }
-            println!();
-            println!(
-                "{}",
-                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len())
-            );
-
-            // Print rows
-            for capa in capas {
-                let short_id = short_ids.get_short_id(&capa.id).unwrap_or_default();
-                print!("{:<8} ", style(&short_id).cyan());
-
-                for (i, (_, col)) in headers.iter().enumerate() {
-                    let cell = match col {
-                        ListColumn::Id => truncate_str(&capa.id, widths[i] - 2),
-                        ListColumn::Title => truncate_str(&capa.title, widths[i] - 2),
-                        ListColumn::CapaType => capa.capa_type.as_deref().unwrap_or("").to_string(),
-                        ListColumn::Status => capa.capa_status.as_deref().unwrap_or("").to_string(),
-                        ListColumn::Author => truncate_str(&capa.author, widths[i] - 2),
-                        ListColumn::Created => capa.created.format("%Y-%m-%d %H:%M").to_string(),
-                    };
-                    print!("{:<width$} ", cell, width = widths[i]);
-                }
-                println!();
-            }
-
-            println!();
-            println!(
-                "{} CAPA(s) found. Use {} to reference by short ID.",
-                style(capas.len()).cyan(),
-                style("CAPA@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter =
+                TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for capa in capas {
@@ -1131,21 +930,6 @@ fn output_cached_capas(
                 }
             }
         }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Status |");
-            println!("|---|---|---|---|---|");
-            for capa in capas {
-                let short_id = short_ids.get_short_id(&capa.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&capa.id, 16),
-                    capa.title,
-                    capa.capa_type.as_deref().unwrap_or(""),
-                    capa.capa_status.as_deref().unwrap_or("")
-                );
-            }
-        }
         OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             // Should not reach here - cache bypassed for these formats
             unreachable!();
@@ -1153,6 +937,34 @@ fn output_cached_capas(
     }
 
     Ok(())
+}
+
+/// Convert a full Capa entity to a TableRow
+fn capa_to_row(capa: &Capa, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(capa.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(capa.id.to_string()))
+        .cell("title", CellValue::Text(capa.title.clone()))
+        .cell("capa-type", CellValue::Type(capa.capa_type.to_string()))
+        .cell("status", CellValue::Type(capa.capa_status.to_string()))
+        .cell("author", CellValue::Text(capa.author.clone()))
+        .cell("created", CellValue::DateTime(capa.created))
+}
+
+/// Convert a cached CAPA to a TableRow
+fn cached_capa_to_row(capa: &CachedCapa, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(capa.id.clone(), short_ids)
+        .cell("id", CellValue::Id(capa.id.clone()))
+        .cell("title", CellValue::Text(capa.title.clone()))
+        .cell(
+            "capa-type",
+            CellValue::Type(capa.capa_type.clone().unwrap_or_default()),
+        )
+        .cell(
+            "status",
+            CellValue::Type(capa.capa_status.clone().unwrap_or_default()),
+        )
+        .cell("author", CellValue::Text(capa.author.clone()))
+        .cell("created", CellValue::DateTime(capa.created))
 }
 
 fn run_verify(args: VerifyArgs, global: &GlobalOpts) -> Result<()> {

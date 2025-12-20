@@ -27,7 +27,7 @@ pub trait Entity: Serialize + DeserializeOwned {
 }
 
 /// Status values common across entity types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum Status {
@@ -51,8 +51,23 @@ impl std::fmt::Display for Status {
     }
 }
 
+impl std::str::FromStr for Status {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "draft" => Ok(Status::Draft),
+            "review" => Ok(Status::Review),
+            "approved" => Ok(Status::Approved),
+            "released" => Ok(Status::Released),
+            "obsolete" => Ok(Status::Obsolete),
+            _ => Err(format!("Unknown status: {}", s)),
+        }
+    }
+}
+
 /// Priority values common across entity types
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum Priority {
@@ -70,6 +85,20 @@ impl std::fmt::Display for Priority {
             Priority::Medium => write!(f, "medium"),
             Priority::High => write!(f, "high"),
             Priority::Critical => write!(f, "critical"),
+        }
+    }
+}
+
+impl std::str::FromStr for Priority {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "low" => Ok(Priority::Low),
+            "medium" => Ok(Priority::Medium),
+            "high" => Ok(Priority::High),
+            "critical" => Ok(Priority::Critical),
+            _ => Err(format!("Unknown priority: {}", s)),
         }
     }
 }

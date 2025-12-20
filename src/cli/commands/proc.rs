@@ -5,17 +5,29 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::truncate_str;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::{CachedEntity, EntityCache, EntityFilter};
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
 use crate::entities::process::{Process, ProcessType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
+
+/// Column definitions for process list output
+const PROC_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("title", "TITLE", 30),
+    ColumnDef::new("process-type", "TYPE", 12),
+    ColumnDef::new("operation", "OP #", 10),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 16),
+    ColumnDef::new("created", "CREATED", 20),
+];
 
 /// CLI-friendly process type enum
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -107,17 +119,6 @@ pub enum ProcessTypeFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    All,
-}
-
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by process type
@@ -150,7 +151,6 @@ pub struct ListArgs {
 
     /// Columns to display (comma-separated)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
-        ListColumn::Id,
         ListColumn::Title,
         ListColumn::ProcessType,
         ListColumn::Operation,
@@ -165,6 +165,14 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text at specified width (enables multi-line rows)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show full entity ID column (hidden by default, SHORT ID always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 /// Column selection for list output
@@ -181,14 +189,21 @@ pub enum ListColumn {
 
 impl std::fmt::Display for ListColumn {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.key())
+    }
+}
+
+impl ListColumn {
+    /// Get the column key for use with TableFormatter
+    pub const fn key(&self) -> &'static str {
         match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::ProcessType => write!(f, "process-type"),
-            ListColumn::Operation => write!(f, "operation"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
+            ListColumn::Id => "id",
+            ListColumn::Title => "title",
+            ListColumn::ProcessType => "process-type",
+            ListColumn::Operation => "operation",
+            ListColumn::Status => "status",
+            ListColumn::Author => "author",
+            ListColumn::Created => "created",
         }
     }
 }
@@ -283,6 +298,14 @@ pub struct ArchiveArgs {
 /// Directories where processes are stored
 const PROCESS_DIRS: &[&str] = &["manufacturing/processes"];
 
+/// Entity configuration for processes
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Proc,
+    dirs: PROCESS_DIRS,
+    name: "process",
+    name_plural: "processes",
+};
+
 #[derive(clap::Args, Debug)]
 pub struct FlowArgs {
     /// Filter by process ID (optional - shows all if omitted)
@@ -337,18 +360,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     if can_use_cache {
         if let Ok(cache) = EntityCache::open(&project) {
-            let status_filter = match args.status {
-                StatusFilter::Draft => Some("draft"),
-                StatusFilter::Review => Some("review"),
-                StatusFilter::Approved => Some("approved"),
-                StatusFilter::Released => Some("released"),
-                StatusFilter::Obsolete => Some("obsolete"),
-                StatusFilter::All => None,
-            };
-
             let filter = EntityFilter {
                 prefix: Some(EntityPrefix::Proc),
-                status: status_filter.map(|s| s.to_string()),
+                status: crate::cli::entity_cmd::status_filter_to_status(args.status),
                 author: args.author.clone(),
                 search: None,
                 limit: None,
@@ -386,7 +400,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             // Update short ID index
             let mut short_ids = ShortIdIndex::load(&project);
             short_ids.ensure_all(entities.iter().map(|e| e.id.clone()));
-            let _ = short_ids.save(&project);
+            super::utils::save_short_ids(&mut short_ids, &project);
 
             return output_cached_processes(&entities, &args, &short_ids, format);
         }
@@ -423,14 +437,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             ProcessTypeFilter::Coating => p.process_type == ProcessType::Coating,
             ProcessTypeFilter::All => true,
         })
-        .filter(|p| match args.status {
-            StatusFilter::Draft => p.status == crate::core::entity::Status::Draft,
-            StatusFilter::Review => p.status == crate::core::entity::Status::Review,
-            StatusFilter::Approved => p.status == crate::core::entity::Status::Approved,
-            StatusFilter::Released => p.status == crate::core::entity::Status::Released,
-            StatusFilter::Obsolete => p.status == crate::core::entity::Status::Obsolete,
-            StatusFilter::All => true,
-        })
+        .filter(|p| crate::cli::entity_cmd::status_enum_matches_filter(&p.status, args.status))
         .filter(|p| {
             if let Some(ref author) = args.author {
                 let author_lower = author.to_lowercase();
@@ -505,7 +512,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(processes.iter().map(|p| p.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     match format {
@@ -517,143 +524,52 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&processes).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,title,type,op_number,cycle_time,status");
-            for proc in &processes {
-                let short_id = short_ids
-                    .get_short_id(&proc.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    proc.id,
-                    escape_csv(&proc.title),
-                    proc.process_type,
-                    proc.operation_number.as_deref().unwrap_or(""),
-                    proc.cycle_time_minutes
-                        .map_or(String::new(), |t| t.to_string()),
-                    proc.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header
-            let mut headers = Vec::new();
-            let mut widths = Vec::new();
-
-            // Always show SHORT first
-            headers.push(style("SHORT").bold().dim().to_string());
-            widths.push(8);
-
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 30),
-                    ListColumn::ProcessType => ("TYPE", 12),
-                    ListColumn::Operation => ("OP #", 8),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Author => ("AUTHOR", 20),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                headers.push(style(header).bold().to_string());
-                widths.push(width);
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md
+        | OutputFormat::Id | OutputFormat::ShortId => {
+            // Convert visible columns to keys, optionally including ID
+            let mut visible_columns: Vec<&str> = args.columns
+                .iter()
+                .map(|c| c.key())
+                .collect();
+            if args.show_id && !visible_columns.contains(&"id") {
+                visible_columns.insert(0, "id");
             }
 
-            // Print header
-            for (i, header) in headers.iter().enumerate() {
-                if i > 0 {
-                    print!(" ");
-                }
-                print!("{:<width$}", header, width = widths[i]);
-            }
-            println!();
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
+            // Build table rows from full Process entities
+            let rows: Vec<TableRow> = processes
+                .iter()
+                .map(|p| process_to_row(p, &short_ids))
+                .collect();
 
-            // Print rows
-            for proc in &processes {
-                let short_id = short_ids
-                    .get_short_id(&proc.id.to_string())
-                    .unwrap_or_default();
+            // Configure wrapping if requested
+            let config = match args.wrap {
+                Some(width) => TableConfig::with_wrap(width),
+                None => TableConfig::default(),
+            };
 
-                // Always show SHORT first
-                print!("{:<8} ", style(&short_id).cyan());
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format_short_id(&proc.id),
-                        ListColumn::Title => truncate_str(&proc.title, 28),
-                        ListColumn::ProcessType => proc.process_type.to_string(),
-                        ListColumn::Operation => {
-                            proc.operation_number.as_deref().unwrap_or("-").to_string()
-                        }
-                        ListColumn::Status => proc.status.to_string(),
-                        ListColumn::Author => truncate_str(&proc.author, 18),
-                        ListColumn::Created => proc.created.format("%Y-%m-%d %H:%M").to_string(),
-                    };
-
-                    let width = match col {
-                        ListColumn::Id => 17,
-                        ListColumn::Title => 30,
-                        ListColumn::ProcessType => 12,
-                        ListColumn::Operation => 8,
-                        ListColumn::Status => 10,
-                        ListColumn::Author => 20,
-                        ListColumn::Created => 20,
-                    };
-
-                    print!("{:<width$} ", value, width = width);
-                }
-                println!();
-            }
-
-            println!();
-            println!(
-                "{} process(es) found. Use {} to reference by short ID.",
-                style(processes.len()).cyan(),
-                style("PROC@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for proc in &processes {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&proc.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", proc.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Op # | Cycle | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for proc in &processes {
-                let short_id = short_ids
-                    .get_short_id(&proc.id.to_string())
-                    .unwrap_or_default();
-                let cycle_str = proc
-                    .cycle_time_minutes
-                    .map_or("-".to_string(), |t| format!("{:.1}m", t));
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&proc.id),
-                    proc.title,
-                    proc.process_type,
-                    proc.operation_number.as_deref().unwrap_or("-"),
-                    cycle_str,
-                    proc.status
-                );
-            }
+            // Output using TableFormatter
+            let formatter = TableFormatter::new(PROC_COLUMNS, "process", "PROC")
+                .with_config(config);
+            formatter.output(rows, format, &visible_columns);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
+}
+
+/// Convert a Process entity to a TableRow
+fn process_to_row(proc: &Process, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(proc.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(proc.id.to_string()))
+        .cell("title", CellValue::Text(proc.title.clone()))
+        .cell("process-type", CellValue::Type(proc.process_type.to_string()))
+        .cell("operation", CellValue::Text(
+            proc.operation_number.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("status", CellValue::Status(proc.status))
+        .cell("author", CellValue::Text(proc.author.clone()))
+        .cell("created", CellValue::DateTime(proc.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -738,77 +654,27 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Proc,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links =
+        crate::cli::entity_cmd::process_link_flags(&file_path, EntityPrefix::Proc, &args.link, &short_ids);
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
-        }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created process {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-            println!(
-                "   Type: {} | {}",
-                style(&process_type).yellow(),
-                style(&title).white()
-            );
-
-            // Show added links
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &title,
+        Some(&format!(
+            "Type: {} | {}",
+            style(&process_type).yellow(),
+            style(&title).white()
+        )),
+        &added_links,
+        global,
+    );
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -963,46 +829,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the process file
-    let proc_dir = project.root().join("manufacturing/processes");
-    let mut found_path = None;
-
-    if proc_dir.exists() {
-        for entry in fs::read_dir(&proc_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No process found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {
@@ -1011,6 +838,20 @@ fn run_delete(args: DeleteArgs) -> Result<()> {
 
 fn run_archive(args: ArchiveArgs) -> Result<()> {
     crate::cli::commands::utils::run_delete(&args.id, PROCESS_DIRS, args.force, true, args.quiet)
+}
+
+/// Convert a CachedEntity to a TableRow for process output
+fn cached_entity_to_row(entity: &CachedEntity, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(entity.id.clone(), short_ids)
+        .cell("id", CellValue::Id(entity.id.clone()))
+        .cell("title", CellValue::Text(entity.title.clone()))
+        .cell("process-type", CellValue::Type(
+            entity.entity_type.as_deref().unwrap_or("").to_string()
+        ))
+        .cell("operation", CellValue::Empty) // Not in cache
+        .cell("status", CellValue::Status(entity.status))
+        .cell("author", CellValue::Text(entity.author.clone()))
+        .cell("created", CellValue::DateTime(entity.created))
 }
 
 /// Output cached processes in the requested format
@@ -1032,110 +873,31 @@ fn output_cached_processes(
         return Ok(());
     }
 
-    match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,title,type,status");
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{}",
-                    short_id,
-                    entity.id,
-                    escape_csv(&entity.title),
-                    entity.entity_type.as_deref().unwrap_or(""),
-                    entity.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header
-            let mut headers = vec![];
-            let mut widths = vec![];
-
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 30),
-                    ListColumn::ProcessType => ("TYPE", 12),
-                    ListColumn::Operation => ("OPERATION", 10),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Author => ("AUTHOR", 16),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                headers.push((header, *col));
-                widths.push(width);
-            }
-
-            // Print header
-            print!("{:<8} ", style("SHORT").bold().dim());
-            for (i, (header, _)) in headers.iter().enumerate() {
-                print!("{:<width$} ", style(header).bold(), width = widths[i]);
-            }
-            println!();
-            println!(
-                "{}",
-                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len())
-            );
-
-            // Print rows
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                print!("{:<8} ", style(&short_id).cyan());
-
-                for (i, (_, col)) in headers.iter().enumerate() {
-                    let cell = match col {
-                        ListColumn::Id => truncate_str(&entity.id, widths[i] - 2),
-                        ListColumn::Title => truncate_str(&entity.title, widths[i] - 2),
-                        ListColumn::ProcessType => {
-                            entity.entity_type.as_deref().unwrap_or("").to_string()
-                        }
-                        ListColumn::Operation => "-".to_string(), // Not in cache
-                        ListColumn::Status => entity.status.clone(),
-                        ListColumn::Author => truncate_str(&entity.author, widths[i] - 2),
-                        ListColumn::Created => entity.created.format("%Y-%m-%d %H:%M").to_string(),
-                    };
-                    print!("{:<width$} ", cell, width = widths[i]);
-                }
-                println!();
-            }
-
-            println!();
-            println!(
-                "{} process(es) found. Use {} to reference by short ID.",
-                style(entities.len()).cyan(),
-                style("PROC@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for entity in entities {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", entity.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Status |");
-            println!("|---|---|---|---|---|");
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&entity.id, 16),
-                    entity.title,
-                    entity.entity_type.as_deref().unwrap_or(""),
-                    entity.status
-                );
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
-            // Should not reach here - cache bypassed for these formats
-            unreachable!();
-        }
+    // Convert visible columns to keys, optionally including ID
+    let mut visible_columns: Vec<&str> = args.columns
+        .iter()
+        .map(|c| c.key())
+        .collect();
+    if args.show_id && !visible_columns.contains(&"id") {
+        visible_columns.insert(0, "id");
     }
+
+    // Build table rows
+    let rows: Vec<TableRow> = entities
+        .iter()
+        .map(|e| cached_entity_to_row(e, short_ids))
+        .collect();
+
+    // Configure wrapping if requested
+    let config = match args.wrap {
+        Some(width) => TableConfig::with_wrap(width),
+        None => TableConfig::default(),
+    };
+
+    // Output using TableFormatter
+    let formatter = TableFormatter::new(PROC_COLUMNS, "process", "PROC")
+        .with_config(config);
+    formatter.output(rows, format, &visible_columns);
 
     Ok(())
 }

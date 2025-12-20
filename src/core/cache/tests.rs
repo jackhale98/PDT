@@ -92,7 +92,7 @@ created: 2024-01-15T10:30:00Z
 
     let entity = cache.get_entity("REQ-01ABC123").unwrap();
     assert_eq!(entity.title, "Test Requirement");
-    assert_eq!(entity.status, "draft");
+    assert_eq!(entity.status, crate::core::entity::Status::Draft);
     assert_eq!(entity.author, "Test Author");
 }
 
@@ -252,7 +252,7 @@ created: 2024-01-17T10:30:00Z
 
     // Filter by status
     let approved = cache.list_entities(&EntityFilter {
-        status: Some("approved".to_string()),
+        status: Some(crate::core::entity::Status::Approved),
         ..Default::default()
     });
     assert_eq!(approved.len(), 1);

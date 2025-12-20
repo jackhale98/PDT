@@ -5,11 +5,12 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
+use crate::core::CachedSupplier;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -36,18 +37,6 @@ pub enum SupCommands {
 
     /// Archive a supplier (soft delete)
     Archive(ArchiveArgs),
-}
-
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    /// All statuses
-    All,
 }
 
 /// Capability filter
@@ -96,6 +85,18 @@ impl std::fmt::Display for ListColumn {
     }
 }
 
+/// Column definitions for supplier list output
+const SUP_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("name", "NAME", 25),
+    ColumnDef::new("short-name", "SHORT NAME", 12),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("website", "WEBSITE", 25),
+    ColumnDef::new("capabilities", "CAPABILITIES", 20),
+    ColumnDef::new("author", "AUTHOR", 14),
+    ColumnDef::new("created", "CREATED", 12),
+];
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by status
@@ -120,7 +121,6 @@ pub struct ListArgs {
 
     /// Columns to display (can specify multiple)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
-        ListColumn::Id,
         ListColumn::Name,
         ListColumn::ShortName,
         ListColumn::Status,
@@ -143,6 +143,14 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text at specified width (for mobile-friendly display)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show full ID column (hidden by default since SHORT is always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -227,6 +235,14 @@ pub struct ArchiveArgs {
 /// Directories where suppliers are stored
 const SUPPLIER_DIRS: &[&str] = &["bom/suppliers"];
 
+/// Entity configuration for suppliers
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Sup,
+    dirs: SUPPLIER_DIRS,
+    name: "supplier",
+    name_plural: "suppliers",
+};
+
 /// Run a supplier subcommand
 pub fn run(cmd: SupCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -246,14 +262,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let cache = EntityCache::open(&project)?;
 
     // Convert filters to cache-compatible format
-    let status_filter = match args.status {
-        StatusFilter::Draft => Some("draft"),
-        StatusFilter::Review => Some("review"),
-        StatusFilter::Approved => Some("approved"),
-        StatusFilter::Released => Some("released"),
-        StatusFilter::Obsolete => Some("obsolete"),
-        StatusFilter::All => None,
-    };
+    let status_filter = crate::cli::entity_cmd::status_filter_to_str(args.status);
 
     let capability_filter = match args.capability {
         CapabilityFilter::Machining => Some("machining"),
@@ -280,10 +289,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         None, // We'll apply limit after sorting
     );
 
-    // Apply post-filters that cache doesn't support (recent filter)
+    // Apply post-filters that cache doesn't support
     let mut suppliers: Vec<_> = suppliers
         .into_iter()
         .filter(|s| {
+            // Active filter: exclude obsolete
+            if !crate::cli::entity_cmd::status_enum_matches_filter(&s.status, args.status) {
+                return false;
+            }
+            // Recent filter
             args.recent.is_none_or(|days| {
                 let cutoff = chrono::Utc::now() - chrono::Duration::days(days as i64);
                 s.created >= cutoff
@@ -329,7 +343,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(suppliers.iter().map(|s| s.id.clone()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {
@@ -358,112 +372,58 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 print!("{}", yaml);
             }
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,name,short_name,website,status,capabilities");
-            for sup in &suppliers {
-                let short_id = short_ids.get_short_id(&sup.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},\"{}\"",
-                    short_id,
-                    sup.id,
-                    escape_csv(&sup.name),
-                    sup.short_name.as_deref().unwrap_or(""),
-                    sup.website.as_deref().unwrap_or(""),
-                    sup.status,
-                    sup.capabilities.join(";")
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
-                    ListColumn::Name => format!("{:<25}", style("NAME").bold()),
-                    ListColumn::ShortName => format!("{:<12}", style("SHORT").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::Website => format!("{:<25}", style("WEBSITE").bold()),
-                    ListColumn::Capabilities => format!("{:<20}", style("CAPABILITIES").bold()),
-                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(95));
-
-            for sup in &suppliers {
-                let short_id = short_ids.get_short_id(&sup.id).unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", truncate_str(&sup.id, 15)),
-                        ListColumn::Name => format!("{:<25}", truncate_str(&sup.name, 23)),
-                        ListColumn::ShortName => format!(
-                            "{:<12}",
-                            truncate_str(sup.short_name.as_deref().unwrap_or("-"), 10)
-                        ),
-                        ListColumn::Status => format!("{:<10}", sup.status),
-                        ListColumn::Website => format!(
-                            "{:<25}",
-                            truncate_str(sup.website.as_deref().unwrap_or("-"), 23)
-                        ),
-                        ListColumn::Capabilities => {
-                            let caps: Vec<_> = sup.capabilities.iter().take(2).cloned().collect();
-                            let caps_display = if sup.capabilities.len() > 2 {
-                                format!("{}+{}", caps.join(","), sup.capabilities.len() - 2)
-                            } else {
-                                caps.join(",")
-                            };
-                            format!("{:<20}", caps_display)
-                        }
-                        ListColumn::Author => format!("{:<14}", truncate_str(&sup.author, 12)),
-                        ListColumn::Created => format!("{:<12}", sup.created.format("%Y-%m-%d")),
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+            // Build visible columns list
+            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            if args.show_id && !visible.contains(&"id") {
+                visible.insert(0, "id");
             }
 
-            println!();
-            println!(
-                "{} supplier(s) found. Use {} to reference by short ID.",
-                style(suppliers.len()).cyan(),
-                style("SUP@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for sup in &suppliers {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&sup.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", sup.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Name | Short | Status | Capabilities |");
-            println!("|---|---|---|---|---|---|");
-            for sup in &suppliers {
-                let short_id = short_ids.get_short_id(&sup.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&sup.id, 15),
-                    sup.name,
-                    sup.short_name.as_deref().unwrap_or("-"),
-                    sup.status,
-                    sup.capabilities.join(", ")
-                );
-            }
+            // Convert to TableRows
+            let rows: Vec<TableRow> = suppliers
+                .iter()
+                .map(|sup| cached_supplier_to_row(sup, &short_ids))
+                .collect();
+
+            // Configure table
+            let config = if let Some(width) = args.wrap {
+                TableConfig::with_wrap(width)
+            } else {
+                TableConfig::default()
+            };
+
+            let formatter = TableFormatter::new(SUP_COLUMNS, "supplier", "SUP")
+                .with_config(config);
+            formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
+}
+
+/// Convert a cached supplier to a TableRow
+fn cached_supplier_to_row(
+    sup: &CachedSupplier,
+    short_ids: &ShortIdIndex,
+) -> TableRow {
+    // Format capabilities display
+    let caps_display = if sup.capabilities.len() > 2 {
+        let first_two: Vec<_> = sup.capabilities.iter().take(2).cloned().collect();
+        format!("{}+{}", first_two.join(","), sup.capabilities.len() - 2)
+    } else {
+        sup.capabilities.join(",")
+    };
+
+    TableRow::new(sup.id.clone(), short_ids)
+        .cell("id", CellValue::Id(sup.id.clone()))
+        .cell("name", CellValue::Text(sup.name.clone()))
+        .cell("short-name", CellValue::Text(sup.short_name.clone().unwrap_or_else(|| "-".to_string())))
+        .cell("status", CellValue::Status(sup.status))
+        .cell("website", CellValue::Text(sup.website.clone().unwrap_or_else(|| "-".to_string())))
+        .cell("capabilities", CellValue::Text(caps_display))
+        .cell("author", CellValue::Text(sup.author.clone()))
+        .cell("created", CellValue::Date(sup.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -545,73 +505,23 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Sup,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links =
+        crate::cli::entity_cmd::process_link_flags(&file_path, EntityPrefix::Sup, &args.link, &short_ids);
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
-        }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created supplier {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-            println!("   Name: {}", style(&name).yellow());
-
-            // Show added links
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &name,
+        Some(&format!("Name: {}", style(&name).yellow())),
+        &added_links,
+        global,
+    );
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -784,46 +694,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the supplier file
-    let sup_dir = project.root().join("bom/suppliers");
-    let mut found_path = None;
-
-    if sup_dir.exists() {
-        for entry in fs::read_dir(&sup_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No supplier found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {

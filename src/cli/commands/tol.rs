@@ -6,12 +6,13 @@ use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
-use crate::cli::helpers::{escape_csv, format_short_id, smart_round, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{format_short_id, smart_round, truncate_str};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -61,17 +62,6 @@ pub enum DispositionFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    All,
-}
-
 /// Analysis result filter
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ResultFilter {
@@ -112,6 +102,20 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for stackup list output
+const TOL_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "SHORT", 8),
+    ColumnDef::new("title", "TITLE", 22),
+    ColumnDef::new("result", "RESULT", 10),
+    ColumnDef::new("cpk", "CPK", 7),
+    ColumnDef::new("yield", "YIELD", 8),
+    ColumnDef::new("disposition", "DISPOSITION", 14),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("critical", "CRIT", 5),
+    ColumnDef::new("author", "AUTHOR", 15),
+    ColumnDef::new("created", "CREATED", 12),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -162,6 +166,10 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -249,6 +257,14 @@ pub struct ArchiveArgs {
 
 /// Directories where stackups are stored
 const STACKUP_DIRS: &[&str] = &["tolerances/stackups"];
+
+/// Entity configuration for stackup commands
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Tol,
+    dirs: STACKUP_DIRS,
+    name: "stackup",
+    name_plural: "stackups",
+};
 
 #[derive(clap::Args, Debug)]
 pub struct AnalyzeArgs {
@@ -373,6 +389,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::Approved => s.status == crate::core::entity::Status::Approved,
             StatusFilter::Released => s.status == crate::core::entity::Status::Released,
             StatusFilter::Obsolete => s.status == crate::core::entity::Status::Obsolete,
+            StatusFilter::Active => s.status != crate::core::entity::Status::Obsolete,
             StatusFilter::All => true,
         })
         .filter(|s| {
@@ -525,7 +542,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(stackups.iter().map(|s| s.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {
@@ -542,167 +559,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&stackups).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,title,target,wc_result,cpk,disposition,status");
-            for s in &stackups {
-                let short_id = short_ids
-                    .get_short_id(&s.id.to_string())
-                    .unwrap_or_default();
-                let wc_result = s
-                    .analysis_results
-                    .worst_case
-                    .as_ref()
-                    .map(|wc| format!("{}", wc.result))
-                    .unwrap_or_else(|| "n/a".to_string());
-                let cpk = s
-                    .analysis_results
-                    .rss
-                    .as_ref()
-                    .map(|rss| format!("{:.2}", rss.cpk))
-                    .unwrap_or_else(|| "n/a".to_string());
-                println!(
-                    "{},{},{},{},{},{},{},{}",
-                    short_id,
-                    s.id,
-                    escape_csv(&s.title),
-                    escape_csv(&s.target.name),
-                    wc_result,
-                    cpk,
-                    s.disposition,
-                    s.status()
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on columns
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
+            let rows: Vec<TableRow> = stackups
+                .iter()
+                .map(|s| stackup_to_row(s, &short_ids))
+                .collect();
 
-            for col in &args.columns {
-                let (label, width) = match col {
-                    ListColumn::Id => ("SHORT", 8),
-                    ListColumn::Title => ("TITLE", 22),
-                    ListColumn::Result => ("RESULT", 10),
-                    ListColumn::Cpk => ("CPK", 7),
-                    ListColumn::Yield => ("YIELD", 8),
-                    ListColumn::Disposition => ("DISPOSITION", 14),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Critical => ("CRIT", 5),
-                    ListColumn::Author => ("AUTHOR", 15),
-                    ListColumn::Created => ("CREATED", 12),
-                };
-                header_parts.push(format!("{:<width$}", style(label).bold(), width = width));
-                widths.push(width);
-            }
-
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
-
-            for s in &stackups {
-                let mut row_parts = Vec::new();
-
-                for (i, col) in args.columns.iter().enumerate() {
-                    let width = widths[i];
-                    let value = match col {
-                        ListColumn::Id => {
-                            let short_id = short_ids
-                                .get_short_id(&s.id.to_string())
-                                .unwrap_or_default();
-                            format!("{:<width$}", style(&short_id).cyan(), width = width)
-                        }
-                        ListColumn::Title => {
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&s.title, width - 2),
-                                width = width
-                            )
-                        }
-                        ListColumn::Result => {
-                            let wc_result = s
-                                .analysis_results
-                                .worst_case
-                                .as_ref()
-                                .map(|wc| format!("{}", wc.result))
-                                .unwrap_or_else(|| "n/a".to_string());
-                            let wc_styled = match wc_result.as_str() {
-                                "pass" => style(wc_result).green(),
-                                "marginal" => style(wc_result).yellow(),
-                                "fail" => style(wc_result).red(),
-                                _ => style(wc_result).dim(),
-                            };
-                            format!("{:<width$}", wc_styled, width = width)
-                        }
-                        ListColumn::Cpk => {
-                            let cpk = s.analysis_results.rss.as_ref().map(|rss| rss.cpk);
-                            let cpk_str = cpk
-                                .map(|c| format!("{:.2}", c))
-                                .unwrap_or_else(|| "-".to_string());
-                            let cpk_styled = match cpk {
-                                Some(c) if c >= 1.33 => style(cpk_str).green(),
-                                Some(c) if c >= 1.0 => style(cpk_str).yellow(),
-                                Some(_) => style(cpk_str).red(),
-                                None => style(cpk_str).dim(),
-                            };
-                            format!("{:<width$}", cpk_styled, width = width)
-                        }
-                        ListColumn::Yield => {
-                            let mc_yield = s
-                                .analysis_results
-                                .monte_carlo
-                                .as_ref()
-                                .map(|mc| mc.yield_percent);
-                            let yield_str = mc_yield
-                                .map(|y| format!("{:.1}%", y))
-                                .unwrap_or_else(|| "-".to_string());
-                            let yield_styled = match mc_yield {
-                                Some(y) if y >= 99.73 => style(yield_str).green(), // 3-sigma
-                                Some(y) if y >= 95.0 => style(yield_str).yellow(),
-                                Some(_) => style(yield_str).red(),
-                                None => style(yield_str).dim(),
-                            };
-                            format!("{:<width$}", yield_styled, width = width)
-                        }
-                        ListColumn::Disposition => {
-                            format!("{:<width$}", format!("{}", s.disposition), width = width)
-                        }
-                        ListColumn::Status => {
-                            format!("{:<width$}", s.status(), width = width)
-                        }
-                        ListColumn::Critical => {
-                            let crit = if s.target.critical { "yes" } else { "no" };
-                            let crit_styled = if s.target.critical {
-                                style(crit).red().bold()
-                            } else {
-                                style(crit).dim()
-                            };
-                            format!("{:<width$}", crit_styled, width = width)
-                        }
-                        ListColumn::Author => {
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&s.author, width - 2),
-                                width = width
-                            )
-                        }
-                        ListColumn::Created => {
-                            format!("{:<width$}", s.created.format("%Y-%m-%d"), width = width)
-                        }
-                    };
-                    row_parts.push(value);
-                }
-
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} stackup(s) found. Use {} to reference by short ID.",
-                style(stackups.len()).cyan(),
-                style("TOL@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter =
+                TableFormatter::new(TOL_COLUMNS, "stackup", "TOL").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for s in &stackups {
@@ -714,37 +588,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", s.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Target | W/C | Cpk | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for s in &stackups {
-                let short_id = short_ids
-                    .get_short_id(&s.id.to_string())
-                    .unwrap_or_default();
-                let wc_result = s
-                    .analysis_results
-                    .worst_case
-                    .as_ref()
-                    .map(|wc| format!("{}", wc.result))
-                    .unwrap_or_else(|| "n/a".to_string());
-                let cpk = s
-                    .analysis_results
-                    .rss
-                    .as_ref()
-                    .map(|rss| format!("{:.2}", rss.cpk))
-                    .unwrap_or_else(|| "n/a".to_string());
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&s.id),
-                    s.title,
-                    s.target.name,
-                    wc_result,
-                    cpk,
-                    s.status()
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -840,38 +683,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Tol,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Tol,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {
@@ -1137,46 +957,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the stackup file
-    let tol_dir = project.root().join("tolerances/stackups");
-    let mut found_path = None;
-
-    if tol_dir.exists() {
-        for entry in fs::read_dir(&tol_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No stackup found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {
@@ -2025,4 +1806,37 @@ fn run_remove(args: RemoveArgs) -> Result<()> {
     );
 
     Ok(())
+}
+
+/// Convert a Stackup entity to a TableRow
+fn stackup_to_row(stackup: &Stackup, short_ids: &ShortIdIndex) -> TableRow {
+    let wc_result = stackup
+        .analysis_results
+        .worst_case
+        .as_ref()
+        .map(|wc| wc.result.to_string())
+        .unwrap_or_else(|| "n/a".to_string());
+
+    let cpk = stackup.analysis_results.rss.as_ref().map(|rss| rss.cpk);
+
+    let mc_yield = stackup
+        .analysis_results
+        .monte_carlo
+        .as_ref()
+        .map(|mc| mc.yield_percent);
+
+    TableRow::new(stackup.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(stackup.id.to_string()))
+        .cell("title", CellValue::Text(stackup.title.clone()))
+        .cell("result", CellValue::AnalysisResult(wc_result))
+        .cell("cpk", CellValue::Cpk(cpk))
+        .cell("yield", CellValue::YieldPct(mc_yield))
+        .cell(
+            "disposition",
+            CellValue::Type(stackup.disposition.to_string()),
+        )
+        .cell("status", CellValue::Type(stackup.status().to_string()))
+        .cell("critical", CellValue::Critical(stackup.target.critical))
+        .cell("author", CellValue::Text(stackup.author.clone()))
+        .cell("created", CellValue::DateTime(stackup.created))
 }

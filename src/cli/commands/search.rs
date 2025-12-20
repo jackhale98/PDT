@@ -128,7 +128,7 @@ pub fn run(args: SearchArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(results.iter().map(|r| r.id.clone()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {

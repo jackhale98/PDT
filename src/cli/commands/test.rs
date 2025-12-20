@@ -6,12 +6,13 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{format_short_id, truncate_str};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::entity::Priority;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::CachedTest;
@@ -191,20 +192,6 @@ pub enum TestMethodFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    /// All active (not obsolete)
-    Active,
-    /// All statuses
-    All,
-}
-
 /// Columns to display in list output
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum ListColumn {
@@ -236,6 +223,20 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for test list output
+const TEST_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("type", "TYPE", 12),
+    ColumnDef::new("level", "LEVEL", 8),
+    ColumnDef::new("method", "METHOD", 12),
+    ColumnDef::new("title", "TITLE", 24),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("priority", "PRIO", 8),
+    ColumnDef::new("category", "CATEGORY", 12),
+    ColumnDef::new("author", "AUTHOR", 16),
+    ColumnDef::new("created", "CREATED", 16),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -293,7 +294,6 @@ pub struct ListArgs {
 
     /// Columns to display (comma-separated)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
-        ListColumn::Id,
         ListColumn::Type,
         ListColumn::Level,
         ListColumn::Method,
@@ -318,6 +318,14 @@ pub struct ListArgs {
     /// Show count only, not the items
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show the full ID column (hidden by default since SHORT is always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -538,7 +546,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
             // Handle 'active' status filter (exclude obsolete)
             if matches!(args.status, StatusFilter::Active) {
-                tests.retain(|t| t.status.to_lowercase() != "obsolete");
+                tests.retain(|t| t.status != crate::core::entity::Status::Obsolete);
             }
 
             // Sort
@@ -569,15 +577,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 ListColumn::Title => tests.sort_by(|a, b| a.title.cmp(&b.title)),
                 ListColumn::Status => tests.sort_by(|a, b| a.status.cmp(&b.status)),
                 ListColumn::Priority => tests.sort_by(|a, b| {
-                    let priority_order = |p: Option<&str>| match p {
-                        Some("critical") => 0,
-                        Some("high") => 1,
-                        Some("medium") => 2,
-                        Some("low") => 3,
-                        _ => 4,
+                    use crate::core::entity::Priority;
+                    let priority_order = |p: Option<Priority>| match p {
+                        Some(Priority::Critical) => 0,
+                        Some(Priority::High) => 1,
+                        Some(Priority::Medium) => 2,
+                        Some(Priority::Low) => 3,
+                        None => 4,
                     };
-                    priority_order(a.priority.as_deref())
-                        .cmp(&priority_order(b.priority.as_deref()))
+                    priority_order(a.priority).cmp(&priority_order(b.priority))
                 }),
                 ListColumn::Category => tests.sort_by(|a, b| {
                     a.category
@@ -607,6 +615,34 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         load_all_results(&project)
     } else {
         Vec::new()
+    };
+
+    // Pre-compute HashSets for O(1) lookups instead of O(n) iterations per test
+    use std::collections::{HashMap, HashSet};
+    let tests_with_results: HashSet<&crate::core::identity::EntityId> =
+        results.iter().map(|r| &r.test_id).collect();
+
+    // For last_failed: find most recent result per test and check if it's Fail
+    let last_failed_tests: HashSet<&crate::core::identity::EntityId> = {
+        // Group results by test_id, keeping only the most recent
+        let mut latest_by_test: HashMap<&crate::core::identity::EntityId, &crate::entities::result::Result> =
+            HashMap::new();
+        for r in &results {
+            latest_by_test
+                .entry(&r.test_id)
+                .and_modify(|existing| {
+                    if r.executed_date > existing.executed_date {
+                        *existing = r;
+                    }
+                })
+                .or_insert(r);
+        }
+        // Collect test IDs where latest result is Fail
+        latest_by_test
+            .into_iter()
+            .filter(|(_, r)| r.verdict == crate::entities::result::Verdict::Fail)
+            .map(|(id, _)| id)
+            .collect()
     };
 
     // Collect all test files from both verification and validation directories
@@ -739,23 +775,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             t.created >= cutoff
         });
 
-        // No results filter - tests with no results recorded
+        // No results filter - tests with no results recorded (O(1) lookup)
         let no_results_match = if args.no_results {
-            !results.iter().any(|r| r.test_id == t.id)
+            !tests_with_results.contains(&t.id)
         } else {
             true
         };
 
-        // Last failed filter - tests where most recent result is fail
+        // Last failed filter - tests where most recent result is fail (O(1) lookup)
         let last_failed_match = if args.last_failed {
-            // Find all results for this test, sorted by date desc
-            let mut test_results: Vec<_> = results.iter().filter(|r| r.test_id == t.id).collect();
-            test_results.sort_by(|a, b| b.executed_date.cmp(&a.executed_date));
-
-            // Check if most recent result is fail
-            test_results
-                .first()
-                .is_some_and(|r| r.verdict == crate::entities::result::Verdict::Fail)
+            last_failed_tests.contains(&t.id)
         } else {
             true
         };
@@ -848,7 +877,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index with current tests (preserves other entity types)
     let mut short_ids = short_ids;
     short_ids.ensure_all(tests.iter().map(|t| t.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     match format {
         OutputFormat::Json => {
@@ -859,106 +888,25 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&tests).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,type,level,method,title,status,priority");
-            for test in &tests {
-                let short_id = short_ids
-                    .get_short_id(&test.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{},{}",
-                    short_id,
-                    test.id,
-                    test.test_type,
-                    test.test_level.map_or("-".to_string(), |l| l.to_string()),
-                    test.test_method.map_or("-".to_string(), |m| m.to_string()),
-                    escape_csv(&test.title),
-                    test.status,
-                    test.priority
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Dynamically build header based on selected columns
-            let mut header_parts = vec![style("SHORT").bold().dim().to_string()];
-            for col in &args.columns {
-                let col_name = match col {
-                    ListColumn::Id => "ID",
-                    ListColumn::Type => "TYPE",
-                    ListColumn::Level => "LEVEL",
-                    ListColumn::Method => "METHOD",
-                    ListColumn::Title => "TITLE",
-                    ListColumn::Status => "STATUS",
-                    ListColumn::Priority => "PRIO",
-                    ListColumn::Category => "CATEGORY",
-                    ListColumn::Author => "AUTHOR",
-                    ListColumn::Created => "CREATED",
-                };
-                header_parts.push(style(col_name).bold().to_string());
-            }
-            println!("{}", header_parts.join("  "));
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            // Build column list from args
+            let mut columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
 
-            // Calculate total width for separator
-            let total_width = 8
-                + args.columns.len() * 2
-                + args
-                    .columns
-                    .iter()
-                    .map(|col| match col {
-                        ListColumn::Id => 17,
-                        ListColumn::Type => 12,
-                        ListColumn::Level => 8,
-                        ListColumn::Method => 12,
-                        ListColumn::Title => 24,
-                        ListColumn::Status => 10,
-                        ListColumn::Priority => 8,
-                        ListColumn::Category => 12,
-                        ListColumn::Author => 16,
-                        ListColumn::Created => 16,
-                    })
-                    .sum::<usize>();
-            println!("{}", "-".repeat(total_width));
-
-            for test in &tests {
-                let short_id = short_ids
-                    .get_short_id(&test.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", format_short_id(&test.id)),
-                        ListColumn::Type => format!("{:<12}", test.test_type),
-                        ListColumn::Level => format!(
-                            "{:<8}",
-                            test.test_level.map_or("-".to_string(), |l| l.to_string())
-                        ),
-                        ListColumn::Method => format!(
-                            "{:<12}",
-                            test.test_method.map_or("-".to_string(), |m| m.to_string())
-                        ),
-                        ListColumn::Title => format!("{:<24}", truncate_str(&test.title, 22)),
-                        ListColumn::Status => format!("{:<10}", test.status),
-                        ListColumn::Priority => format!("{:<8}", test.priority),
-                        ListColumn::Category => {
-                            format!("{:<12}", test.category.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Author => format!("{:<16}", truncate_str(&test.author, 14)),
-                        ListColumn::Created => {
-                            format!("{:<16}", test.created.format("%Y-%m-%d %H:%M"))
-                        }
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join("  "));
+            // Add Id column if --show-id flag is set
+            if args.show_id && !columns.contains(&"id") {
+                columns.insert(0, "id");
             }
 
-            println!();
-            println!(
-                "{} test(s) found. Use {} to reference by short ID.",
-                style(tests.len()).cyan(),
-                style("TEST@N").cyan()
-            );
+            // Build rows
+            let rows: Vec<TableRow> = tests.iter().map(|t| test_to_row(t, &short_ids)).collect();
+
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST")
+                .with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for test in &tests {
@@ -970,26 +918,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", test.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Type | Level | Method | Title | Status | Priority |");
-            println!("|---|---|---|---|---|---|---|---|");
-            for test in &tests {
-                let short_id = short_ids
-                    .get_short_id(&test.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&test.id),
-                    test.test_type,
-                    test.test_level.map_or("-".to_string(), |l| l.to_string()),
-                    test.test_method.map_or("-".to_string(), |m| m.to_string()),
-                    test.title,
-                    test.status,
-                    test.priority
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -1018,104 +946,25 @@ fn output_cached_tests(
     }
 
     match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,type,level,method,title,status,priority");
-            for test in tests {
-                let short_id = short_ids.get_short_id(&test.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{},{}",
-                    short_id,
-                    test.id,
-                    test.test_type.as_deref().unwrap_or("-"),
-                    test.level.as_deref().unwrap_or("-"),
-                    test.method.as_deref().unwrap_or("-"),
-                    escape_csv(&test.title),
-                    test.status,
-                    test.priority.as_deref().unwrap_or("-")
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Dynamically build header based on selected columns
-            let mut header_parts = vec![style("SHORT").bold().dim().to_string()];
-            for col in &args.columns {
-                let col_name = match col {
-                    ListColumn::Id => "ID",
-                    ListColumn::Type => "TYPE",
-                    ListColumn::Level => "LEVEL",
-                    ListColumn::Method => "METHOD",
-                    ListColumn::Title => "TITLE",
-                    ListColumn::Status => "STATUS",
-                    ListColumn::Priority => "PRIO",
-                    ListColumn::Category => "CATEGORY",
-                    ListColumn::Author => "AUTHOR",
-                    ListColumn::Created => "CREATED",
-                };
-                header_parts.push(style(col_name).bold().to_string());
-            }
-            println!("{}", header_parts.join("  "));
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            // Build column list from args
+            let mut columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
 
-            // Calculate total width for separator
-            let total_width = 8
-                + args.columns.len() * 2
-                + args
-                    .columns
-                    .iter()
-                    .map(|col| match col {
-                        ListColumn::Id => 17,
-                        ListColumn::Type => 12,
-                        ListColumn::Level => 8,
-                        ListColumn::Method => 12,
-                        ListColumn::Title => 24,
-                        ListColumn::Status => 10,
-                        ListColumn::Priority => 8,
-                        ListColumn::Category => 12,
-                        ListColumn::Author => 16,
-                        ListColumn::Created => 16,
-                    })
-                    .sum::<usize>();
-            println!("{}", "-".repeat(total_width));
-
-            for test in tests {
-                let short_id = short_ids.get_short_id(&test.id).unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", truncate_str(&test.id, 15)),
-                        ListColumn::Type => {
-                            format!("{:<12}", test.test_type.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Level => {
-                            format!("{:<8}", test.level.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Method => {
-                            format!("{:<12}", test.method.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Title => format!("{:<24}", truncate_str(&test.title, 22)),
-                        ListColumn::Status => format!("{:<10}", test.status),
-                        ListColumn::Priority => {
-                            format!("{:<8}", test.priority.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Category => {
-                            format!("{:<12}", test.category.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Author => format!("{:<16}", truncate_str(&test.author, 14)),
-                        ListColumn::Created => {
-                            format!("{:<16}", test.created.format("%Y-%m-%d %H:%M"))
-                        }
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join("  "));
+            // Add Id column if --show-id flag is set
+            if args.show_id && !columns.contains(&"id") {
+                columns.insert(0, "id");
             }
 
-            println!();
-            println!(
-                "{} test(s) found. Use {} to reference by short ID.",
-                style(tests.len()).cyan(),
-                style("TEST@N").cyan()
-            );
+            // Build rows
+            let rows: Vec<TableRow> = tests.iter().map(|t| cached_test_to_row(t, short_ids)).collect();
+
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST")
+                .with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for test in tests {
@@ -1127,24 +976,6 @@ fn output_cached_tests(
                 }
             }
         }
-        OutputFormat::Md => {
-            println!("| Short | ID | Type | Level | Method | Title | Status | Priority |");
-            println!("|---|---|---|---|---|---|---|---|");
-            for test in tests {
-                let short_id = short_ids.get_short_id(&test.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&test.id, 15),
-                    test.test_type.as_deref().unwrap_or("-"),
-                    test.level.as_deref().unwrap_or("-"),
-                    test.method.as_deref().unwrap_or("-"),
-                    test.title,
-                    test.status,
-                    test.priority.as_deref().unwrap_or("-")
-                );
-            }
-        }
         OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             // Should never reach here - JSON/YAML use full YAML path
             unreachable!()
@@ -1152,6 +983,50 @@ fn output_cached_tests(
     }
 
     Ok(())
+}
+
+/// Convert a Test to a TableRow
+fn test_to_row(test: &Test, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(test.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(test.id.to_string()))
+        .cell("type", CellValue::Type(test.test_type.to_string()))
+        .cell("level", CellValue::Text(
+            test.test_level.map_or("-".to_string(), |l| l.to_string())
+        ))
+        .cell("method", CellValue::Text(
+            test.test_method.map_or("-".to_string(), |m| m.to_string())
+        ))
+        .cell("title", CellValue::Text(test.title.clone()))
+        .cell("status", CellValue::Status(test.status))
+        .cell("priority", CellValue::Priority(test.priority))
+        .cell("category", CellValue::Text(
+            test.category.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("author", CellValue::Text(test.author.clone()))
+        .cell("created", CellValue::Date(test.created))
+}
+
+/// Convert a CachedTest to a TableRow
+fn cached_test_to_row(test: &CachedTest, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(test.id.clone(), short_ids)
+        .cell("id", CellValue::Id(test.id.clone()))
+        .cell("type", CellValue::Type(
+            test.test_type.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("level", CellValue::Text(
+            test.level.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("method", CellValue::Text(
+            test.method.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("title", CellValue::Text(test.title.clone()))
+        .cell("status", CellValue::Status(test.status))
+        .cell("priority", CellValue::OptionalPriority(test.priority))
+        .cell("category", CellValue::Text(
+            test.category.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("author", CellValue::Text(test.author.clone()))
+        .cell("created", CellValue::Date(test.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -1308,7 +1183,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --verifies and --mitigates flags by updating the file with links
     if !args.verifies.is_empty() || !args.mitigates.is_empty() {
@@ -1356,37 +1231,12 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        // Resolve target ID
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        // Parse target to get prefix
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Test,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Test,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {
@@ -1950,7 +1800,7 @@ fn run_run(args: RunArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let result_short_id = short_ids.add(result_id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     match global.format {

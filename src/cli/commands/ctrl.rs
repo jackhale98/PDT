@@ -6,11 +6,11 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -51,17 +51,6 @@ pub enum ControlTypeFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    All,
-}
-
 /// Column selection for list output
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum ListColumn {
@@ -85,6 +74,16 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for control list output
+const CTRL_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("title", "TITLE", 30),
+    ColumnDef::new("control-type", "TYPE", 16),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 20),
+    ColumnDef::new("created", "CREATED", 20),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -117,7 +116,7 @@ pub struct ListArgs {
     pub search: Option<String>,
 
     /// Columns to display
-    #[arg(long, short = 'c', value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::Title, ListColumn::ControlType, ListColumn::Status])]
+    #[arg(long, short = 'c', value_delimiter = ',', default_values_t = vec![ListColumn::Title, ListColumn::ControlType, ListColumn::Status])]
     pub columns: Vec<ListColumn>,
 
     /// Sort by column
@@ -135,6 +134,14 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text at specified width (for mobile-friendly display)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show full ID column (hidden by default since SHORT is always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -223,6 +230,14 @@ pub struct ArchiveArgs {
 /// Directories where controls are stored
 const CONTROL_DIRS: &[&str] = &["manufacturing/controls"];
 
+/// Entity configuration for controls
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Ctrl,
+    dirs: CONTROL_DIRS,
+    name: "control",
+    name_plural: "controls",
+};
+
 /// Run a control subcommand
 pub fn run(cmd: CtrlCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -261,18 +276,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     if can_use_cache {
         if let Ok(cache) = EntityCache::open(&project) {
-            let status_filter = match args.status {
-                StatusFilter::Draft => Some("draft"),
-                StatusFilter::Review => Some("review"),
-                StatusFilter::Approved => Some("approved"),
-                StatusFilter::Released => Some("released"),
-                StatusFilter::Obsolete => Some("obsolete"),
-                StatusFilter::All => None,
-            };
-
             let filter = crate::core::cache::EntityFilter {
                 prefix: Some(EntityPrefix::Ctrl),
-                status: status_filter.map(|s| s.to_string()),
+                status: crate::cli::entity_cmd::status_filter_to_status(args.status),
                 author: args.author.clone(),
                 search: None,
                 limit: None,
@@ -358,14 +364,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             ControlTypeFilter::Attribute => c.control_type == ControlType::Attribute,
             ControlTypeFilter::All => true,
         })
-        .filter(|c| match args.status {
-            StatusFilter::Draft => c.status == crate::core::entity::Status::Draft,
-            StatusFilter::Review => c.status == crate::core::entity::Status::Review,
-            StatusFilter::Approved => c.status == crate::core::entity::Status::Approved,
-            StatusFilter::Released => c.status == crate::core::entity::Status::Released,
-            StatusFilter::Obsolete => c.status == crate::core::entity::Status::Obsolete,
-            StatusFilter::All => true,
-        })
+        .filter(|c| crate::cli::entity_cmd::status_enum_matches_filter(&c.status, args.status))
         .filter(|c| {
             if let Some(ref proc_id) = process_filter {
                 c.links
@@ -451,7 +450,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = short_ids;
     short_ids.ensure_all(controls.iter().map(|c| c.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     match format {
         OutputFormat::Json => {
@@ -462,131 +461,45 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&controls).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,title,type,characteristic,critical,status");
-            for ctrl in &controls {
-                let short_id = short_ids
-                    .get_short_id(&ctrl.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    ctrl.id,
-                    escape_csv(&ctrl.title),
-                    ctrl.control_type,
-                    escape_csv(&ctrl.characteristic.name),
-                    if ctrl.characteristic.critical {
-                        "Y"
-                    } else {
-                        "N"
-                    },
-                    ctrl.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
-
-            for col in &args.columns {
-                let (name, width) = match col {
-                    ListColumn::Id => ("SHORT", 20),
-                    ListColumn::Title => ("TITLE", 30),
-                    ListColumn::ControlType => ("TYPE", 16),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Author => ("AUTHOR", 20),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                header_parts.push(format!("{:<width$}", style(name).bold(), width = width));
-                widths.push(width);
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+            // Build visible columns list
+            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            if args.show_id && !visible.contains(&"id") {
+                visible.insert(0, "id");
             }
 
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
+            // Convert to TableRows
+            let rows: Vec<TableRow> = controls
+                .iter()
+                .map(|ctrl| control_to_row(ctrl, &short_ids))
+                .collect();
 
-            for ctrl in &controls {
-                let short_id = short_ids
-                    .get_short_id(&ctrl.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = Vec::new();
+            // Configure table
+            let config = if let Some(width) = args.wrap {
+                TableConfig::with_wrap(width)
+            } else {
+                TableConfig::default()
+            };
 
-                for (col, &width) in args.columns.iter().zip(&widths) {
-                    let value = match col {
-                        ListColumn::Id => {
-                            let id_str = if short_id.is_empty() {
-                                format_short_id(&ctrl.id)
-                            } else {
-                                short_id.clone()
-                            };
-                            style(truncate_str(&id_str, width)).cyan().to_string()
-                        }
-                        ListColumn::Title => truncate_str(&ctrl.title, width),
-                        ListColumn::ControlType => {
-                            format!("{}", ctrl.control_type)
-                        }
-                        ListColumn::Status => {
-                            format!("{}", ctrl.status)
-                        }
-                        ListColumn::Author => truncate_str(&ctrl.author, width),
-                        ListColumn::Created => ctrl.created.format("%Y-%m-%d %H:%M").to_string(),
-                    };
-                    row_parts.push(format!("{:<width$}", value, width = width));
-                }
-
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} control(s) found. Use {} to reference by short ID.",
-                style(controls.len()).cyan(),
-                style("CTRL@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for ctrl in &controls {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&ctrl.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", ctrl.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Characteristic | CTQ | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for ctrl in &controls {
-                let short_id = short_ids
-                    .get_short_id(&ctrl.id.to_string())
-                    .unwrap_or_default();
-                let ctq = if ctrl.characteristic.critical {
-                    "Yes"
-                } else {
-                    ""
-                };
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&ctrl.id),
-                    ctrl.title,
-                    ctrl.control_type,
-                    ctrl.characteristic.name,
-                    ctq,
-                    ctrl.status
-                );
-            }
+            let formatter = TableFormatter::new(CTRL_COLUMNS, "control", "CTRL")
+                .with_config(config);
+            formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
+}
+
+/// Convert a Control to a TableRow
+fn control_to_row(ctrl: &Control, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(ctrl.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(ctrl.id.to_string()))
+        .cell("title", CellValue::Text(ctrl.title.clone()))
+        .cell("control-type", CellValue::Type(ctrl.control_type.to_string()))
+        .cell("status", CellValue::Status(ctrl.status))
+        .cell("author", CellValue::Text(ctrl.author.clone()))
+        .cell("created", CellValue::DateTime(ctrl.created))
 }
 
 /// Output cached controls (fast path - no YAML parsing needed)
@@ -606,107 +519,41 @@ fn output_cached_controls(
         return Ok(());
     }
 
-    match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,title,status");
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{}",
-                    short_id,
-                    entity.id,
-                    escape_csv(&entity.title),
-                    entity.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
-
-            for col in &args.columns {
-                let (name, width) = match col {
-                    ListColumn::Id => ("SHORT", 20),
-                    ListColumn::Title => ("TITLE", 30),
-                    ListColumn::ControlType => ("TYPE", 16),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Author => ("AUTHOR", 20),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                header_parts.push(format!("{:<width$}", style(name).bold(), width = width));
-                widths.push(width);
-            }
-
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
-
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                let mut row_parts = Vec::new();
-
-                for (col, &width) in args.columns.iter().zip(&widths) {
-                    let value = match col {
-                        ListColumn::Id => {
-                            let id_str = if short_id.is_empty() {
-                                truncate_str(&entity.id, width)
-                            } else {
-                                short_id.clone()
-                            };
-                            style(truncate_str(&id_str, width)).cyan().to_string()
-                        }
-                        ListColumn::Title => truncate_str(&entity.title, width),
-                        ListColumn::ControlType => "-".to_string(), // Not available in cache
-                        ListColumn::Status => entity.status.clone(),
-                        ListColumn::Author => truncate_str(&entity.author, width),
-                        ListColumn::Created => entity.created.format("%Y-%m-%d %H:%M").to_string(),
-                    };
-                    row_parts.push(format!("{:<width$}", value, width = width));
-                }
-
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} control(s) found. Use {} to reference by short ID.",
-                style(entities.len()).cyan(),
-                style("CTRL@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for entity in entities {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", entity.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Status |");
-            println!("|---|---|---|---|");
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&entity.id, 15),
-                    entity.title,
-                    entity.status
-                );
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
-            unreachable!()
-        }
+    // Build visible columns list
+    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    if args.show_id && !visible.contains(&"id") {
+        visible.insert(0, "id");
     }
 
+    // Convert to TableRows
+    let rows: Vec<TableRow> = entities
+        .iter()
+        .map(|entity| cached_entity_to_row(entity, short_ids))
+        .collect();
+
+    // Configure table
+    let config = if let Some(width) = args.wrap {
+        TableConfig::with_wrap(width)
+    } else {
+        TableConfig::default()
+    };
+
+    let formatter = TableFormatter::new(CTRL_COLUMNS, "control", "CTRL")
+        .with_config(config);
+    formatter.output(rows, format, &visible);
+
     Ok(())
+}
+
+/// Convert a CachedEntity to a TableRow for controls
+fn cached_entity_to_row(entity: &crate::core::CachedEntity, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(entity.id.clone(), short_ids)
+        .cell("id", CellValue::Id(entity.id.clone()))
+        .cell("title", CellValue::Text(entity.title.clone()))
+        .cell("control-type", CellValue::Text("-".to_string())) // Not available in cache
+        .cell("status", CellValue::Status(entity.status))
+        .cell("author", CellValue::Text(entity.author.clone()))
+        .cell("created", CellValue::DateTime(entity.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -805,82 +652,37 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Ctrl,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Ctrl,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
+    let extra_info = format!(
+        "Type: {} | {}{}",
+        style(&control_type).yellow(),
+        style(&title).white(),
+        if args.critical {
+            format!(" {}", style("[CTQ]").red().bold())
+        } else {
+            String::new()
         }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created control {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-            println!(
-                "   Type: {} | {}{}",
-                style(&control_type).yellow(),
-                style(&title).white(),
-                if args.critical {
-                    format!(" {}", style("[CTQ]").red().bold())
-                } else {
-                    String::new()
-                }
-            );
-
-            // Show added links
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    );
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &title,
+        Some(&extra_info),
+        &added_links,
+        global,
+    );
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1051,46 +853,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the control file
-    let ctrl_dir = project.root().join("manufacturing/controls");
-    let mut found_path = None;
-
-    if ctrl_dir.exists() {
-        for entry in fs::read_dir(&ctrl_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No control found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {

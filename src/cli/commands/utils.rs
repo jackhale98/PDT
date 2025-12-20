@@ -9,6 +9,17 @@ use crate::core::cache::EntityCache;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 
+/// Save short ID index with warning on failure (instead of silent discard)
+pub fn save_short_ids(short_ids: &mut ShortIdIndex, project: &Project) {
+    if let Err(e) = short_ids.save(project) {
+        eprintln!(
+            "{} Warning: Failed to save short ID index: {}",
+            style("!").yellow(),
+            e
+        );
+    }
+}
+
 /// Format a linked entity ID with its title for display
 /// Returns format like "CMP@1 (Housing)" or just "CMP@1" if title lookup fails
 pub fn format_link_with_title(

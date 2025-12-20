@@ -6,11 +6,12 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{format_short_id, truncate_str};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -99,19 +100,6 @@ pub enum RiskLevelFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Obsolete,
-    /// All active (not obsolete)
-    Active,
-    /// All statuses
-    All,
-}
-
 /// Columns to display in list output
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum ListColumn {
@@ -147,6 +135,22 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for risk list output
+const RISK_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("type", "TYPE", 10),
+    ColumnDef::new("title", "TITLE", 30),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("risk-level", "LEVEL", 10),
+    ColumnDef::new("severity", "SEV", 5),
+    ColumnDef::new("occurrence", "OCC", 5),
+    ColumnDef::new("detection", "DET", 5),
+    ColumnDef::new("rpn", "RPN", 5),
+    ColumnDef::new("category", "CATEGORY", 12),
+    ColumnDef::new("author", "AUTHOR", 16),
+    ColumnDef::new("created", "CREATED", 12),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -208,7 +212,6 @@ pub struct ListArgs {
 
     /// Columns to display (can specify multiple)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
-        ListColumn::Id,
         ListColumn::Type,
         ListColumn::Title,
         ListColumn::Status,
@@ -236,6 +239,14 @@ pub struct ListArgs {
     /// Show count only, not the items
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text at specified width (for mobile-friendly display)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show full ID column (hidden by default since SHORT is always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -444,6 +455,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::Draft => Some("draft"),
             StatusFilter::Review => Some("review"),
             StatusFilter::Approved => Some("approved"),
+            StatusFilter::Released => Some("released"),
             StatusFilter::Obsolete => Some("obsolete"),
             StatusFilter::Active | StatusFilter::All => None,
         };
@@ -507,6 +519,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::Draft => r.status == crate::core::entity::Status::Draft,
             StatusFilter::Review => r.status == crate::core::entity::Status::Review,
             StatusFilter::Approved => r.status == crate::core::entity::Status::Approved,
+            StatusFilter::Released => r.status == crate::core::entity::Status::Released,
             StatusFilter::Obsolete => r.status == crate::core::entity::Status::Obsolete,
             StatusFilter::Active => r.status != crate::core::entity::Status::Obsolete,
             StatusFilter::All => true,
@@ -683,7 +696,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index with current risks (preserves other entity types)
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(risks.iter().map(|r| r.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {
@@ -700,148 +713,61 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&risks).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,type,title,status,risk_level,severity,occurrence,detection,rpn");
-            for risk in &risks {
-                let short_id = short_ids
-                    .get_short_id(&risk.id.to_string())
-                    .unwrap_or_default();
-                // Use computed values for accurate export
-                println!(
-                    "{},{},{},{},{},{},{},{},{},{}",
-                    short_id,
-                    risk.id,
-                    risk.risk_type,
-                    escape_csv(&risk.title),
-                    risk.status,
-                    risk.get_risk_level()
-                        .map_or("".to_string(), |l| l.to_string()),
-                    risk.severity.map_or("".to_string(), |s| s.to_string()),
-                    risk.occurrence.map_or("".to_string(), |o| o.to_string()),
-                    risk.detection.map_or("".to_string(), |d| d.to_string()),
-                    risk.get_rpn().map_or("".to_string(), |r| r.to_string())
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
-                    ListColumn::Type => format!("{:<9}", style("TYPE").bold()),
-                    ListColumn::Title => format!("{:<28}", style("TITLE").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::RiskLevel => format!("{:<8}", style("LEVEL").bold()),
-                    ListColumn::Severity => format!("{:<4}", style("SEV").bold()),
-                    ListColumn::Occurrence => format!("{:<4}", style("OCC").bold()),
-                    ListColumn::Detection => format!("{:<4}", style("DET").bold()),
-                    ListColumn::Rpn => format!("{:<5}", style("RPN").bold()),
-                    ListColumn::Category => format!("{:<14}", style("CATEGORY").bold()),
-                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(90));
-
-            for risk in &risks {
-                let short_id = short_ids
-                    .get_short_id(&risk.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", format_short_id(&risk.id)),
-                        ListColumn::Type => format!("{:<9}", risk.risk_type),
-                        ListColumn::Title => format!("{:<28}", truncate_str(&risk.title, 26)),
-                        ListColumn::Status => format!("{:<10}", risk.status),
-                        ListColumn::RiskLevel => format!(
-                            "{:<8}",
-                            risk.get_risk_level()
-                                .map_or("-".to_string(), |l| l.to_string())
-                        ),
-                        ListColumn::Severity => format!(
-                            "{:<4}",
-                            risk.severity.map_or("-".to_string(), |s| s.to_string())
-                        ),
-                        ListColumn::Occurrence => format!(
-                            "{:<4}",
-                            risk.occurrence.map_or("-".to_string(), |o| o.to_string())
-                        ),
-                        ListColumn::Detection => format!(
-                            "{:<4}",
-                            risk.detection.map_or("-".to_string(), |d| d.to_string())
-                        ),
-                        ListColumn::Rpn => {
-                            // Use computed RPN for accurate display
-                            let computed_rpn = risk.get_rpn();
-                            let rpn_str = computed_rpn.map_or("-".to_string(), |r| r.to_string());
-                            let colored = match computed_rpn {
-                                Some(r) if r > 400 => style(&rpn_str).red().to_string(),
-                                Some(r) if r > 150 => style(&rpn_str).yellow().to_string(),
-                                _ => rpn_str.clone(),
-                            };
-                            format!("{:<5}", colored)
-                        }
-                        ListColumn::Category => format!(
-                            "{:<14}",
-                            truncate_str(risk.category.as_deref().unwrap_or(""), 12)
-                        ),
-                        ListColumn::Author => format!("{:<14}", truncate_str(&risk.author, 12)),
-                        ListColumn::Created => format!("{:<12}", risk.created.format("%Y-%m-%d")),
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+            // Build visible columns list
+            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            if args.show_id && !visible.contains(&"id") {
+                visible.insert(0, "id");
             }
 
-            println!();
-            println!(
-                "{} risk(s) found. Use {} to reference by short ID.",
-                style(risks.len()).cyan(),
-                style("RISK@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for risk in &risks {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&risk.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", risk.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Type | Title | Status | Level | RPN |");
-            println!("|---|---|---|---|---|---|---|");
-            for risk in &risks {
-                let short_id = short_ids
-                    .get_short_id(&risk.id.to_string())
-                    .unwrap_or_default();
-                // Use computed values for accurate export
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&risk.id),
-                    risk.risk_type,
-                    risk.title,
-                    risk.status,
-                    risk.get_risk_level()
-                        .map_or("-".to_string(), |l| l.to_string()),
-                    risk.get_rpn().map_or("-".to_string(), |r| r.to_string())
-                );
-            }
+            // Convert to TableRows
+            let rows: Vec<TableRow> = risks
+                .iter()
+                .map(|risk| risk_to_row(risk, &short_ids))
+                .collect();
+
+            // Configure table
+            let config = if let Some(width) = args.wrap {
+                TableConfig::with_wrap(width)
+            } else {
+                TableConfig::default()
+            };
+
+            let formatter = TableFormatter::new(RISK_COLUMNS, "risk", "RISK")
+                .with_config(config);
+            formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
+}
+
+/// Convert a Risk to a TableRow
+fn risk_to_row(risk: &Risk, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(risk.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(risk.id.to_string()))
+        .cell("type", CellValue::Type(risk.risk_type.to_string()))
+        .cell("title", CellValue::Text(risk.title.clone()))
+        .cell("status", CellValue::Status(risk.status))
+        .cell("risk-level", CellValue::Text(
+            risk.get_risk_level().map_or("-".to_string(), |l| l.to_string())
+        ))
+        .cell("severity", CellValue::Text(
+            risk.severity.map_or("-".to_string(), |s| s.to_string())
+        ))
+        .cell("occurrence", CellValue::Text(
+            risk.occurrence.map_or("-".to_string(), |o| o.to_string())
+        ))
+        .cell("detection", CellValue::Text(
+            risk.detection.map_or("-".to_string(), |d| d.to_string())
+        ))
+        .cell("rpn", CellValue::Text(
+            risk.get_rpn().map_or("-".to_string(), |r| r.to_string())
+        ))
+        .cell("category", CellValue::Text(risk.category.clone().unwrap_or_default()))
+        .cell("author", CellValue::Text(risk.author.clone()))
+        .cell("created", CellValue::Date(risk.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -1029,38 +955,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Risk,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Risk,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {

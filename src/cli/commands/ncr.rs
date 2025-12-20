@@ -6,11 +6,11 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::helpers::format_short_id;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::{CachedNcr, EntityCache};
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -195,6 +195,17 @@ impl std::fmt::Display for ListColumn {
     }
 }
 
+/// Column definitions for NCR list output
+const NCR_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("title", "TITLE", 26),
+    ColumnDef::new("ncr-type", "TYPE", 10),
+    ColumnDef::new("severity", "SEVERITY", 10),
+    ColumnDef::new("status", "STATUS", 12),
+    ColumnDef::new("author", "AUTHOR", 16),
+    ColumnDef::new("created", "CREATED", 20),
+];
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by NCR type
@@ -250,6 +261,10 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -329,6 +344,14 @@ pub struct ArchiveArgs {
 
 /// Directories where NCRs are stored
 const NCR_DIRS: &[&str] = &["manufacturing/ncrs"];
+
+/// Entity configuration for NCRs
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Ncr,
+    dirs: NCR_DIRS,
+    name: "NCR",
+    name_plural: "NCRs",
+};
 
 /// Disposition decision for CLI
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -475,7 +498,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             // Update short ID index
             let mut short_ids = ShortIdIndex::load(&project);
             short_ids.ensure_all(ncrs.iter().map(|n| n.id.clone()));
-            let _ = short_ids.save(&project);
+            super::utils::save_short_ids(&mut short_ids, &project);
 
             return output_cached_ncrs(&ncrs, &args, &short_ids, format);
         }
@@ -600,7 +623,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(ncrs.iter().map(|n| n.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     match format {
@@ -612,92 +635,20 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&ncrs).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,title,type,severity,category,ncr_status");
-            for ncr in &ncrs {
-                let short_id = short_ids
-                    .get_short_id(&ncr.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    ncr.id,
-                    escape_csv(&ncr.title),
-                    ncr.ncr_type,
-                    ncr.severity,
-                    ncr.category,
-                    ncr.ncr_status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header
-            let mut headers = vec![];
-            let mut widths = vec![];
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            // Build column list from args
+            let columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
 
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 26),
-                    ListColumn::NcrType => ("TYPE", 10),
-                    ListColumn::Severity => ("SEVERITY", 10),
-                    ListColumn::Status => ("STATUS", 12),
-                    ListColumn::Author => ("AUTHOR", 16),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                headers.push((header, *col));
-                widths.push(width);
-            }
+            // Build rows
+            let rows: Vec<TableRow> = ncrs.iter().map(|n| ncr_to_row(n, &short_ids)).collect();
 
-            // Print header
-            print!("{:<8} ", style("SHORT").bold().dim());
-            for (i, (header, _)) in headers.iter().enumerate() {
-                print!("{:<width$} ", style(header).bold(), width = widths[i]);
-            }
-            println!();
-            println!(
-                "{}",
-                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len())
-            );
-
-            // Print rows
-            for ncr in &ncrs {
-                let short_id = short_ids
-                    .get_short_id(&ncr.id.to_string())
-                    .unwrap_or_default();
-                print!("{:<8} ", style(&short_id).cyan());
-
-                for (i, (_, col)) in headers.iter().enumerate() {
-                    let cell = match col {
-                        ListColumn::Id => format_short_id(&ncr.id),
-                        ListColumn::Title => truncate_str(&ncr.title, widths[i] - 2),
-                        ListColumn::NcrType => ncr.ncr_type.to_string(),
-                        ListColumn::Severity => {
-                            let severity_styled = match ncr.severity {
-                                NcrSeverity::Critical => {
-                                    style(ncr.severity.to_string()).red().bold()
-                                }
-                                NcrSeverity::Major => style(ncr.severity.to_string()).yellow(),
-                                NcrSeverity::Minor => style(ncr.severity.to_string()).white(),
-                            };
-                            print!("{:<width$} ", severity_styled, width = widths[i]);
-                            continue;
-                        }
-                        ListColumn::Status => ncr.ncr_status.to_string(),
-                        ListColumn::Author => truncate_str(&ncr.author, widths[i] - 2),
-                        ListColumn::Created => ncr.created.format("%Y-%m-%d %H:%M").to_string(),
-                    };
-                    print!("{:<width$} ", cell, width = widths[i]);
-                }
-                println!();
-            }
-
-            println!();
-            println!(
-                "{} NCR(s) found. Use {} to reference by short ID.",
-                style(ncrs.len()).cyan(),
-                style("NCR@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(NCR_COLUMNS, "NCR", "NCR")
+                .with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for ncr in &ncrs {
@@ -709,25 +660,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", ncr.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Severity | Category | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for ncr in &ncrs {
-                let short_id = short_ids
-                    .get_short_id(&ncr.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&ncr.id),
-                    ncr.title,
-                    ncr.ncr_type,
-                    ncr.severity,
-                    ncr.category,
-                    ncr.ncr_status
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -818,38 +750,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Ncr,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Ncr,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {
@@ -1092,45 +1001,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the NCR file
-    let ncr_dir = project.root().join("manufacturing/ncrs");
-    let mut found_path = None;
-
-    if ncr_dir.exists() {
-        for entry in fs::read_dir(&ncr_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path = found_path.ok_or_else(|| miette::miette!("No NCR found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {
@@ -1161,87 +1032,20 @@ fn output_cached_ncrs(
     }
 
     match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,title,type,severity,category,ncr_status");
-            for ncr in ncrs {
-                let short_id = short_ids.get_short_id(&ncr.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    ncr.id,
-                    escape_csv(&ncr.title),
-                    ncr.ncr_type.as_deref().unwrap_or(""),
-                    ncr.severity.as_deref().unwrap_or(""),
-                    ncr.category.as_deref().unwrap_or(""),
-                    ncr.ncr_status.as_deref().unwrap_or("")
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header
-            let mut headers = vec![];
-            let mut widths = vec![];
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            // Build column list from args
+            let columns: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
 
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => ("ID", 17),
-                    ListColumn::Title => ("TITLE", 26),
-                    ListColumn::NcrType => ("TYPE", 10),
-                    ListColumn::Severity => ("SEVERITY", 10),
-                    ListColumn::Status => ("STATUS", 12),
-                    ListColumn::Author => ("AUTHOR", 16),
-                    ListColumn::Created => ("CREATED", 20),
-                };
-                headers.push((header, *col));
-                widths.push(width);
-            }
+            // Build rows
+            let rows: Vec<TableRow> = ncrs.iter().map(|n| cached_ncr_to_row(n, short_ids)).collect();
 
-            // Print header
-            print!("{:<8} ", style("SHORT").bold().dim());
-            for (i, (header, _)) in headers.iter().enumerate() {
-                print!("{:<width$} ", style(header).bold(), width = widths[i]);
-            }
-            println!();
-            println!(
-                "{}",
-                "-".repeat(8 + widths.iter().sum::<usize>() + widths.len())
-            );
-
-            // Print rows
-            for ncr in ncrs {
-                let short_id = short_ids.get_short_id(&ncr.id).unwrap_or_default();
-                print!("{:<8} ", style(&short_id).cyan());
-
-                for (i, (_, col)) in headers.iter().enumerate() {
-                    let cell = match col {
-                        ListColumn::Id => truncate_str(&ncr.id, widths[i] - 2),
-                        ListColumn::Title => truncate_str(&ncr.title, widths[i] - 2),
-                        ListColumn::NcrType => ncr.ncr_type.as_deref().unwrap_or("").to_string(),
-                        ListColumn::Severity => {
-                            let severity = ncr.severity.as_deref().unwrap_or("");
-                            let severity_styled = match severity {
-                                "critical" => style(severity.to_string()).red().bold(),
-                                "major" => style(severity.to_string()).yellow(),
-                                _ => style(severity.to_string()).white(),
-                            };
-                            print!("{:<width$} ", severity_styled, width = widths[i]);
-                            continue;
-                        }
-                        ListColumn::Status => ncr.ncr_status.as_deref().unwrap_or("").to_string(),
-                        ListColumn::Author => truncate_str(&ncr.author, widths[i] - 2),
-                        ListColumn::Created => ncr.created.format("%Y-%m-%d %H:%M").to_string(),
-                    };
-                    print!("{:<width$} ", cell, width = widths[i]);
-                }
-                println!();
-            }
-
-            println!();
-            println!(
-                "{} NCR(s) found. Use {} to reference by short ID.",
-                style(ncrs.len()).cyan(),
-                style("NCR@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(NCR_COLUMNS, "NCR", "NCR")
+                .with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for ncr in ncrs {
@@ -1253,23 +1057,6 @@ fn output_cached_ncrs(
                 }
             }
         }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Severity | Category | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for ncr in ncrs {
-                let short_id = short_ids.get_short_id(&ncr.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&ncr.id, 16),
-                    ncr.title,
-                    ncr.ncr_type.as_deref().unwrap_or(""),
-                    ncr.severity.as_deref().unwrap_or(""),
-                    ncr.category.as_deref().unwrap_or(""),
-                    ncr.ncr_status.as_deref().unwrap_or("")
-                );
-            }
-        }
         OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             // Should not reach here - cache bypassed for these formats
             unreachable!();
@@ -1277,6 +1064,36 @@ fn output_cached_ncrs(
     }
 
     Ok(())
+}
+
+/// Convert an Ncr to a TableRow
+fn ncr_to_row(ncr: &Ncr, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(ncr.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(ncr.id.to_string()))
+        .cell("title", CellValue::Text(ncr.title.clone()))
+        .cell("ncr-type", CellValue::Type(ncr.ncr_type.to_string()))
+        .cell("severity", CellValue::NcrSeverity(ncr.severity.to_string()))
+        .cell("status", CellValue::Type(ncr.ncr_status.to_string()))
+        .cell("author", CellValue::Text(ncr.author.clone()))
+        .cell("created", CellValue::DateTime(ncr.created))
+}
+
+/// Convert a CachedNcr to a TableRow
+fn cached_ncr_to_row(ncr: &CachedNcr, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(ncr.id.clone(), short_ids)
+        .cell("id", CellValue::Id(ncr.id.clone()))
+        .cell("title", CellValue::Text(ncr.title.clone()))
+        .cell("ncr-type", CellValue::Type(
+            ncr.ncr_type.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("severity", CellValue::NcrSeverity(
+            ncr.severity.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("status", CellValue::Type(
+            ncr.ncr_status.as_deref().unwrap_or("-").to_string()
+        ))
+        .cell("author", CellValue::Text(ncr.author.clone()))
+        .cell("created", CellValue::DateTime(ncr.created))
 }
 
 fn run_close(args: CloseArgs, global: &GlobalOpts) -> Result<()> {

@@ -1768,7 +1768,7 @@ fn test_proc_list_shows_processes() {
         .success()
         .stdout(predicate::str::contains("Process One"))
         .stdout(predicate::str::contains("Process Two"))
-        .stdout(predicate::str::contains("2 process(es) found"));
+        .stdout(predicate::str::contains("2 process(s) found"));
 }
 
 #[test]
@@ -3537,4 +3537,263 @@ fn test_req_archive() {
 
     // Verify the archive directory exists
     assert!(tmp.path().join(".tdt/archive/requirements/inputs").exists());
+}
+
+// ============================================================================
+// Status Command Tests
+// ============================================================================
+
+#[test]
+fn test_status_empty_project() {
+    let tmp = setup_test_project();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["status"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Project"));
+}
+
+#[test]
+fn test_status_shows_counts() {
+    let tmp = setup_test_project();
+
+    // Create some entities
+    create_test_requirement(&tmp, "Test Req", "input");
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["status"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("REQ"));
+}
+
+// ============================================================================
+// Trace Command Tests
+// ============================================================================
+
+#[test]
+fn test_trace_help() {
+    tdt()
+        .args(["trace", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("trace"));
+}
+
+#[test]
+fn test_trace_matrix_empty_project() {
+    let tmp = setup_test_project();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["trace", "matrix"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_trace_orphans_empty_project() {
+    let tmp = setup_test_project();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["trace", "orphans"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_trace_from_requirement() {
+    let tmp = setup_test_project();
+    let req_id = create_test_requirement(&tmp, "Test Req", "input");
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["trace", "from", &req_id])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_trace_to_requirement() {
+    let tmp = setup_test_project();
+    let req_id = create_test_requirement(&tmp, "Test Req", "input");
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["trace", "to", &req_id])
+        .assert()
+        .success();
+}
+
+// ============================================================================
+// Lot Command Tests
+// ============================================================================
+
+#[test]
+fn test_lot_list_empty_project() {
+    let tmp = setup_test_project();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["lot", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No lots found"));
+}
+
+#[test]
+fn test_lot_new_creates_file() {
+    let tmp = setup_test_project();
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "lot",
+            "new",
+            "--title",
+            "Test Lot",
+            "--lot-number",
+            "LOT-001",
+            "--quantity",
+            "100",
+            "--no-edit",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created lot"));
+
+    // Verify file was created
+    let lot_dir = tmp.path().join("manufacturing/lots");
+    assert!(lot_dir.exists());
+    let files: Vec<_> = fs::read_dir(&lot_dir).unwrap().collect();
+    assert_eq!(files.len(), 1);
+}
+
+#[test]
+fn test_lot_list_shows_lots() {
+    let tmp = setup_test_project();
+
+    // Create a lot
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "lot",
+            "new",
+            "--title",
+            "Test Lot",
+            "--lot-number",
+            "LOT-001",
+            "--quantity",
+            "100",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // List should show it
+    tdt()
+        .current_dir(tmp.path())
+        .args(["lot", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Test Lot"));
+}
+
+// ============================================================================
+// Dev (Deviation) Command Tests
+// ============================================================================
+
+#[test]
+fn test_dev_list_empty_project() {
+    let tmp = setup_test_project();
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dev", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No deviations found"));
+}
+
+#[test]
+fn test_dev_new_creates_file() {
+    let tmp = setup_test_project();
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "dev",
+            "new",
+            "--title",
+            "Test Deviation",
+            "--dev-type",
+            "temporary",
+            "--no-edit",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created deviation"));
+
+    // Verify file was created
+    let dev_dir = tmp.path().join("manufacturing/deviations");
+    assert!(dev_dir.exists());
+    let files: Vec<_> = fs::read_dir(&dev_dir).unwrap().collect();
+    assert_eq!(files.len(), 1);
+}
+
+#[test]
+fn test_dev_list_shows_deviations() {
+    let tmp = setup_test_project();
+
+    // Create a deviation
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "dev",
+            "new",
+            "--title",
+            "Test Deviation",
+            "--dev-type",
+            "temporary",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // List should show it
+    tdt()
+        .current_dir(tmp.path())
+        .args(["dev", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Test Deviation"));
+}
+
+// ============================================================================
+// Schema Command Tests
+// ============================================================================
+
+#[test]
+fn test_schema_list() {
+    tdt()
+        .args(["schema", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("req"));
+}
+
+#[test]
+fn test_schema_show_req() {
+    tdt()
+        .args(["schema", "show", "req"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("id"));
+}
+
+#[test]
+fn test_schema_show_raw_json() {
+    tdt()
+        .args(["schema", "show", "req", "--raw"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"$schema\""))
+        .stdout(predicate::str::contains("\"properties\""));
 }

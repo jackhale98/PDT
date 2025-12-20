@@ -6,12 +6,13 @@ use miette::{bail, IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, smart_round, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{format_short_id, smart_round, truncate_str};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -77,17 +78,6 @@ pub enum TypeFilter {
     All,
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    All,
-}
-
 /// List column selection
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum ListColumn {
@@ -119,6 +109,20 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for mate list output
+const MATE_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "SHORT", 8),
+    ColumnDef::new("title", "TITLE", 20),
+    ColumnDef::new("mate-type", "TYPE", 16),
+    ColumnDef::new("fit-result", "FIT", 12),
+    ColumnDef::new("match", "OK", 4),
+    ColumnDef::new("feature-a", "FEATURE A", 16),
+    ColumnDef::new("feature-b", "FEATURE B", 16),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 15),
+    ColumnDef::new("created", "CREATED", 12),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -157,6 +161,10 @@ pub struct ListArgs {
     /// Columns to display
     #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Id, ListColumn::Title, ListColumn::MateType, ListColumn::FitResult, ListColumn::Match, ListColumn::Status])]
     pub columns: Vec<ListColumn>,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -242,6 +250,14 @@ pub struct ArchiveArgs {
 /// Directories where mates are stored
 const MATE_DIRS: &[&str] = &["tolerances/mates"];
 
+/// Entity configuration for mates
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Mate,
+    dirs: MATE_DIRS,
+    name: "mate",
+    name_plural: "mates",
+};
+
 #[derive(clap::Args, Debug)]
 pub struct RecalcArgs {
     /// Mate ID or short ID (MATE@N)
@@ -312,6 +328,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::Approved => m.status == crate::core::entity::Status::Approved,
             StatusFilter::Released => m.status == crate::core::entity::Status::Released,
             StatusFilter::Obsolete => m.status == crate::core::entity::Status::Obsolete,
+            StatusFilter::Active => m.status != crate::core::entity::Status::Obsolete,
             StatusFilter::All => true,
         })
         .filter(|m| {
@@ -397,7 +414,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(mates.iter().map(|m| m.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {
@@ -414,160 +431,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&mates).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,title,mate_type,fit_result,status");
-            for mate in &mates {
-                let short_id = short_ids
-                    .get_short_id(&mate.id.to_string())
-                    .unwrap_or_default();
-                let fit_result = mate
-                    .fit_analysis
-                    .as_ref()
-                    .map(|a| format!("{}", a.fit_result))
-                    .unwrap_or_else(|| "n/a".to_string());
-                println!(
-                    "{},{},{},{},{},{}",
-                    short_id,
-                    mate.id,
-                    escape_csv(&mate.title),
-                    mate.mate_type,
-                    fit_result,
-                    mate.status()
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header with variable widths
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => ("SHORT", 8),
-                    ListColumn::Title => ("TITLE", 20),
-                    ListColumn::MateType => ("TYPE", 16),
-                    ListColumn::FitResult => ("FIT", 12),
-                    ListColumn::Match => ("OK", 4),
-                    ListColumn::FeatureA => ("FEATURE A", 16),
-                    ListColumn::FeatureB => ("FEATURE B", 16),
-                    ListColumn::Status => ("STATUS", 10),
-                    ListColumn::Author => ("AUTHOR", 15),
-                    ListColumn::Created => ("CREATED", 12),
-                };
-                header_parts.push(format!("{:<width$}", style(header).bold(), width = width));
-                widths.push(width);
-            }
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
+            let rows: Vec<TableRow> = mates
+                .iter()
+                .map(|m| mate_to_row(m, &short_ids))
+                .collect();
 
-            // Build rows
-            for mate in &mates {
-                let short_id = short_ids
-                    .get_short_id(&mate.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = Vec::new();
-
-                for (i, col) in args.columns.iter().enumerate() {
-                    let width = widths[i];
-                    let value = match col {
-                        ListColumn::Id => {
-                            let id_str = if !short_id.is_empty() {
-                                short_id.clone()
-                            } else {
-                                format_short_id(&mate.id)
-                            };
-                            format!("{:<width$}", style(&id_str).cyan(), width = width)
-                        }
-                        ListColumn::Title => {
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&mate.title, width.saturating_sub(2)),
-                                width = width
-                            )
-                        }
-                        ListColumn::MateType => {
-                            let type_str = format!("{}", mate.mate_type);
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&type_str, width.saturating_sub(2)),
-                                width = width
-                            )
-                        }
-                        ListColumn::FitResult => {
-                            let fit_result = mate
-                                .fit_analysis
-                                .as_ref()
-                                .map(|a| format!("{}", a.fit_result))
-                                .unwrap_or_else(|| "n/a".to_string());
-                            let styled = match fit_result.as_str() {
-                                "clearance" => style(fit_result).green(),
-                                "interference" => style(fit_result).yellow(),
-                                "transition" => style(fit_result).magenta(),
-                                _ => style(fit_result).dim(),
-                            };
-                            format!("{:<width$}", styled, width = width)
-                        }
-                        ListColumn::Match => {
-                            let styled = match fit_matches_type(mate) {
-                                FitMatch::Match => style("✓").green(),
-                                FitMatch::Mismatch => style("⚠").yellow(),
-                                FitMatch::Unknown => style("-").dim(),
-                            };
-                            format!("{:<width$}", styled, width = width)
-                        }
-                        ListColumn::FeatureA => {
-                            let display = mate
-                                .feature_a
-                                .name
-                                .clone()
-                                .or_else(|| short_ids.get_short_id(&mate.feature_a.id.to_string()))
-                                .unwrap_or_else(|| mate.feature_a.id.to_string());
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&display, width.saturating_sub(2)),
-                                width = width
-                            )
-                        }
-                        ListColumn::FeatureB => {
-                            let display = mate
-                                .feature_b
-                                .name
-                                .clone()
-                                .or_else(|| short_ids.get_short_id(&mate.feature_b.id.to_string()))
-                                .unwrap_or_else(|| mate.feature_b.id.to_string());
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&display, width.saturating_sub(2)),
-                                width = width
-                            )
-                        }
-                        ListColumn::Status => {
-                            format!("{:<width$}", mate.status(), width = width)
-                        }
-                        ListColumn::Author => {
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&mate.author, width.saturating_sub(2)),
-                                width = width
-                            )
-                        }
-                        ListColumn::Created => {
-                            format!("{:<width$}", mate.created.format("%Y-%m-%d"), width = width)
-                        }
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} mate(s) found. Use {} to reference by short ID.",
-                style(mates.len()).cyan(),
-                style("MATE@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter =
+                TableFormatter::new(MATE_COLUMNS, "mate", "MATE").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for mate in &mates {
@@ -579,29 +460,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", mate.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Type | Fit | Status |");
-            println!("|---|---|---|---|---|---|");
-            for mate in &mates {
-                let short_id = short_ids
-                    .get_short_id(&mate.id.to_string())
-                    .unwrap_or_default();
-                let fit_result = mate
-                    .fit_analysis
-                    .as_ref()
-                    .map(|a| format!("{}", a.fit_result))
-                    .unwrap_or_else(|| "n/a".to_string());
-                println!(
-                    "| {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&mate.id),
-                    mate.title,
-                    mate.mate_type,
-                    fit_result,
-                    mate.status()
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -747,38 +605,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Mate,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Mate,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {
@@ -1054,45 +889,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the mate file
-    let mate_dir = project.root().join("tolerances/mates");
-    let mut found_path = None;
-
-    if mate_dir.exists() {
-        for entry in fs::read_dir(&mate_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path = found_path.ok_or_else(|| miette::miette!("No mate found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {
@@ -1475,4 +1272,45 @@ fn fit_matches_type(mate: &Mate) -> FitMatch {
         // Any other combination is a mismatch
         _ => FitMatch::Mismatch,
     }
+}
+
+/// Convert a Mate entity to a TableRow
+fn mate_to_row(mate: &Mate, short_ids: &ShortIdIndex) -> TableRow {
+    let fit_result = mate
+        .fit_analysis
+        .as_ref()
+        .map(|a| a.fit_result.to_string())
+        .unwrap_or_else(|| "n/a".to_string());
+
+    let fit_match = match fit_matches_type(mate) {
+        FitMatch::Match => "match",
+        FitMatch::Mismatch => "mismatch",
+        FitMatch::Unknown => "unknown",
+    };
+
+    let feature_a_display = mate
+        .feature_a
+        .name
+        .clone()
+        .or_else(|| short_ids.get_short_id(&mate.feature_a.id.to_string()))
+        .unwrap_or_else(|| mate.feature_a.id.to_string());
+
+    let feature_b_display = mate
+        .feature_b
+        .name
+        .clone()
+        .or_else(|| short_ids.get_short_id(&mate.feature_b.id.to_string()))
+        .unwrap_or_else(|| mate.feature_b.id.to_string());
+
+    TableRow::new(mate.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(mate.id.to_string()))
+        .cell("title", CellValue::Text(mate.title.clone()))
+        .cell("mate-type", CellValue::Type(mate.mate_type.to_string()))
+        .cell("fit-result", CellValue::FitResult(fit_result))
+        .cell("match", CellValue::FitMatch(fit_match.to_string()))
+        .cell("feature-a", CellValue::Text(feature_a_display))
+        .cell("feature-b", CellValue::Text(feature_b_display))
+        .cell("status", CellValue::Type(mate.status().to_string()))
+        .cell("author", CellValue::Text(mate.author.clone()))
+        .cell("created", CellValue::DateTime(mate.created))
 }

@@ -154,7 +154,7 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
     }
 
     if !args.dry_run {
-        let _ = short_ids.save(project);
+        crate::cli::commands::utils::save_short_ids(&mut short_ids, project);
     }
 
     Ok(stats)

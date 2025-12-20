@@ -2,17 +2,16 @@
 
 use clap::{Subcommand, ValueEnum};
 use console::style;
+use dialoguer::{theme::ColorfulTheme, Input};
 use miette::{IntoDiagnostic, Result};
 use std::fs;
 
-use dialoguer::{theme::ColorfulTheme, Input};
-
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::truncate_str;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
-use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::CachedFeature;
@@ -75,17 +74,6 @@ impl From<CliFeatureType> for FeatureType {
     }
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    All,
-}
-
 /// Columns to display in list output
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum ListColumn {
@@ -113,6 +101,18 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for feature list output
+const FEAT_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("title", "TITLE", 20),
+    ColumnDef::new("description", "DESCRIPTION", 30),
+    ColumnDef::new("feature-type", "TYPE", 10),
+    ColumnDef::new("component", "COMPONENT", 40),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 14),
+    ColumnDef::new("created", "CREATED", 12),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -165,6 +165,10 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -241,6 +245,14 @@ pub struct ArchiveArgs {
 /// Directories where features are stored
 const FEATURE_DIRS: &[&str] = &["tolerances/features"];
 
+/// Entity configuration for features
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Feat,
+    dirs: FEATURE_DIRS,
+    name: "feature",
+    name_plural: "features",
+};
+
 /// Run a feature subcommand
 pub fn run(cmd: FeatCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -283,7 +295,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 StatusFilter::Approved => Some("approved"),
                 StatusFilter::Released => Some("released"),
                 StatusFilter::Obsolete => Some("obsolete"),
-                StatusFilter::All => None,
+                StatusFilter::Active | StatusFilter::All => None,
             };
 
             let type_filter = match args.feature_type {
@@ -387,6 +399,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::Approved => f.status == crate::core::entity::Status::Approved,
             StatusFilter::Released => f.status == crate::core::entity::Status::Released,
             StatusFilter::Obsolete => f.status == crate::core::entity::Status::Obsolete,
+            StatusFilter::Active => f.status != crate::core::entity::Status::Obsolete,
             StatusFilter::All => true,
         })
         .filter(|f| {
@@ -458,7 +471,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = short_ids;
     short_ids.ensure_all(features.iter().map(|f| f.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Load component info for display
     let component_info: std::collections::HashMap<String, (String, String)> =
@@ -484,129 +497,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&features).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!(
-                "short_id,id,component,part_number,component_title,feature_type,title,dims,status"
-            );
-            for feat in &features {
-                let short_id = short_ids
-                    .get_short_id(&feat.id.to_string())
-                    .unwrap_or_default();
-                let cmp_alias = short_ids.get_short_id(&feat.component).unwrap_or_default();
-                let (part_number, cmp_title) = component_info
-                    .get(&feat.component)
-                    .map(|(pn, t)| (pn.as_str(), t.as_str()))
-                    .unwrap_or(("", ""));
-                println!(
-                    "{},{},{},{},{},{},{},{},{}",
-                    short_id,
-                    feat.id,
-                    cmp_alias,
-                    escape_csv(part_number),
-                    escape_csv(cmp_title),
-                    feat.feature_type,
-                    escape_csv(&feat.title),
-                    feat.dimensions.len(),
-                    feat.status()
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            let mut widths = vec![8usize];
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => (style("ID").bold().to_string(), 17),
-                    ListColumn::Title => (style("TITLE").bold().to_string(), 20),
-                    ListColumn::Description => (style("DESCRIPTION").bold().to_string(), 30),
-                    ListColumn::FeatureType => (style("TYPE").bold().to_string(), 10),
-                    ListColumn::Component => (style("COMPONENT").bold().to_string(), 40),
-                    ListColumn::Status => (style("STATUS").bold().to_string(), 10),
-                    ListColumn::Author => (style("AUTHOR").bold().to_string(), 14),
-                    ListColumn::Created => (style("CREATED").bold().to_string(), 12),
-                };
-                header_parts.push(format!("{:<width$}", header, width = width));
-                widths.push(width);
-            }
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
+            let rows: Vec<TableRow> = features
+                .iter()
+                .map(|f| feat_to_row(f, &short_ids, &component_info))
+                .collect();
 
-            for feat in &features {
-                let short_id = short_ids
-                    .get_short_id(&feat.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for (i, col) in args.columns.iter().enumerate() {
-                    let width = widths[i + 1]; // +1 because first width is for SHORT column
-                    let value = match col {
-                        ListColumn::Id => {
-                            format!("{:<width$}", format_short_id(&feat.id), width = width)
-                        }
-                        ListColumn::Title => format!(
-                            "{:<width$}",
-                            truncate_str(&feat.title, width - 2),
-                            width = width
-                        ),
-                        ListColumn::Description => {
-                            let desc = feat.description.as_deref().unwrap_or("-");
-                            format!("{:<width$}", truncate_str(desc, width - 2), width = width)
-                        }
-                        ListColumn::FeatureType => {
-                            format!("{:<width$}", feat.feature_type, width = width)
-                        }
-                        ListColumn::Component => {
-                            // Show component alias, part number, and title
-                            let cmp_alias = short_ids
-                                .get_short_id(&feat.component)
-                                .unwrap_or_else(|| "?".to_string());
-                            let (part_number, cmp_title) = component_info
-                                .get(&feat.component)
-                                .map(|(pn, t)| (pn.as_str(), t.as_str()))
-                                .unwrap_or(("", ""));
-                            let display = if !part_number.is_empty() {
-                                format!(
-                                    "{} ({}) {}",
-                                    cmp_alias,
-                                    part_number,
-                                    truncate_str(cmp_title, 20)
-                                )
-                            } else if !cmp_title.is_empty() {
-                                format!("{} {}", cmp_alias, truncate_str(cmp_title, 25))
-                            } else {
-                                cmp_alias
-                            };
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&display, width - 2),
-                                width = width
-                            )
-                        }
-                        ListColumn::Status => format!("{:<width$}", feat.status(), width = width),
-                        ListColumn::Author => format!(
-                            "{:<width$}",
-                            truncate_str(&feat.author, width - 2),
-                            width = width
-                        ),
-                        ListColumn::Created => {
-                            format!("{:<width$}", feat.created.format("%Y-%m-%d"), width = width)
-                        }
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} feature(s) found. Use {} to reference by short ID.",
-                style(features.len()).cyan(),
-                style("FEAT@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter =
+                TableFormatter::new(FEAT_COLUMNS, "feature", "FEAT").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for feat in &features {
@@ -618,25 +526,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", feat.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Component | Type | Title | Dims | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for feat in &features {
-                let short_id = short_ids
-                    .get_short_id(&feat.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&feat.id),
-                    truncate_str(&feat.component, 13),
-                    feat.feature_type,
-                    feat.title,
-                    feat.dimensions.len(),
-                    feat.status()
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -664,123 +553,24 @@ fn output_cached_features(
     }
 
     match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,component,part_number,component_title,feature_type,title,status");
-            for feat in features {
-                let short_id = short_ids.get_short_id(&feat.id).unwrap_or_default();
-                let cmp_alias = short_ids
-                    .get_short_id(&feat.component_id)
-                    .unwrap_or_default();
-                let (part_number, cmp_title) = component_info
-                    .get(&feat.component_id)
-                    .map(|(pn, t)| (pn.as_str(), t.as_str()))
-                    .unwrap_or(("", ""));
-                println!(
-                    "{},{},{},{},{},{},{},{}",
-                    short_id,
-                    feat.id,
-                    cmp_alias,
-                    escape_csv(part_number),
-                    escape_csv(cmp_title),
-                    feat.feature_type,
-                    escape_csv(&feat.title),
-                    feat.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            let mut widths = vec![8usize];
-            for col in &args.columns {
-                let (header, width) = match col {
-                    ListColumn::Id => (style("ID").bold().to_string(), 17),
-                    ListColumn::Title => (style("TITLE").bold().to_string(), 20),
-                    ListColumn::Description => (style("DESCRIPTION").bold().to_string(), 30),
-                    ListColumn::FeatureType => (style("TYPE").bold().to_string(), 10),
-                    ListColumn::Component => (style("COMPONENT").bold().to_string(), 40),
-                    ListColumn::Status => (style("STATUS").bold().to_string(), 10),
-                    ListColumn::Author => (style("AUTHOR").bold().to_string(), 14),
-                    ListColumn::Created => (style("CREATED").bold().to_string(), 12),
-                };
-                header_parts.push(format!("{:<width$}", header, width = width));
-                widths.push(width);
-            }
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
+            let rows: Vec<TableRow> = features
+                .iter()
+                .map(|f| cached_feat_to_row(f, short_ids, component_info))
+                .collect();
 
-            for feat in features {
-                let short_id = short_ids.get_short_id(&feat.id).unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for (i, col) in args.columns.iter().enumerate() {
-                    let width = widths[i + 1];
-                    let value = match col {
-                        ListColumn::Id => format!(
-                            "{:<width$}",
-                            truncate_str(&feat.id, width - 2),
-                            width = width
-                        ),
-                        ListColumn::Title => format!(
-                            "{:<width$}",
-                            truncate_str(&feat.title, width - 2),
-                            width = width
-                        ),
-                        ListColumn::Description => format!("{:<width$}", "-", width = width), // No desc in cache
-                        ListColumn::FeatureType => {
-                            format!("{:<width$}", feat.feature_type, width = width)
-                        }
-                        ListColumn::Component => {
-                            // Show component alias, part number, and title
-                            let cmp_alias = short_ids
-                                .get_short_id(&feat.component_id)
-                                .unwrap_or_else(|| "?".to_string());
-                            let (part_number, cmp_title) = component_info
-                                .get(&feat.component_id)
-                                .map(|(pn, t)| (pn.as_str(), t.as_str()))
-                                .unwrap_or(("", ""));
-                            let display = if !part_number.is_empty() {
-                                format!(
-                                    "{} ({}) {}",
-                                    cmp_alias,
-                                    part_number,
-                                    truncate_str(cmp_title, 20)
-                                )
-                            } else if !cmp_title.is_empty() {
-                                format!("{} {}", cmp_alias, truncate_str(cmp_title, 25))
-                            } else {
-                                cmp_alias
-                            };
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&display, width - 2),
-                                width = width
-                            )
-                        }
-                        ListColumn::Status => format!("{:<width$}", feat.status, width = width),
-                        ListColumn::Author => format!(
-                            "{:<width$}",
-                            truncate_str(&feat.author, width - 2),
-                            width = width
-                        ),
-                        ListColumn::Created => {
-                            format!("{:<width$}", feat.created.format("%Y-%m-%d"), width = width)
-                        }
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} feature(s) found. Use {} to reference by short ID.",
-                style(features.len()).cyan(),
-                style("FEAT@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter =
+                TableFormatter::new(FEAT_COLUMNS, "feature", "FEAT").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for feat in features {
@@ -792,22 +582,6 @@ fn output_cached_features(
                 }
             }
         }
-        OutputFormat::Md => {
-            println!("| Short | ID | Component | Type | Title | Status |");
-            println!("|---|---|---|---|---|---|");
-            for feat in features {
-                let short_id = short_ids.get_short_id(&feat.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&feat.id, 15),
-                    truncate_str(&feat.component_id, 13),
-                    feat.feature_type,
-                    feat.title,
-                    feat.status
-                );
-            }
-        }
         OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             // Should never reach here
             unreachable!()
@@ -815,6 +589,74 @@ fn output_cached_features(
     }
 
     Ok(())
+}
+
+/// Format component display string from component_info map
+fn format_component_display(
+    component_id: &str,
+    short_ids: &ShortIdIndex,
+    component_info: &std::collections::HashMap<String, (String, String)>,
+) -> String {
+    let cmp_alias = short_ids
+        .get_short_id(component_id)
+        .unwrap_or_else(|| "?".to_string());
+    let (part_number, cmp_title) = component_info
+        .get(component_id)
+        .map(|(pn, t)| (pn.as_str(), t.as_str()))
+        .unwrap_or(("", ""));
+
+    if !part_number.is_empty() {
+        format!("{} ({}) {}", cmp_alias, part_number, cmp_title)
+    } else if !cmp_title.is_empty() {
+        format!("{} {}", cmp_alias, cmp_title)
+    } else {
+        cmp_alias
+    }
+}
+
+/// Convert a full Feature entity to a TableRow
+fn feat_to_row(
+    feat: &Feature,
+    short_ids: &ShortIdIndex,
+    component_info: &std::collections::HashMap<String, (String, String)>,
+) -> TableRow {
+    let component_display = format_component_display(&feat.component, short_ids, component_info);
+
+    TableRow::new(feat.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(feat.id.to_string()))
+        .cell("title", CellValue::Text(feat.title.clone()))
+        .cell(
+            "description",
+            CellValue::Text(feat.description.clone().unwrap_or_default()),
+        )
+        .cell(
+            "feature-type",
+            CellValue::Type(feat.feature_type.to_string()),
+        )
+        .cell("component", CellValue::Text(component_display))
+        .cell("status", CellValue::Status(feat.status.clone()))
+        .cell("author", CellValue::Text(feat.author.clone()))
+        .cell("created", CellValue::DateTime(feat.created))
+}
+
+/// Convert a cached feature to a TableRow
+fn cached_feat_to_row(
+    feat: &CachedFeature,
+    short_ids: &ShortIdIndex,
+    component_info: &std::collections::HashMap<String, (String, String)>,
+) -> TableRow {
+    let component_display =
+        format_component_display(&feat.component_id, short_ids, component_info);
+
+    TableRow::new(feat.id.clone(), short_ids)
+        .cell("id", CellValue::Id(feat.id.clone()))
+        .cell("title", CellValue::Text(feat.title.clone()))
+        .cell("description", CellValue::Text(String::new())) // No desc in cache
+        .cell("feature-type", CellValue::Type(feat.feature_type.clone()))
+        .cell("component", CellValue::Text(component_display))
+        .cell("status", CellValue::Type(feat.status.to_string()))
+        .cell("author", CellValue::Text(feat.author.clone()))
+        .cell("created", CellValue::DateTime(feat.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -949,78 +791,33 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Feat,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Feat,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
-        }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created feature {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-            println!(
-                "   Parent: {} | Type: {} | {}",
-                style(truncate_str(&component_id, 13)).yellow(),
-                style(&feature_type).cyan(),
-                style(&title).white()
-            );
-
-            // Show added links
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    let extra_info = format!(
+        "Parent: {} | Type: {} | {}",
+        style(truncate_str(&component_id, 13)).yellow(),
+        style(&feature_type).cyan(),
+        style(&title).white()
+    );
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &title,
+        Some(&extra_info),
+        &added_links,
+        global,
+    );
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1188,46 +985,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the feature file
-    let feat_dir = project.root().join("tolerances/features");
-    let mut found_path = None;
-
-    if feat_dir.exists() {
-        for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No feature found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {

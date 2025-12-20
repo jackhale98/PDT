@@ -8,7 +8,6 @@ use std::fs;
 use crate::cli::helpers::{escape_csv, truncate_str};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -434,6 +433,14 @@ pub struct ExpireArgs {
 /// Directories where deviations are stored
 const DEV_DIRS: &[&str] = &["manufacturing/deviations"];
 
+/// Entity configuration for deviation commands
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Dev,
+    dirs: DEV_DIRS,
+    name: "deviation",
+    name_plural: "deviations",
+};
+
 /// Run a deviation command
 pub fn run(cmd: DevCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -599,7 +606,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(deviations.iter().map(|d| d.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     match format {
@@ -846,33 +853,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Dev,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(_link_type) => {}
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        }
-    }
+    let _added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Dev,
+        &args.link,
+        &short_ids,
+    );
 
     // Output
     if !global.quiet {
@@ -1070,46 +1059,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 
 /// Edit a deviation
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the file
-    let dev_dir = project.root().join("manufacturing/deviations");
-    let mut found_path = None;
-
-    if dev_dir.exists() {
-        for entry in fs::read_dir(&dev_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No deviation found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 /// Delete a deviation

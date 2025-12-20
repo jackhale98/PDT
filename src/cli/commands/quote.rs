@@ -6,11 +6,12 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{format_short_id, truncate_str};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::CachedQuote;
@@ -50,17 +51,6 @@ pub enum QuoteStatusFilter {
     Accepted,
     Rejected,
     Expired,
-    All,
-}
-
-/// Entity status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
     All,
 }
 
@@ -124,6 +114,10 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text in columns (mobile-friendly output with specified width)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
 }
 
 /// Columns to display in list output
@@ -155,6 +149,19 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for quote list output
+const QUOTE_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("title", "TITLE", 20),
+    ColumnDef::new("supplier", "SUPPLIER", 15),
+    ColumnDef::new("component", "FOR", 12),
+    ColumnDef::new("price", "PRICE", 10),
+    ColumnDef::new("quote-status", "Q-STATUS", 10),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 14),
+    ColumnDef::new("created", "CREATED", 12),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
@@ -254,6 +261,14 @@ pub struct ArchiveArgs {
 /// Directories where quotes are stored
 const QUOTE_DIRS: &[&str] = &["bom/quotes"];
 
+/// Entity configuration for quotes
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Quot,
+    dirs: QUOTE_DIRS,
+    name: "quote",
+    name_plural: "quotes",
+};
+
 #[derive(clap::Args, Debug)]
 pub struct CompareArgs {
     /// Component or Assembly ID to compare quotes for
@@ -338,14 +353,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     if can_use_cache {
         if let Ok(cache) = EntityCache::open(&project) {
-            let status_filter = match args.status {
-                StatusFilter::Draft => Some("draft"),
-                StatusFilter::Review => Some("review"),
-                StatusFilter::Approved => Some("approved"),
-                StatusFilter::Released => Some("released"),
-                StatusFilter::Obsolete => Some("obsolete"),
-                StatusFilter::All => None,
-            };
+            let status_filter = crate::cli::entity_cmd::status_filter_to_str(args.status);
 
             let quote_status_filter = match args.quote_status {
                 QuoteStatusFilter::Pending => Some("pending"),
@@ -462,6 +470,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::Approved => q.status == crate::core::entity::Status::Approved,
             StatusFilter::Released => q.status == crate::core::entity::Status::Released,
             StatusFilter::Obsolete => q.status == crate::core::entity::Status::Obsolete,
+            StatusFilter::Active => q.status != crate::core::entity::Status::Obsolete,
             StatusFilter::All => true,
         })
         .filter(|q| {
@@ -556,7 +565,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(quotes.iter().map(|q| q.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {
@@ -573,103 +582,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&quotes).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!(
-                "short_id,id,title,supplier,linked_item,unit_price,lead_time,quote_status,status"
-            );
-            for quote in &quotes {
-                let short_id = short_ids
-                    .get_short_id(&quote.id.to_string())
-                    .unwrap_or_default();
-                let unit_price = quote
-                    .price_for_qty(1)
-                    .map_or("".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote
-                    .lead_time_days
-                    .map_or("".to_string(), |d| d.to_string());
-                let linked_item = quote.linked_item().unwrap_or("-");
-                let supplier_short = short_ids
-                    .get_short_id(&quote.supplier)
-                    .unwrap_or_else(|| quote.supplier.clone());
-                println!(
-                    "{},{},{},{},{},{},{},{},{}",
-                    short_id,
-                    quote.id,
-                    escape_csv(&quote.title),
-                    supplier_short,
-                    linked_item,
-                    unit_price,
-                    lead_time,
-                    quote.quote_status,
-                    quote.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
-                    ListColumn::Title => format!("{:<20}", style("TITLE").bold()),
-                    ListColumn::Supplier => format!("{:<15}", style("SUPPLIER").bold()),
-                    ListColumn::Component => format!("{:<12}", style("FOR").bold()),
-                    ListColumn::Price => format!("{:<10}", style("PRICE").bold()),
-                    ListColumn::QuoteStatus => format!("{:<10}", style("Q-STATUS").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(110));
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
+            let rows: Vec<TableRow> = quotes
+                .iter()
+                .map(|q| quote_to_row(q, &short_ids))
+                .collect();
 
-            for quote in &quotes {
-                let short_id = short_ids
-                    .get_short_id(&quote.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", format_short_id(&quote.id)),
-                        ListColumn::Title => format!("{:<20}", truncate_str(&quote.title, 18)),
-                        ListColumn::Supplier => {
-                            let supplier_short = short_ids
-                                .get_short_id(&quote.supplier)
-                                .unwrap_or_else(|| truncate_str(&quote.supplier, 13).to_string());
-                            format!("{:<15}", supplier_short)
-                        }
-                        ListColumn::Component => {
-                            let linked_item = quote.linked_item().unwrap_or("-");
-                            let item_short = short_ids
-                                .get_short_id(linked_item)
-                                .unwrap_or_else(|| truncate_str(linked_item, 10).to_string());
-                            format!("{:<12}", item_short)
-                        }
-                        ListColumn::Price => {
-                            let unit_price = quote
-                                .price_for_qty(1)
-                                .map_or("-".to_string(), |p| format!("{:.2}", p));
-                            format!("{:<10}", unit_price)
-                        }
-                        ListColumn::QuoteStatus => format!("{:<10}", quote.quote_status),
-                        ListColumn::Status => format!("{:<10}", quote.status),
-                        ListColumn::Author => format!("{:<14}", truncate_str(&quote.author, 12)),
-                        ListColumn::Created => format!("{:<12}", quote.created.format("%Y-%m-%d")),
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} quote(s) found. Use {} to reference by short ID.",
-                style(quotes.len()).cyan(),
-                style("QUOT@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter =
+                TableFormatter::new(QUOTE_COLUMNS, "quote", "QUOT").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for quote in &quotes {
@@ -681,36 +611,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 } else {
                     println!("{}", quote.id);
                 }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Supplier | For | Price | Lead | Q-Status |");
-            println!("|---|---|---|---|---|---|---|---|");
-            for quote in &quotes {
-                let short_id = short_ids
-                    .get_short_id(&quote.id.to_string())
-                    .unwrap_or_default();
-                let unit_price = quote
-                    .price_for_qty(1)
-                    .map_or("-".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote
-                    .lead_time_days
-                    .map_or("-".to_string(), |d| format!("{}d", d));
-                let linked_item = quote.linked_item().unwrap_or("-");
-                let supplier_short = short_ids
-                    .get_short_id(&quote.supplier)
-                    .unwrap_or_else(|| quote.supplier.clone());
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&quote.id),
-                    quote.title,
-                    supplier_short,
-                    linked_item,
-                    unit_price,
-                    lead_time,
-                    quote.quote_status
-                );
             }
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
@@ -737,109 +637,24 @@ fn output_cached_quotes(
     }
 
     match format {
-        OutputFormat::Csv => {
-            println!(
-                "short_id,id,title,supplier,linked_item,unit_price,lead_time,quote_status,status"
-            );
-            for quote in quotes {
-                let short_id = short_ids.get_short_id(&quote.id).unwrap_or_default();
-                let unit_price = quote
-                    .unit_price
-                    .map_or("".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote
-                    .lead_time_days
-                    .map_or("".to_string(), |d| d.to_string());
-                let linked_item = quote.component_id.as_deref().unwrap_or("-");
-                let supplier_short = quote
-                    .supplier_id
-                    .as_ref()
-                    .map(|s| short_ids.get_short_id(s).unwrap_or_else(|| s.clone()))
-                    .unwrap_or_else(|| "-".to_string());
-                println!(
-                    "{},{},{},{},{},{},{},{},{}",
-                    short_id,
-                    quote.id,
-                    escape_csv(&quote.title),
-                    supplier_short,
-                    linked_item,
-                    unit_price,
-                    lead_time,
-                    quote.quote_status.as_deref().unwrap_or("-"),
-                    quote.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
-                    ListColumn::Title => format!("{:<20}", style("TITLE").bold()),
-                    ListColumn::Supplier => format!("{:<15}", style("SUPPLIER").bold()),
-                    ListColumn::Component => format!("{:<12}", style("FOR").bold()),
-                    ListColumn::Price => format!("{:<10}", style("PRICE").bold()),
-                    ListColumn::QuoteStatus => format!("{:<10}", style("Q-STATUS").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::Author => format!("{:<14}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(110));
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+            let columns: Vec<&str> = args
+                .columns
+                .iter()
+                .map(|c| c.to_string().leak() as &str)
+                .collect();
+            let rows: Vec<TableRow> = quotes
+                .iter()
+                .map(|q| cached_quote_to_row(q, short_ids))
+                .collect();
 
-            for quote in quotes {
-                let short_id = short_ids.get_short_id(&quote.id).unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", truncate_str(&quote.id, 15)),
-                        ListColumn::Title => format!("{:<20}", truncate_str(&quote.title, 18)),
-                        ListColumn::Supplier => {
-                            let supplier_short = quote
-                                .supplier_id
-                                .as_ref()
-                                .map(|s| {
-                                    short_ids
-                                        .get_short_id(s)
-                                        .unwrap_or_else(|| truncate_str(s, 13).to_string())
-                                })
-                                .unwrap_or_else(|| "-".to_string());
-                            format!("{:<15}", supplier_short)
-                        }
-                        ListColumn::Component => {
-                            let linked_item = quote.component_id.as_deref().unwrap_or("-");
-                            let item_short = short_ids
-                                .get_short_id(linked_item)
-                                .unwrap_or_else(|| truncate_str(linked_item, 10).to_string());
-                            format!("{:<12}", item_short)
-                        }
-                        ListColumn::Price => {
-                            let unit_price = quote
-                                .unit_price
-                                .map_or("-".to_string(), |p| format!("{:.2}", p));
-                            format!("{:<10}", unit_price)
-                        }
-                        ListColumn::QuoteStatus => {
-                            format!("{:<10}", quote.quote_status.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Status => format!("{:<10}", quote.status),
-                        ListColumn::Author => format!("{:<14}", truncate_str(&quote.author, 12)),
-                        ListColumn::Created => format!("{:<12}", quote.created.format("%Y-%m-%d")),
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} quote(s) found. Use {} to reference by short ID.",
-                style(quotes.len()).cyan(),
-                style("QUOT@N").cyan()
-            );
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter =
+                TableFormatter::new(QUOTE_COLUMNS, "quote", "QUOT").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for quote in quotes {
@@ -851,36 +666,6 @@ fn output_cached_quotes(
                 }
             }
         }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Supplier | For | Price | Lead | Q-Status |");
-            println!("|---|---|---|---|---|---|---|---|");
-            for quote in quotes {
-                let short_id = short_ids.get_short_id(&quote.id).unwrap_or_default();
-                let unit_price = quote
-                    .unit_price
-                    .map_or("-".to_string(), |p| format!("{:.2}", p));
-                let lead_time = quote
-                    .lead_time_days
-                    .map_or("-".to_string(), |d| format!("{}d", d));
-                let linked_item = quote.component_id.as_deref().unwrap_or("-");
-                let supplier_short = quote
-                    .supplier_id
-                    .as_ref()
-                    .map(|s| short_ids.get_short_id(s).unwrap_or_else(|| s.clone()))
-                    .unwrap_or_else(|| "-".to_string());
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&quote.id, 15),
-                    quote.title,
-                    supplier_short,
-                    linked_item,
-                    unit_price,
-                    lead_time,
-                    quote.quote_status.as_deref().unwrap_or("-")
-                );
-            }
-        }
         OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
             // Should never reach here - JSON/YAML use full YAML path
             unreachable!()
@@ -888,6 +673,68 @@ fn output_cached_quotes(
     }
 
     Ok(())
+}
+
+/// Convert a full Quote entity to a TableRow
+fn quote_to_row(quote: &Quote, short_ids: &ShortIdIndex) -> TableRow {
+    let supplier_display = short_ids
+        .get_short_id(&quote.supplier)
+        .unwrap_or_else(|| quote.supplier.clone());
+
+    let linked_item = quote.linked_item().unwrap_or("-");
+    let component_display = short_ids
+        .get_short_id(linked_item)
+        .unwrap_or_else(|| linked_item.to_string());
+
+    let unit_price = quote
+        .price_for_qty(1)
+        .map_or("-".to_string(), |p| format!("{:.2}", p));
+
+    TableRow::new(quote.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(quote.id.to_string()))
+        .cell("title", CellValue::Text(quote.title.clone()))
+        .cell("supplier", CellValue::Text(supplier_display))
+        .cell("component", CellValue::Text(component_display))
+        .cell("price", CellValue::Text(unit_price))
+        .cell(
+            "quote-status",
+            CellValue::Type(quote.quote_status.to_string()),
+        )
+        .cell("status", CellValue::Type(quote.status.to_string()))
+        .cell("author", CellValue::Text(quote.author.clone()))
+        .cell("created", CellValue::DateTime(quote.created))
+}
+
+/// Convert a cached quote to a TableRow
+fn cached_quote_to_row(quote: &CachedQuote, short_ids: &ShortIdIndex) -> TableRow {
+    let supplier_display = quote
+        .supplier_id
+        .as_ref()
+        .map(|s| short_ids.get_short_id(s).unwrap_or_else(|| s.clone()))
+        .unwrap_or_else(|| "-".to_string());
+
+    let linked_item = quote.component_id.as_deref().unwrap_or("-");
+    let component_display = short_ids
+        .get_short_id(linked_item)
+        .unwrap_or_else(|| linked_item.to_string());
+
+    let unit_price = quote
+        .unit_price
+        .map_or("-".to_string(), |p| format!("{:.2}", p));
+
+    TableRow::new(quote.id.clone(), short_ids)
+        .cell("id", CellValue::Id(quote.id.clone()))
+        .cell("title", CellValue::Text(quote.title.clone()))
+        .cell("supplier", CellValue::Text(supplier_display))
+        .cell("component", CellValue::Text(component_display))
+        .cell("price", CellValue::Text(unit_price))
+        .cell(
+            "quote-status",
+            CellValue::Type(quote.quote_status.clone().unwrap_or_default()),
+        )
+        .cell("status", CellValue::Type(quote.status.to_string()))
+        .cell("author", CellValue::Text(quote.author.clone()))
+        .cell("created", CellValue::DateTime(quote.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -1062,38 +909,15 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Quot,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Quot,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
     match global.format {
@@ -1334,41 +1158,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the quote file
-    let quote_dir = project.root().join("bom/quotes");
-    let mut found_path = None;
-
-    if quote_dir.exists() {
-        for entry in fs::read_dir(&quote_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No quote found matching '{}'", args.id))?;
-
-    // Open in editor
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {
@@ -1431,7 +1221,7 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(quotes.iter().map(|q| q.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output comparison
     let format = match global.format {

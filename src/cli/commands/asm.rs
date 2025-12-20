@@ -7,10 +7,11 @@ use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::{escape_csv, truncate_str};
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -83,17 +84,30 @@ impl fmt::Display for ListColumn {
     }
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    /// All statuses
-    All,
+impl ListColumn {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ListColumn::Short => "short",
+            ListColumn::Id => "id",
+            ListColumn::PartNumber => "part-number",
+            ListColumn::Title => "title",
+            ListColumn::Status => "status",
+            ListColumn::Author => "author",
+            ListColumn::Created => "created",
+        }
+    }
 }
+
+/// Column definitions for TableFormatter
+const ASM_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("short", "SHORT", 8),
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("part-number", "PART #", 12),
+    ColumnDef::new("title", "TITLE", 30),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 15),
+    ColumnDef::new("created", "CREATED", 20),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -136,6 +150,10 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap output for mobile/narrow terminals (specify width, e.g., -w 60)
+    #[arg(short = 'w', long)]
+    pub wrap: Option<usize>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -215,6 +233,14 @@ pub struct ArchiveArgs {
 
 /// Directories where assemblies are stored
 const ASSEMBLY_DIRS: &[&str] = &["bom/assemblies"];
+
+/// Entity configuration for assemblies
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Asm,
+    dirs: ASSEMBLY_DIRS,
+    name: "assembly",
+    name_plural: "assemblies",
+};
 
 #[derive(clap::Args, Debug)]
 pub struct BomArgs {
@@ -349,6 +375,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             StatusFilter::Approved => a.status == crate::core::entity::Status::Approved,
             StatusFilter::Released => a.status == crate::core::entity::Status::Released,
             StatusFilter::Obsolete => a.status == crate::core::entity::Status::Obsolete,
+            StatusFilter::Active => a.status != crate::core::entity::Status::Obsolete,
             StatusFilter::All => true,
         })
         .filter(|a| {
@@ -454,7 +481,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(assemblies.iter().map(|a| a.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
+
+    // Build rows for table output
+    let rows: Vec<TableRow> = assemblies
+        .iter()
+        .map(|asm| asm_to_row(asm, &short_ids))
+        .collect();
+
+    // Map ListColumn to column name strings
+    let columns: Vec<&str> = args.columns.iter().map(|c| c.as_str()).collect();
 
     // Output based on format
     let format = match global.format {
@@ -471,131 +507,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&assemblies).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,part_number,revision,title,bom_items,status");
-            for asm in &assemblies {
-                let short_id = short_ids
-                    .get_short_id(&asm.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    asm.id,
-                    asm.part_number,
-                    asm.revision.as_deref().unwrap_or(""),
-                    escape_csv(&asm.title),
-                    asm.bom.len(),
-                    asm.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build dynamic header based on columns
-            let mut header_parts = Vec::new();
-            let mut header_widths = Vec::new();
-
-            for col in &args.columns {
-                match col {
-                    ListColumn::Short => {
-                        header_parts.push(style("SHORT").bold().to_string());
-                        header_widths.push(8);
-                    }
-                    ListColumn::Id => {
-                        header_parts.push(style("ID").bold().to_string());
-                        header_widths.push(17);
-                    }
-                    ListColumn::PartNumber => {
-                        header_parts.push(style("PART #").bold().to_string());
-                        header_widths.push(12);
-                    }
-                    ListColumn::Title => {
-                        header_parts.push(style("TITLE").bold().to_string());
-                        header_widths.push(30);
-                    }
-                    ListColumn::Status => {
-                        header_parts.push(style("STATUS").bold().to_string());
-                        header_widths.push(10);
-                    }
-                    ListColumn::Author => {
-                        header_parts.push(style("AUTHOR").bold().to_string());
-                        header_widths.push(15);
-                    }
-                    ListColumn::Created => {
-                        header_parts.push(style("CREATED").bold().to_string());
-                        header_widths.push(20);
-                    }
-                }
-            }
-
-            // Print header
-            for (i, part) in header_parts.iter().enumerate() {
-                if i > 0 {
-                    print!(" ");
-                }
-                print!("{:<width$}", part, width = header_widths[i]);
-            }
-            println!();
-            println!(
-                "{}",
-                "-".repeat(header_widths.iter().sum::<usize>() + args.columns.len() - 1)
-            );
-
-            // Print rows
-            for asm in &assemblies {
-                for (i, col) in args.columns.iter().enumerate() {
-                    if i > 0 {
-                        print!(" ");
-                    }
-                    let width = header_widths[i];
-                    match col {
-                        ListColumn::Short => {
-                            let short_id = short_ids
-                                .get_short_id(&asm.id.to_string())
-                                .unwrap_or_else(|| "?".to_string());
-                            print!("{:<width$}", short_id, width = width);
-                        }
-                        ListColumn::Id => {
-                            print!("{:<width$}", format_short_id(&asm.id), width = width);
-                        }
-                        ListColumn::PartNumber => {
-                            print!(
-                                "{:<width$}",
-                                truncate_str(&asm.part_number, width - 2),
-                                width = width
-                            );
-                        }
-                        ListColumn::Title => {
-                            print!(
-                                "{:<width$}",
-                                truncate_str(&asm.title, width - 2),
-                                width = width
-                            );
-                        }
-                        ListColumn::Status => {
-                            print!("{:<width$}", asm.status, width = width);
-                        }
-                        ListColumn::Author => {
-                            print!(
-                                "{:<width$}",
-                                truncate_str(&asm.author, width - 2),
-                                width = width
-                            );
-                        }
-                        ListColumn::Created => {
-                            print!(
-                                "{:<width$}",
-                                asm.created.format("%Y-%m-%d %H:%M"),
-                                width = width
-                            );
-                        }
-                    }
-                }
-                println!();
-            }
-
-            println!();
-            println!("{} assembly(s) found.", style(assemblies.len()).cyan());
-        }
         OutputFormat::Id | OutputFormat::ShortId => {
             for asm in &assemblies {
                 if format == OutputFormat::ShortId {
@@ -608,28 +519,30 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 }
             }
         }
-        OutputFormat::Md => {
-            println!("| Short | ID | Part # | Title | BOM Items | Status |");
-            println!("|---|---|---|---|---|---|");
-            for asm in &assemblies {
-                let short_id = short_ids
-                    .get_short_id(&asm.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&asm.id),
-                    asm.part_number,
-                    asm.title,
-                    asm.bom.len(),
-                    asm.status
-                );
-            }
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md => {
+            let config = TableConfig {
+                wrap_width: args.wrap,
+                show_summary: true,
+            };
+            let formatter = TableFormatter::new(ASM_COLUMNS, "assembly", "ASM").with_config(config);
+            formatter.output(rows, format, &columns);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
+}
+
+/// Convert an Assembly to a TableRow
+fn asm_to_row(asm: &Assembly, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(asm.id.to_string(), short_ids)
+        .cell("short", CellValue::ShortId(asm.id.to_string()))
+        .cell("id", CellValue::Id(asm.id.to_string()))
+        .cell("part-number", CellValue::Text(asm.part_number.clone()))
+        .cell("title", CellValue::Text(asm.title.clone()))
+        .cell("status", CellValue::Status(asm.status.clone()))
+        .cell("author", CellValue::Text(asm.author.clone()))
+        .cell("created", CellValue::DateTime(asm.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -716,77 +629,32 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Asm,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Asm,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
-        }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created assembly {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-            println!(
-                "   Part: {} | {}",
-                style(&part_number).yellow(),
-                style(&title).white()
-            );
-
-            // Show added links
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    let extra_info = format!(
+        "Part: {} | {}",
+        style(&part_number).yellow(),
+        style(&title).white()
+    );
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &title,
+        Some(&extra_info),
+        &added_links,
+        global,
+    );
 
     // Handle BOM items if provided
     if !args.bom.is_empty() {
@@ -976,46 +844,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the assembly file
-    let asm_dir = project.root().join("bom/assemblies");
-    let mut found_path = None;
-
-    if asm_dir.exists() {
-        for entry in fs::read_dir(&asm_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path =
-        found_path.ok_or_else(|| miette::miette!("No assembly found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {

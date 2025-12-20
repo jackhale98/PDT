@@ -6,11 +6,11 @@ use miette::{IntoDiagnostic, Result};
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -63,16 +63,15 @@ impl std::fmt::Display for ListColumn {
     }
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    All,
-}
+/// Column definitions for work instruction list output
+const WORK_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("doc-number", "DOC #", 14),
+    ColumnDef::new("title", "TITLE", 30),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 20),
+    ColumnDef::new("created", "CREATED", 20),
+];
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -98,7 +97,6 @@ pub struct ListArgs {
 
     /// Columns to display
     #[arg(long, short = 'c', value_delimiter = ',', default_values_t = vec![
-        ListColumn::Id,
         ListColumn::DocNumber,
         ListColumn::Title,
         ListColumn::Status,
@@ -120,6 +118,14 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text at specified width (for mobile-friendly display)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show full ID column (hidden by default since SHORT is always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -196,6 +202,14 @@ pub struct ArchiveArgs {
 /// Directories where work instructions are stored
 const WORK_INSTRUCTION_DIRS: &[&str] = &["manufacturing/work_instructions"];
 
+/// Entity configuration for work instructions
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Work,
+    dirs: WORK_INSTRUCTION_DIRS,
+    name: "work instruction",
+    name_plural: "work instructions",
+};
+
 /// Run a work instruction subcommand
 pub fn run(cmd: WorkCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -230,18 +244,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
 
     if can_use_cache {
         if let Ok(cache) = EntityCache::open(&project) {
-            let status_filter = match args.status {
-                StatusFilter::Draft => Some("draft"),
-                StatusFilter::Review => Some("review"),
-                StatusFilter::Approved => Some("approved"),
-                StatusFilter::Released => Some("released"),
-                StatusFilter::Obsolete => Some("obsolete"),
-                StatusFilter::All => None,
-            };
-
             let filter = crate::core::cache::EntityFilter {
                 prefix: Some(EntityPrefix::Work),
-                status: status_filter.map(|s| s.to_string()),
+                status: crate::cli::entity_cmd::status_filter_to_status(args.status),
                 author: args.author.clone(),
                 search: None,
                 limit: None,
@@ -311,14 +316,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Apply filters
     let work_instructions: Vec<WorkInstruction> = work_instructions
         .into_iter()
-        .filter(|w| match args.status {
-            StatusFilter::Draft => w.status == crate::core::entity::Status::Draft,
-            StatusFilter::Review => w.status == crate::core::entity::Status::Review,
-            StatusFilter::Approved => w.status == crate::core::entity::Status::Approved,
-            StatusFilter::Released => w.status == crate::core::entity::Status::Released,
-            StatusFilter::Obsolete => w.status == crate::core::entity::Status::Obsolete,
-            StatusFilter::All => true,
-        })
+        .filter(|w| crate::cli::entity_cmd::status_enum_matches_filter(&w.status, args.status))
         .filter(|w| {
             if let Some(ref proc_id) = process_filter {
                 w.links
@@ -399,7 +397,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = short_ids;
     short_ids.ensure_all(work_instructions.iter().map(|w| w.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     match format {
         OutputFormat::Json => {
@@ -410,148 +408,45 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&work_instructions).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,doc_number,title,steps,duration,status");
-            for work in &work_instructions {
-                let short_id = short_ids
-                    .get_short_id(&work.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{}",
-                    short_id,
-                    work.id,
-                    work.document_number.as_deref().unwrap_or(""),
-                    escape_csv(&work.title),
-                    work.procedure.len(),
-                    work.estimated_duration_minutes
-                        .map_or(String::new(), |d| format!("{:.0}", d)),
-                    work.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on columns
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
-
-            for col in &args.columns {
-                match col {
-                    ListColumn::Id => {
-                        header_parts.push(format!("{:<17}", style("ID").bold()));
-                        widths.push(17);
-                    }
-                    ListColumn::Title => {
-                        header_parts.push(format!("{:<30}", style("TITLE").bold()));
-                        widths.push(30);
-                    }
-                    ListColumn::DocNumber => {
-                        header_parts.push(format!("{:<14}", style("DOC #").bold()));
-                        widths.push(14);
-                    }
-                    ListColumn::Status => {
-                        header_parts.push(format!("{:<10}", style("STATUS").bold()));
-                        widths.push(10);
-                    }
-                    ListColumn::Author => {
-                        header_parts.push(format!("{:<20}", style("AUTHOR").bold()));
-                        widths.push(20);
-                    }
-                    ListColumn::Created => {
-                        header_parts.push(format!("{:<20}", style("CREATED").bold()));
-                        widths.push(20);
-                    }
-                }
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+            // Build visible columns list
+            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            if args.show_id && !visible.contains(&"id") {
+                visible.insert(0, "id");
             }
 
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
+            // Convert to TableRows
+            let rows: Vec<TableRow> = work_instructions
+                .iter()
+                .map(|work| work_instruction_to_row(work, &short_ids))
+                .collect();
 
-            for work in &work_instructions {
-                let mut row_parts = Vec::new();
+            // Configure table
+            let config = if let Some(width) = args.wrap {
+                TableConfig::with_wrap(width)
+            } else {
+                TableConfig::default()
+            };
 
-                for (col, width) in args.columns.iter().zip(&widths) {
-                    let value = match col {
-                        ListColumn::Id => {
-                            let id_display = format_short_id(&work.id);
-                            format!("{:<width$}", id_display, width = width)
-                        }
-                        ListColumn::Title => {
-                            let title_truncated = truncate_str(&work.title, width - 2);
-                            format!("{:<width$}", title_truncated, width = width)
-                        }
-                        ListColumn::DocNumber => {
-                            let doc_num = truncate_str(
-                                work.document_number.as_deref().unwrap_or("-"),
-                                width - 2,
-                            );
-                            format!("{:<width$}", doc_num, width = width)
-                        }
-                        ListColumn::Status => {
-                            format!("{:<width$}", work.status, width = width)
-                        }
-                        ListColumn::Author => {
-                            let author = truncate_str(&work.author, width - 2);
-                            format!("{:<width$}", author, width = width)
-                        }
-                        ListColumn::Created => {
-                            let created = work.created.format("%Y-%m-%d %H:%M").to_string();
-                            format!("{:<width$}", created, width = width)
-                        }
-                    };
-                    row_parts.push(value);
-                }
-
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} work instruction(s) found. Use {} to reference by short ID.",
-                style(work_instructions.len()).cyan(),
-                style("WORK@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for work in &work_instructions {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&work.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", work.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Doc # | Title | Steps | Time | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for work in &work_instructions {
-                let short_id = short_ids
-                    .get_short_id(&work.id.to_string())
-                    .unwrap_or_default();
-                let duration_str = work
-                    .estimated_duration_minutes
-                    .map_or("-".to_string(), |d| format!("{:.0}m", d));
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&work.id),
-                    work.document_number.as_deref().unwrap_or("-"),
-                    work.title,
-                    work.procedure.len(),
-                    duration_str,
-                    work.status
-                );
-            }
+            let formatter = TableFormatter::new(WORK_COLUMNS, "work instruction", "WORK")
+                .with_config(config);
+            formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
+}
+
+/// Convert a WorkInstruction to a TableRow
+fn work_instruction_to_row(work: &WorkInstruction, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(work.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(work.id.to_string()))
+        .cell("doc-number", CellValue::Text(work.document_number.clone().unwrap_or_else(|| "-".to_string())))
+        .cell("title", CellValue::Text(work.title.clone()))
+        .cell("status", CellValue::Status(work.status))
+        .cell("author", CellValue::Text(work.author.clone()))
+        .cell("created", CellValue::DateTime(work.created))
 }
 
 /// Output cached work instructions (fast path - no YAML parsing needed)
@@ -571,145 +466,41 @@ fn output_cached_work_instructions(
         return Ok(());
     }
 
-    match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,title,status");
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{}",
-                    short_id,
-                    entity.id,
-                    escape_csv(&entity.title),
-                    entity.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on columns
-            let mut header_parts = Vec::new();
-            let mut widths = Vec::new();
-
-            for col in &args.columns {
-                match col {
-                    ListColumn::Id => {
-                        header_parts.push(format!("{:<20}", style("SHORT").bold()));
-                        widths.push(20);
-                    }
-                    ListColumn::Title => {
-                        header_parts.push(format!("{:<35}", style("TITLE").bold()));
-                        widths.push(35);
-                    }
-                    ListColumn::DocNumber => {
-                        header_parts.push(format!("{:<15}", style("DOC #").bold()));
-                        widths.push(15);
-                    }
-                    ListColumn::Status => {
-                        header_parts.push(format!("{:<10}", style("STATUS").bold()));
-                        widths.push(10);
-                    }
-                    ListColumn::Author => {
-                        header_parts.push(format!("{:<15}", style("AUTHOR").bold()));
-                        widths.push(15);
-                    }
-                    ListColumn::Created => {
-                        header_parts.push(format!("{:<20}", style("CREATED").bold()));
-                        widths.push(20);
-                    }
-                }
-            }
-
-            println!("{}", header_parts.join(" "));
-            println!(
-                "{}",
-                "-".repeat(widths.iter().sum::<usize>() + widths.len() - 1)
-            );
-
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                let mut row_parts = Vec::new();
-
-                for (col, width) in args.columns.iter().zip(&widths) {
-                    let value = match col {
-                        ListColumn::Id => {
-                            let id_str = if short_id.is_empty() {
-                                truncate_str(&entity.id, *width)
-                            } else {
-                                short_id.clone()
-                            };
-                            format!("{:<width$}", style(&id_str).cyan(), width = width)
-                        }
-                        ListColumn::Title => {
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&entity.title, *width - 2),
-                                width = width
-                            )
-                        }
-                        ListColumn::DocNumber => {
-                            format!("{:<width$}", "-", width = width) // Not in cache
-                        }
-                        ListColumn::Status => {
-                            format!("{:<width$}", entity.status, width = width)
-                        }
-                        ListColumn::Author => {
-                            format!(
-                                "{:<width$}",
-                                truncate_str(&entity.author, *width - 2),
-                                width = width
-                            )
-                        }
-                        ListColumn::Created => {
-                            format!(
-                                "{:<width$}",
-                                entity.created.format("%Y-%m-%d %H:%M"),
-                                width = width
-                            )
-                        }
-                    };
-                    row_parts.push(value);
-                }
-
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} work instruction(s) found. Use {} to reference by short ID.",
-                style(entities.len()).cyan(),
-                style("WORK@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for entity in entities {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", entity.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Title | Status |");
-            println!("|---|---|---|---|");
-            for entity in entities {
-                let short_id = short_ids.get_short_id(&entity.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&entity.id, 15),
-                    entity.title,
-                    entity.status
-                );
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
-            unreachable!()
-        }
+    // Build visible columns list
+    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    if args.show_id && !visible.contains(&"id") {
+        visible.insert(0, "id");
     }
 
+    // Convert to TableRows
+    let rows: Vec<TableRow> = entities
+        .iter()
+        .map(|entity| cached_entity_to_row(entity, short_ids))
+        .collect();
+
+    // Configure table
+    let config = if let Some(width) = args.wrap {
+        TableConfig::with_wrap(width)
+    } else {
+        TableConfig::default()
+    };
+
+    let formatter = TableFormatter::new(WORK_COLUMNS, "work instruction", "WORK")
+        .with_config(config);
+    formatter.output(rows, format, &visible);
+
     Ok(())
+}
+
+/// Convert a CachedEntity to a TableRow for work instructions
+fn cached_entity_to_row(entity: &crate::core::CachedEntity, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(entity.id.clone(), short_ids)
+        .cell("id", CellValue::Id(entity.id.clone()))
+        .cell("doc-number", CellValue::Text("-".to_string())) // Not in cache
+        .cell("title", CellValue::Text(entity.title.clone()))
+        .cell("status", CellValue::Status(entity.status))
+        .cell("author", CellValue::Text(entity.author.clone()))
+        .cell("created", CellValue::DateTime(entity.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -788,76 +579,28 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Work,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links =
+        crate::cli::entity_cmd::process_link_flags(&file_path, EntityPrefix::Work, &args.link, &short_ids);
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
-        }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created work instruction {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-            println!("   {}", style(&title).white());
-            if let Some(ref doc_num) = args.doc_number {
-                println!("   Doc: {}", style(doc_num).yellow());
-            }
-
-            // Show added links
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    let extra_info = if let Some(ref doc_num) = args.doc_number {
+        format!("{}\n   Doc: {}", style(&title).white(), style(doc_num).yellow())
+    } else {
+        format!("{}", style(&title).white())
+    };
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &title,
+        Some(&extra_info),
+        &added_links,
+        global,
+    );
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1028,46 +771,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids
-        .resolve(&args.id)
-        .unwrap_or_else(|| args.id.clone());
-
-    // Find the work instruction file
-    let work_dir = project.root().join("manufacturing/work_instructions");
-    let mut found_path = None;
-
-    if work_dir.exists() {
-        for entry in fs::read_dir(&work_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path = found_path
-        .ok_or_else(|| miette::miette!("No work instruction found matching '{}'", args.id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&args.id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {

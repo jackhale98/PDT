@@ -7,11 +7,12 @@ use std::collections::HashSet;
 use std::fs;
 
 use crate::cli::commands::utils::format_link_with_title;
-use crate::cli::helpers::{escape_csv, format_short_id, resolve_id_arg, truncate_str};
+use crate::cli::filters::StatusFilter;
+use crate::cli::helpers::resolve_id_arg;
+use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
-use crate::core::links::add_inferred_link;
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
@@ -104,18 +105,6 @@ impl std::fmt::Display for CliComponentCategory {
     }
 }
 
-/// Status filter
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum StatusFilter {
-    Draft,
-    Review,
-    Approved,
-    Released,
-    Obsolete,
-    /// All statuses
-    All,
-}
-
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by make/buy decision
@@ -164,7 +153,6 @@ pub struct ListArgs {
 
     /// Columns to display (can specify multiple)
     #[arg(long, value_delimiter = ',', default_values_t = vec![
-        ListColumn::Id,
         ListColumn::PartNumber,
         ListColumn::Title,
         ListColumn::MakeBuy,
@@ -188,6 +176,14 @@ pub struct ListArgs {
     /// Show only count
     #[arg(long)]
     pub count: bool,
+
+    /// Wrap text at specified width (for mobile-friendly display)
+    #[arg(long, short = 'w')]
+    pub wrap: Option<usize>,
+
+    /// Show full ID column (hidden by default since SHORT is always shown)
+    #[arg(long)]
+    pub show_id: bool,
 }
 
 /// Columns to display in list output
@@ -219,6 +215,19 @@ impl std::fmt::Display for ListColumn {
         }
     }
 }
+
+/// Column definitions for component list output
+const CMP_COLUMNS: &[ColumnDef] = &[
+    ColumnDef::new("id", "ID", 17),
+    ColumnDef::new("part-number", "PART #", 12),
+    ColumnDef::new("revision", "REV", 8),
+    ColumnDef::new("title", "TITLE", 30),
+    ColumnDef::new("make-buy", "M/B", 6),
+    ColumnDef::new("category", "CATEGORY", 12),
+    ColumnDef::new("status", "STATUS", 10),
+    ColumnDef::new("author", "AUTHOR", 16),
+    ColumnDef::new("created", "CREATED", 12),
+];
 
 /// Sort field (reuses ListColumn for consistency)
 pub type SortField = ListColumn;
@@ -313,6 +322,14 @@ pub struct ArchiveArgs {
 /// Directories where components are stored
 const COMPONENT_DIRS: &[&str] = &["bom/components"];
 
+/// Entity configuration for components
+const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
+    prefix: EntityPrefix::Cmp,
+    dirs: COMPONENT_DIRS,
+    name: "component",
+    name_plural: "components",
+};
+
 #[derive(clap::Args, Debug)]
 pub struct SetQuoteArgs {
     /// Component ID or short ID (CMP@N)
@@ -371,14 +388,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         let cache = EntityCache::open(&project)?;
 
         // Convert filters to cache-compatible format
-        let status_filter = match args.status {
-            StatusFilter::Draft => Some("draft"),
-            StatusFilter::Review => Some("review"),
-            StatusFilter::Approved => Some("approved"),
-            StatusFilter::Released => Some("released"),
-            StatusFilter::Obsolete => Some("obsolete"),
-            StatusFilter::All => None,
-        };
+        let status_filter = crate::cli::entity_cmd::status_filter_to_str(args.status);
 
         let make_buy_filter = match args.make_buy {
             MakeBuyFilter::Make => Some("make"),
@@ -448,7 +458,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Update short ID index
         let mut short_ids = ShortIdIndex::load(&project);
         short_ids.ensure_all(cached_cmps.iter().map(|c| c.id.clone()));
-        let _ = short_ids.save(&project);
+        super::utils::save_short_ids(&mut short_ids, &project);
 
         // Output from cached data
         return output_cached_components(&cached_cmps, &short_ids, &args, output_format);
@@ -497,14 +507,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             CategoryFilter::Consumable => c.category == ComponentCategory::Consumable,
             CategoryFilter::All => true,
         })
-        .filter(|c| match args.status {
-            StatusFilter::Draft => c.status == crate::core::entity::Status::Draft,
-            StatusFilter::Review => c.status == crate::core::entity::Status::Review,
-            StatusFilter::Approved => c.status == crate::core::entity::Status::Approved,
-            StatusFilter::Released => c.status == crate::core::entity::Status::Released,
-            StatusFilter::Obsolete => c.status == crate::core::entity::Status::Obsolete,
-            StatusFilter::All => true,
-        })
+        .filter(|c| crate::cli::entity_cmd::status_enum_matches_filter(&c.status, args.status))
         .filter(|c| {
             if let Some(ref search) = args.search {
                 let search_lower = search.to_lowercase();
@@ -643,7 +646,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     short_ids.ensure_all(components.iter().map(|c| c.id.to_string()));
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
     let format = match global.format {
@@ -660,120 +663,48 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&components).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv => {
-            println!("short_id,id,part_number,revision,title,make_buy,category,status");
-            for cmp in &components {
-                let short_id = short_ids
-                    .get_short_id(&cmp.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{},{}",
-                    short_id,
-                    cmp.id,
-                    cmp.part_number,
-                    cmp.revision.as_deref().unwrap_or(""),
-                    escape_csv(&cmp.title),
-                    cmp.make_buy,
-                    cmp.category,
-                    cmp.status
-                );
-            }
-        }
-        OutputFormat::Tsv => {
-            // Build header based on selected columns
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
-                    ListColumn::PartNumber => format!("{:<12}", style("PART #").bold()),
-                    ListColumn::Revision => format!("{:<8}", style("REV").bold()),
-                    ListColumn::Title => format!("{:<30}", style("TITLE").bold()),
-                    ListColumn::MakeBuy => format!("{:<6}", style("M/B").bold()),
-                    ListColumn::Category => format!("{:<12}", style("CATEGORY").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::Author => format!("{:<16}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(100));
-
-            for cmp in &components {
-                let short_id = short_ids
-                    .get_short_id(&cmp.id.to_string())
-                    .unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", format_short_id(&cmp.id)),
-                        ListColumn::PartNumber => {
-                            format!("{:<12}", truncate_str(&cmp.part_number, 10))
-                        }
-                        ListColumn::Revision => {
-                            format!("{:<8}", cmp.revision.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Title => format!("{:<30}", truncate_str(&cmp.title, 28)),
-                        ListColumn::MakeBuy => format!(
-                            "{:<6}",
-                            match cmp.make_buy {
-                                MakeBuy::Make => "make",
-                                MakeBuy::Buy => "buy",
-                            }
-                        ),
-                        ListColumn::Category => format!("{:<12}", cmp.category),
-                        ListColumn::Status => format!("{:<10}", cmp.status),
-                        ListColumn::Author => format!("{:<16}", truncate_str(&cmp.author, 14)),
-                        ListColumn::Created => format!("{:<12}", cmp.created.format("%Y-%m-%d")),
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
+        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Id | OutputFormat::ShortId => {
+            // Build visible columns list
+            let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+            if args.show_id && !visible.contains(&"id") {
+                visible.insert(0, "id");
             }
 
-            println!();
-            println!(
-                "{} component(s) found. Use {} to reference by short ID.",
-                style(components.len()).cyan(),
-                style("CMP@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for cmp in &components {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&cmp.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", cmp.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Part # | Title | M/B | Category | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for cmp in &components {
-                let short_id = short_ids
-                    .get_short_id(&cmp.id.to_string())
-                    .unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    format_short_id(&cmp.id),
-                    cmp.part_number,
-                    cmp.title,
-                    cmp.make_buy,
-                    cmp.category,
-                    cmp.status
-                );
-            }
+            // Convert to TableRows
+            let rows: Vec<TableRow> = components
+                .iter()
+                .map(|cmp| component_to_row(cmp, &short_ids))
+                .collect();
+
+            // Configure table
+            let config = if let Some(width) = args.wrap {
+                TableConfig::with_wrap(width)
+            } else {
+                TableConfig::default()
+            };
+
+            let formatter = TableFormatter::new(CMP_COLUMNS, "component", "CMP")
+                .with_config(config);
+            formatter.output(rows, format, &visible);
         }
         OutputFormat::Auto | OutputFormat::Path => unreachable!(),
     }
 
     Ok(())
+}
+
+/// Convert a Component to a TableRow
+fn component_to_row(cmp: &Component, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(cmp.id.to_string(), short_ids)
+        .cell("id", CellValue::Id(cmp.id.to_string()))
+        .cell("part-number", CellValue::Text(cmp.part_number.clone()))
+        .cell("revision", CellValue::Text(cmp.revision.clone().unwrap_or_else(|| "-".to_string())))
+        .cell("title", CellValue::Text(cmp.title.clone()))
+        .cell("make-buy", CellValue::Type(cmp.make_buy.to_string()))
+        .cell("category", CellValue::Type(cmp.category.to_string()))
+        .cell("status", CellValue::Status(cmp.status))
+        .cell("author", CellValue::Text(cmp.author.clone()))
+        .cell("created", CellValue::Date(cmp.created))
 }
 
 /// Output components from cached data (fast path - no YAML parsing)
@@ -783,110 +714,44 @@ fn output_cached_components(
     args: &ListArgs,
     format: OutputFormat,
 ) -> Result<()> {
-    match format {
-        OutputFormat::Csv => {
-            println!("short_id,id,part_number,revision,title,make_buy,category,status");
-            for cmp in cmps {
-                let short_id = short_ids.get_short_id(&cmp.id).unwrap_or_default();
-                println!(
-                    "{},{},{},{},{},{},{},{}",
-                    short_id,
-                    cmp.id,
-                    cmp.part_number.as_deref().unwrap_or(""),
-                    cmp.revision.as_deref().unwrap_or(""),
-                    escape_csv(&cmp.title),
-                    cmp.make_buy.as_deref().unwrap_or("buy"),
-                    cmp.category.as_deref().unwrap_or(""),
-                    cmp.status
-                );
-            }
-        }
-        OutputFormat::Tsv | OutputFormat::Auto => {
-            let mut header_parts = vec![format!("{:<8}", style("SHORT").bold().dim())];
-            for col in &args.columns {
-                let header = match col {
-                    ListColumn::Id => format!("{:<17}", style("ID").bold()),
-                    ListColumn::PartNumber => format!("{:<12}", style("PART #").bold()),
-                    ListColumn::Revision => format!("{:<8}", style("REV").bold()),
-                    ListColumn::Title => format!("{:<30}", style("TITLE").bold()),
-                    ListColumn::MakeBuy => format!("{:<6}", style("M/B").bold()),
-                    ListColumn::Category => format!("{:<12}", style("CATEGORY").bold()),
-                    ListColumn::Status => format!("{:<10}", style("STATUS").bold()),
-                    ListColumn::Author => format!("{:<16}", style("AUTHOR").bold()),
-                    ListColumn::Created => format!("{:<12}", style("CREATED").bold()),
-                };
-                header_parts.push(header);
-            }
-            println!("{}", header_parts.join(" "));
-            println!("{}", "-".repeat(100));
-
-            for cmp in cmps {
-                let short_id = short_ids.get_short_id(&cmp.id).unwrap_or_default();
-                let mut row_parts = vec![format!("{:<8}", style(&short_id).cyan())];
-
-                for col in &args.columns {
-                    let value = match col {
-                        ListColumn::Id => format!("{:<17}", truncate_str(&cmp.id, 15)),
-                        ListColumn::PartNumber => format!(
-                            "{:<12}",
-                            truncate_str(cmp.part_number.as_deref().unwrap_or(""), 10)
-                        ),
-                        ListColumn::Revision => {
-                            format!("{:<8}", cmp.revision.as_deref().unwrap_or("-"))
-                        }
-                        ListColumn::Title => format!("{:<30}", truncate_str(&cmp.title, 28)),
-                        ListColumn::MakeBuy => {
-                            format!("{:<6}", cmp.make_buy.as_deref().unwrap_or("buy"))
-                        }
-                        ListColumn::Category => {
-                            format!("{:<12}", cmp.category.as_deref().unwrap_or(""))
-                        }
-                        ListColumn::Status => format!("{:<10}", cmp.status),
-                        ListColumn::Author => format!("{:<16}", truncate_str(&cmp.author, 14)),
-                        ListColumn::Created => format!("{:<12}", cmp.created.format("%Y-%m-%d")),
-                    };
-                    row_parts.push(value);
-                }
-                println!("{}", row_parts.join(" "));
-            }
-
-            println!();
-            println!(
-                "{} component(s) found. Use {} to reference by short ID.",
-                style(cmps.len()).cyan(),
-                style("CMP@N").cyan()
-            );
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for cmp in cmps {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&cmp.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", cmp.id);
-                }
-            }
-        }
-        OutputFormat::Md => {
-            println!("| Short | ID | Part # | Title | M/B | Category | Status |");
-            println!("|---|---|---|---|---|---|---|");
-            for cmp in cmps {
-                let short_id = short_ids.get_short_id(&cmp.id).unwrap_or_default();
-                println!(
-                    "| {} | {} | {} | {} | {} | {} | {} |",
-                    short_id,
-                    truncate_str(&cmp.id, 15),
-                    cmp.part_number.as_deref().unwrap_or(""),
-                    cmp.title,
-                    cmp.make_buy.as_deref().unwrap_or("buy"),
-                    cmp.category.as_deref().unwrap_or(""),
-                    cmp.status
-                );
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Path => unreachable!(),
+    // Build visible columns list
+    let mut visible: Vec<&str> = args.columns.iter().map(|c| c.to_string().leak() as &str).collect();
+    if args.show_id && !visible.contains(&"id") {
+        visible.insert(0, "id");
     }
+
+    // Convert to TableRows
+    let rows: Vec<TableRow> = cmps
+        .iter()
+        .map(|cmp| cached_component_to_row(cmp, short_ids))
+        .collect();
+
+    // Configure table
+    let config = if let Some(width) = args.wrap {
+        TableConfig::with_wrap(width)
+    } else {
+        TableConfig::default()
+    };
+
+    let formatter = TableFormatter::new(CMP_COLUMNS, "component", "CMP")
+        .with_config(config);
+    formatter.output(rows, format, &visible);
+
     Ok(())
+}
+
+/// Convert a CachedComponent to a TableRow
+fn cached_component_to_row(cmp: &crate::core::CachedComponent, short_ids: &ShortIdIndex) -> TableRow {
+    TableRow::new(cmp.id.clone(), short_ids)
+        .cell("id", CellValue::Id(cmp.id.clone()))
+        .cell("part-number", CellValue::Text(cmp.part_number.clone().unwrap_or_default()))
+        .cell("revision", CellValue::Text(cmp.revision.clone().unwrap_or_else(|| "-".to_string())))
+        .cell("title", CellValue::Text(cmp.title.clone()))
+        .cell("make-buy", CellValue::Type(cmp.make_buy.clone().unwrap_or_else(|| "buy".to_string())))
+        .cell("category", CellValue::Type(cmp.category.clone().unwrap_or_default()))
+        .cell("status", CellValue::Status(cmp.status))
+        .cell("author", CellValue::Text(cmp.author.clone()))
+        .cell("created", CellValue::Date(cmp.created))
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
@@ -1020,76 +885,32 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     // Add to short ID index
     let mut short_ids = ShortIdIndex::load(&project);
     let short_id = short_ids.add(id.to_string());
-    let _ = short_ids.save(&project);
+    super::utils::save_short_ids(&mut short_ids, &project);
 
     // Handle --link flags
-    let mut added_links = Vec::new();
-    for link_target in &args.link {
-        let resolved_target = short_ids
-            .resolve(link_target)
-            .unwrap_or_else(|| link_target.clone());
-
-        if let Ok(target_entity_id) = EntityId::parse(&resolved_target) {
-            match add_inferred_link(
-                &file_path,
-                EntityPrefix::Cmp,
-                &resolved_target,
-                target_entity_id.prefix(),
-            ) {
-                Ok(link_type) => {
-                    added_links.push((link_type, resolved_target.clone()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "{} Failed to add link to {}: {}",
-                        style("!").yellow(),
-                        link_target,
-                        e
-                    );
-                }
-            }
-        } else {
-            eprintln!("{} Invalid entity ID: {}", style("!").yellow(), link_target);
-        }
-    }
+    let added_links = crate::cli::entity_cmd::process_link_flags(
+        &file_path,
+        EntityPrefix::Cmp,
+        &args.link,
+        &short_ids,
+    );
 
     // Output based on format flag
-    match global.format {
-        OutputFormat::Id => {
-            println!("{}", id);
-        }
-        OutputFormat::ShortId => {
-            println!(
-                "{}",
-                short_id.clone().unwrap_or_else(|| format_short_id(&id))
-            );
-        }
-        OutputFormat::Path => {
-            println!("{}", file_path.display());
-        }
-        _ => {
-            println!(
-                "{} Created component {}",
-                style("✓").green(),
-                style(short_id.clone().unwrap_or_else(|| format_short_id(&id))).cyan()
-            );
-            println!("   {}", style(file_path.display()).dim());
-            println!(
-                "   Part: {} | {}",
-                style(&part_number).yellow(),
-                style(&title).white()
-            );
-
-            for (link_type, target) in &added_links {
-                println!(
-                    "   {} --[{}]--> {}",
-                    style("→").dim(),
-                    style(link_type).cyan(),
-                    style(format_short_id(&EntityId::parse(target).unwrap())).yellow()
-                );
-            }
-        }
-    }
+    let extra_info = format!(
+        "Part: {} | {}",
+        style(&part_number).yellow(),
+        style(&title).white()
+    );
+    crate::cli::entity_cmd::output_new_entity(
+        &id,
+        &file_path,
+        short_id.clone(),
+        ENTITY_CONFIG.name,
+        &title,
+        Some(&extra_info),
+        &added_links,
+        global,
+    );
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -1380,46 +1201,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 }
 
 fn run_edit(args: EditArgs) -> Result<()> {
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let config = Config::load();
-
     // Resolve ID from argument or stdin
     let id = resolve_id_arg(&args.id).map_err(|e| miette::miette!("{}", e))?;
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids.resolve(&id).unwrap_or_else(|| id.clone());
-
-    // Find the component file
-    let cmp_dir = project.root().join("bom/components");
-    let mut found_path = None;
-
-    if cmp_dir.exists() {
-        for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
-            let entry = entry.into_diagnostic()?;
-            let path = entry.path();
-
-            if path.extension().is_some_and(|e| e == "yaml") {
-                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
-                    found_path = Some(path);
-                    break;
-                }
-            }
-        }
-    }
-
-    let path = found_path.ok_or_else(|| miette::miette!("No component found matching '{}'", id))?;
-
-    println!(
-        "Opening {} in {}...",
-        style(path.display()).cyan(),
-        style(config.editor()).yellow()
-    );
-
-    config.run_editor(&path).into_diagnostic()?;
-
-    Ok(())
+    crate::cli::entity_cmd::run_edit_generic(&id, &ENTITY_CONFIG)
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {

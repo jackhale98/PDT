@@ -40,7 +40,7 @@ Enter
 Sleep 1.5s
 
 # Create mate between features
-Type "tdt mate new -a FEAT@1 -b FEAT@2 --title 'Shaft-Bore Clearance Fit'"
+Type "tdt mate new -a FEAT@1 -b FEAT@2 --title 'Shaft-Bore Clearance Fit' --no-edit"
 Enter
 Sleep 2s
 

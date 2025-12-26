@@ -62,7 +62,7 @@ Enter
 Sleep 500ms
 
 # Source revision
-Type "Rev A"
+Type "A"
 Enter
 Sleep 500ms
 

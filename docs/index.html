@@ -1395,6 +1395,7 @@
       </a>
       <div class="nav-links">
         <a href="#features">Features</a>
+        <a href="#demo">Demo</a>
         <a href="#install">Install</a>
         <a href="why-plain-text.html">Why Plain Text?</a>
         <a href="tolerance.html">Tolerance</a>
@@ -1421,6 +1422,7 @@
 
   <div class="mobile-menu" id="mobileMenu">
     <a href="#features" onclick="closeMobileMenu()">Features</a>
+    <a href="#demo" onclick="closeMobileMenu()">Demo</a>
     <a href="#install" onclick="closeMobileMenu()">Install</a>
     <a href="why-plain-text.html" onclick="closeMobileMenu()">Why Plain Text?</a>
     <a href="tolerance.html" onclick="closeMobileMenu()">Tolerance</a>
@@ -1560,6 +1562,107 @@
           </div>
           <h3>Domain Mapping Matrix</h3>
           <p>Analyze cross-entity relationships: components vs requirements, processes vs components. Track allocation coverage and identify gaps.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Demo -->
+
+  <section id="demo" class="demo-section">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">// Live Demo</div>
+        <h2 class="section-title">See It in Action</h2>
+        <p class="section-desc">Watch TDT's powerful command-line workflows in action.</p>
+      </div>
+
+      <div class="demo-tabs">
+        <button class="demo-tab active" onclick="showDemo('quickstart')">Quick Start</button>
+        <button class="demo-tab" onclick="showDemo('interactive')">Interactive Mode</button>
+        <button class="demo-tab" onclick="showDemo('traceability')">Traceability</button>
+        <button class="demo-tab" onclick="showDemo('tolerance')">Tolerance</button>
+        <button class="demo-tab" onclick="showDemo('fmea')">FMEA</button>
+        <button class="demo-tab" onclick="showDemo('search')">Search & Tags</button>
+      </div>
+
+      <div class="demo-container">
+        <div id="demo-quickstart" class="demo-panel active">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Quick Start</span>
+            </div>
+            <img src="quickstart.gif" alt="Quick Start Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/quickstart.tape</code> to generate this demo</div>'; this.remove();">
+          </div>
+          <p class="demo-caption">Initialize a project, create requirements, and validate your data in seconds.</p>
+        </div>
+
+        <div id="demo-interactive" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Interactive Wizard</span>
+            </div>
+            <img src="interactive.gif" alt="Interactive Mode Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/interactive.tape</code> to generate this demo</div>'; this.remove();">
+          </div>
+          <p class="demo-caption">Schema-driven prompts guide you through creating entities with all required fields.</p>
+        </div>
+
+        <div id="demo-traceability" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Requirements Traceability</span>
+            </div>
+            <img src="traceability.gif" alt="Traceability Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/traceability.tape</code> to generate this demo</div>'; this.remove();">
+          </div>
+          <p class="demo-caption">Link requirements to tests and components, trace dependencies, and find orphaned items.</p>
+        </div>
+
+        <div id="demo-tolerance" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Tolerance Analysis</span>
+            </div>
+            <img src="tolerance.gif" alt="Tolerance Analysis Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/tolerance.tape</code> to generate this demo</div>'; this.remove();">
+          </div>
+          <p class="demo-caption">Perform worst-case, RSS, and Monte Carlo tolerance stackup analysis.</p>
+        </div>
+
+        <div id="demo-fmea" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">FMEA Risk Analysis</span>
+            </div>
+            <img src="fmea.gif" alt="FMEA Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/fmea.tape</code> to generate this demo</div>'; this.remove();">
+          </div>
+          <p class="demo-caption">Create and analyze failure modes with severity, occurrence, and detection ratings.</p>
+        </div>
+
+        <div id="demo-search" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Search & Tags</span>
+            </div>
+            <img src="recent-tags.gif" alt="Search and Tags Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/recent-tags.tape</code> to generate this demo</div>'; this.remove();">
+          </div>
+          <p class="demo-caption">Search across all entities, manage tags, and view recent activity.</p>
         </div>
       </div>
     </div>
@@ -2061,107 +2164,6 @@ REQ-01KCA9X3JQFT8BHK2VCN5M9B
       </div>
     </div>
 
-  </section>
-
-  <!-- Demo -->
-
-  <section id="demo" class="demo-section">
-    <div class="container">
-      <div class="section-header">
-        <div class="section-tag">// Live Demo</div>
-        <h2 class="section-title">See It in Action</h2>
-        <p class="section-desc">Watch TDT's powerful command-line workflows in action.</p>
-      </div>
-
-      <div class="demo-tabs">
-        <button class="demo-tab active" onclick="showDemo('quickstart')">Quick Start</button>
-        <button class="demo-tab" onclick="showDemo('interactive')">Interactive Mode</button>
-        <button class="demo-tab" onclick="showDemo('traceability')">Traceability</button>
-        <button class="demo-tab" onclick="showDemo('tolerance')">Tolerance</button>
-        <button class="demo-tab" onclick="showDemo('fmea')">FMEA</button>
-        <button class="demo-tab" onclick="showDemo('search')">Search & Tags</button>
-      </div>
-
-      <div class="demo-container">
-        <div id="demo-quickstart" class="demo-panel active">
-          <div class="demo-terminal">
-            <div class="terminal-header">
-              <div class="code-dot red"></div>
-              <div class="code-dot yellow"></div>
-              <div class="code-dot green"></div>
-              <span class="terminal-title">Quick Start</span>
-            </div>
-            <img src="quickstart.gif" alt="Quick Start Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/quickstart.tape</code> to generate this demo</div>'; this.remove();">
-          </div>
-          <p class="demo-caption">Initialize a project, create requirements, and validate your data in seconds.</p>
-        </div>
-
-        <div id="demo-interactive" class="demo-panel">
-          <div class="demo-terminal">
-            <div class="terminal-header">
-              <div class="code-dot red"></div>
-              <div class="code-dot yellow"></div>
-              <div class="code-dot green"></div>
-              <span class="terminal-title">Interactive Wizard</span>
-            </div>
-            <img src="interactive.gif" alt="Interactive Mode Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/interactive.tape</code> to generate this demo</div>'; this.remove();">
-          </div>
-          <p class="demo-caption">Schema-driven prompts guide you through creating entities with all required fields.</p>
-        </div>
-
-        <div id="demo-traceability" class="demo-panel">
-          <div class="demo-terminal">
-            <div class="terminal-header">
-              <div class="code-dot red"></div>
-              <div class="code-dot yellow"></div>
-              <div class="code-dot green"></div>
-              <span class="terminal-title">Requirements Traceability</span>
-            </div>
-            <img src="traceability.gif" alt="Traceability Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/traceability.tape</code> to generate this demo</div>'; this.remove();">
-          </div>
-          <p class="demo-caption">Link requirements to tests and components, trace dependencies, and find orphaned items.</p>
-        </div>
-
-        <div id="demo-tolerance" class="demo-panel">
-          <div class="demo-terminal">
-            <div class="terminal-header">
-              <div class="code-dot red"></div>
-              <div class="code-dot yellow"></div>
-              <div class="code-dot green"></div>
-              <span class="terminal-title">Tolerance Analysis</span>
-            </div>
-            <img src="tolerance.gif" alt="Tolerance Analysis Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/tolerance.tape</code> to generate this demo</div>'; this.remove();">
-          </div>
-          <p class="demo-caption">Perform worst-case, RSS, and Monte Carlo tolerance stackup analysis.</p>
-        </div>
-
-        <div id="demo-fmea" class="demo-panel">
-          <div class="demo-terminal">
-            <div class="terminal-header">
-              <div class="code-dot red"></div>
-              <div class="code-dot yellow"></div>
-              <div class="code-dot green"></div>
-              <span class="terminal-title">FMEA Risk Analysis</span>
-            </div>
-            <img src="fmea.gif" alt="FMEA Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/fmea.tape</code> to generate this demo</div>'; this.remove();">
-          </div>
-          <p class="demo-caption">Create and analyze failure modes with severity, occurrence, and detection ratings.</p>
-        </div>
-
-        <div id="demo-search" class="demo-panel">
-          <div class="demo-terminal">
-            <div class="terminal-header">
-              <div class="code-dot red"></div>
-              <div class="code-dot yellow"></div>
-              <div class="code-dot green"></div>
-              <span class="terminal-title">Search & Tags</span>
-            </div>
-            <img src="recent-tags.gif" alt="Search and Tags Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/recent-tags.tape</code> to generate this demo</div>'; this.remove();">
-          </div>
-          <p class="demo-caption">Search across all entities, manage tags, and view recent activity.</p>
-        </div>
-      </div>
-    </div>
   </section>
 
   <!-- Performance Stats -->

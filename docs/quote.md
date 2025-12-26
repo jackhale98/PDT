@@ -132,7 +132,7 @@ links:
   related_quotes: []
 
 created: 2024-01-15T10:30:00Z
-author: Jack Hale
+author: John Smith
 entity_revision: 1
 ```
 
@@ -182,7 +182,7 @@ quote_status: pending
 status: draft
 
 created: 2024-01-20T14:00:00Z
-author: Jack Hale
+author: John Smith
 entity_revision: 1
 ```
 

@@ -94,7 +94,7 @@ links:
 
 # Auto-managed metadata (do not edit manually)
 created: 2024-01-15T10:30:00Z
-author: Jack Hale
+author: John Smith
 revision: 3
 ```
 

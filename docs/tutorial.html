@@ -1392,15 +1392,15 @@
               <div class="code-header"><span class="code-lang">bash</span></div>
               <pre><code><span class="comment"># Housing machining</span>
 <span class="cmd">tdt proc new</span> --title <span class="string">"Housing CNC Machining"</span> --type machining \
-  --operation-number <span class="string">"OP-010"</span> --no-edit
+  --op-number <span class="string">"OP-010"</span> --no-edit
 
 <span class="comment"># Housing anodizing</span>
 <span class="cmd">tdt proc new</span> --title <span class="string">"Housing Anodizing"</span> --type finishing \
-  --operation-number <span class="string">"OP-020"</span> --no-edit
+  --op-number <span class="string">"OP-020"</span> --no-edit
 
 <span class="comment"># Final assembly</span>
 <span class="cmd">tdt proc new</span> --title <span class="string">"Final Assembly"</span> --type assembly \
-  --operation-number <span class="string">"OP-030"</span> --no-edit</code></pre>
+  --op-number <span class="string">"OP-030"</span> --no-edit</code></pre>
             </div>
 
             <h3>Link Processes to Components and Risks</h3>
@@ -1878,21 +1878,21 @@ Project Health: <span class="warning">Warning</span></div>
 
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">tdt trace coverage</span></code></pre>
+              <pre><code><span class="cmd">tdt report rvm</span></code></pre>
             </div>
 
-            <div class="terminal-output"><span class="header">Verification Coverage Report</span>
+            <div class="terminal-output"><span class="header">Requirements Verification Matrix</span>
 ════════════════════════════════════════════════════════════
 
-Total requirements:     <span class="highlight">5</span>
-With verification:      <span class="success">4</span>
-Without verification:   <span class="warning">1</span>
-
-Coverage: <span class="success">80.0%</span>
-
-<span class="header">Uncovered Requirements:</span>
-────────────────────────────────────────────────────────────
-  <span class="warning">○</span> REQ-01K7XZ3... - LED Selection</div>
+<span class="header">REQ          TITLE                            STATUS       VERIFIED BY</span>
+────────────────────────────────────────────────────────────────────────────
+<span class="highlight">REQ@1</span>        Operating Temperature Range      <span class="success">verified</span>     TEST@1
+<span class="highlight">REQ@2</span>        Maximum Power Consumption        <span class="success">verified</span>     TEST@2
+<span class="highlight">REQ@3</span>        Operating Lifetime               <span class="success">verified</span>     TEST@3
+<span class="highlight">REQ@4</span>        Motor Efficiency                 <span class="success">verified</span>     TEST@4
+<span class="highlight">REQ@5</span>        LED Selection                    <span class="warning">unverified</span>   -
+────────────────────────────────────────────────────────────────────────────
+Coverage: <span class="success">80%</span> (4/5)</div>
           </section>
 
           <!-- Section 16: Traceability -->
@@ -1905,14 +1905,17 @@ Coverage: <span class="success">80.0%</span>
 
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="comment"># Full matrix</span>
+              <pre><code><span class="comment"># Full matrix (uses short IDs by default)</span>
 <span class="cmd">tdt trace matrix</span>
 
-<span class="comment"># With short ID aliases for readability</span>
-<span class="cmd">tdt trace matrix</span> --aliases
+<span class="comment"># Show full ULIDs instead of short aliases</span>
+<span class="cmd">tdt trace matrix</span> --ids
 
 <span class="comment"># Filter by entity type</span>
-<span class="cmd">tdt trace matrix</span> --source-type TEST --target-type REQ</code></pre>
+<span class="cmd">tdt trace matrix</span> --source-type TEST --target-type REQ
+
+<span class="comment"># Requirements Verification Matrix view</span>
+<span class="cmd">tdt trace matrix</span> --rvm</code></pre>
             </div>
 
             <h3>Trace From an Entity</h3>

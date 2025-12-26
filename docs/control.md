@@ -156,7 +156,7 @@ links:
     - REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD
 
 created: 2024-01-15T10:30:00Z
-author: Jack Hale
+author: John Smith
 entity_revision: 1
 ```
 

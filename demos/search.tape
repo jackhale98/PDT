@@ -11,7 +11,7 @@ Set Padding 20
 
 # Setup - use temp directory with entities
 Hide
-Type "cd $(mktemp -d) && tdt init -q"
+Type "cd $(mktemp -d) && tdt init -q && tdt config set author 'John Smith'"
 Enter
 Sleep 300ms
 Type "tdt req new --title 'Thermal Management System' -t input --no-edit -q"

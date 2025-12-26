@@ -22,9 +22,14 @@ Enter
 Sleep 1s
 
 # Initialize project
-Type "tdt init"
+Type "tdt init -q"
 Enter
-Sleep 2s
+Sleep 1s
+
+# Set author
+Type "tdt config set author 'John Smith'"
+Enter
+Sleep 500ms
 
 # Create requirements with proper engineering titles
 Type "tdt req new --title 'Operating Temperature: -20°C to 85°C' -t input --priority high --no-edit -q"

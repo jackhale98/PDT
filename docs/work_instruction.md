@@ -211,7 +211,7 @@ links:
     - CTRL-01KC5B5M87QMYVJT048X27TJ5S
 
 created: 2024-01-15T10:30:00Z
-author: Jack Hale
+author: John Smith
 entity_revision: 2
 ```
 

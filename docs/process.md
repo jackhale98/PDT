@@ -181,7 +181,7 @@ links:
   related_to: []
 
 created: 2024-01-15T10:30:00Z
-author: Jack Hale
+author: John Smith
 entity_revision: 1
 ```
 

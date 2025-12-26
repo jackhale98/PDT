@@ -26,63 +26,49 @@ Type "tdt req new -i"
 Enter
 Sleep 1s
 
-# Fill in the wizard prompts
-# Type selection
+# Wizard prompts in order: type, title, priority, category, tags, text, rationale, acceptance_criteria
+
+# 1. Type selection (enum - input/output)
 Type "input"
 Enter
 Sleep 500ms
 
-# Title
+# 2. Title
 Type "Motor Operating Temperature Range"
 Enter
 Sleep 500ms
 
-# Priority - use arrow key to select
+# 3. Priority (enum - use arrow to select 'high')
 Down
 Enter
 Sleep 500ms
 
-# Status
-Enter
-Sleep 500ms
-
-# Category
+# 4. Category
 Type "thermal"
 Enter
 Sleep 500ms
 
-# Tags
+# 5. Tags
 Type "thermal,critical,motor"
 Enter
 Sleep 500ms
 
-# Source document
-Type "SRS-2024-001"
+# 6. Text (requirement statement)
+Type "The motor shall operate continuously within -20C to +85C ambient temperature."
 Enter
 Sleep 500ms
 
-# Source revision
-Type "A"
-Enter
-Sleep 500ms
-
-# Source section
-Type "3.2.1"
-Enter
-Sleep 500ms
-
-# Text - the main requirement
-Type "The motor shall operate continuously within the temperature range of -20°C to +85°C ambient."
-Enter
-Sleep 500ms
-
-# Rationale
+# 7. Rationale
 Type "Required for automotive applications per ISO 16750-4"
 Enter
 Sleep 500ms
 
-# Acceptance criteria
-Type "Temperature chamber test from -25°C to +90°C for 4 hours"
+# 8. Acceptance criteria (can enter multiple, empty to finish)
+Type "Temperature chamber test from -25C to +90C for 4 hours"
+Enter
+Sleep 500ms
+
+# Empty entry to finish acceptance criteria
 Enter
 Sleep 1s
 

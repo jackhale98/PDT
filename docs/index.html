@@ -2178,57 +2178,54 @@ REQ-01KCA9X3JQFT8BHK2VCN5M9B
 
       <div class="features-grid">
         <div class="feature-card" style="text-align: center;">
-          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">50,000</div>
+          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">1,000</div>
           <h3>Entities Tested</h3>
-          <p>Enterprise-scale benchmarks with 50K requirements in a single project.</p>
+          <p>Benchmarked with 1,000 mixed entities: requirements, components, risks, tests, suppliers.</p>
         </div>
 
         <div class="feature-card" style="text-align: center;">
-          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">1.0s</div>
-          <h3>List 50K Entities</h3>
-          <p>Query, filter, and display 50,000 requirements in about one second.</p>
+          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">22ms</div>
+          <h3>List 500 Entities</h3>
+          <p>Query, filter, and display 500 requirements with full table formatting.</p>
         </div>
 
         <div class="feature-card" style="text-align: center;">
-          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">16K/s</div>
+          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">7.5K/s</div>
           <h3>Validation Rate</h3>
-          <p>Schema validation at ~16,000 entities per second at enterprise scale.</p>
+          <p>Schema validation at ~7,500 entities per second with SQLite caching.</p>
         </div>
 
         <div class="feature-card" style="text-align: center;">
-          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">0.12s</div>
+          <div class="stat-number" style="font-size: 48px; font-weight: 700; color: var(--accent); margin-bottom: 8px;">&lt;10ms</div>
           <h3>Entity Lookup</h3>
-          <p>SQLite-cached single entity lookup via short ID - instant results at any scale.</p>
+          <p>SQLite-cached single entity lookup via short ID - near-instant results.</p>
         </div>
       </div>
 
       <div style="margin-top: 48px; text-align: center;">
         <div class="code-block" style="max-width: 800px; margin: 0 auto; text-align: left;">
           <div class="code-header">
-            <span class="code-title">Enterprise Benchmark (50,000 entities)</span>
+            <span class="code-title">Benchmark (1,000 entities)</span>
           </div>
-          <pre><span style="color: var(--text-muted)"># List all 50,000 requirements</span>
+          <pre><span style="color: var(--text-muted)"># List 500 requirements</span>
 <span style="color: var(--accent)">$</span> tdt req list
-<span style="color: var(--text-muted)">1.0s</span>
+<span style="color: var(--text-muted)">0.022s</span>
 
 <span style="color: var(--text-muted)"># Filter by priority</span>
 <span style="color: var(--accent)">$</span> tdt req list --priority critical
-<span style="color: var(--text-muted)">1.0s</span>
+<span style="color: var(--text-muted)">0.019s</span>
 
-<span style="color: var(--text-muted)"># Single entity lookup (SQLite-cached)</span>
-<span style="color: var(--accent)">$</span> tdt req show REQ@1
-<span style="color: var(--text-muted)">0.12s</span>
+<span style="color: var(--text-muted)"># Validate all 1,000 entities</span>
+<span style="color: var(--accent)">$</span> tdt validate
+<span style="color: var(--text-muted)">0.128s (7,587 entities/s)</span>
 
 <span style="color: var(--text-muted)"># Project status</span>
 <span style="color: var(--accent)">$</span> tdt status
-<span style="color: var(--text-muted)">1.5s</span>
+<span style="color: var(--text-muted)">0.045s</span>
 
-<span style="color: var(--accent)">$</span> tdt validate
-<span style="color: var(--text-muted)">3.1s (16,129 entities/s)</span>
-
-<span style="color: var(--text-muted)"># Export to JSON</span>
-<span style="color: var(--accent)">$</span> tdt req list --format json
-<span style="color: var(--text-muted)">2.2s</span></pre>
+<span style="color: var(--text-muted)"># Cache rebuild</span>
+<span style="color: var(--accent)">$</span> tdt cache rebuild
+<span style="color: var(--text-muted)">0.217s</span></pre>
         </div>
       </div>
 

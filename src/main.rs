@@ -70,6 +70,8 @@ fn main() -> Result<()> {
         Commands::Cache(cmd) => tdt::cli::commands::cache::run(cmd),
         Commands::Config(cmd) => tdt::cli::commands::config::run(cmd, &global),
         Commands::Search(args) => tdt::cli::commands::search::run(args, &global),
+        Commands::Recent(args) => tdt::cli::commands::recent::run(args, &global),
+        Commands::Tags(cmd) => tdt::cli::commands::tags::run(cmd, &global),
         Commands::Schema(cmd) => tdt::cli::commands::schema::run(cmd),
         Commands::Completions(args) => tdt::cli::commands::completions::run(args),
     }

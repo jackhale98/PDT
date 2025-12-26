@@ -1482,4 +1482,151 @@ impl EntityCache {
 
         rows.filter_map(|r| r.ok()).collect()
     }
+
+    /// List recently modified entities (by file modification time)
+    pub fn list_recent(
+        &self,
+        type_prefixes: Option<&[&str]>,
+        limit: usize,
+    ) -> Vec<CachedEntity> {
+        let mut sql = String::from(
+            "SELECT id, prefix, title, status, author, created, file_path, priority, entity_type, category, tags, file_mtime FROM entities WHERE 1=1",
+        );
+        let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = vec![];
+
+        // Filter by entity types
+        if let Some(prefixes) = type_prefixes {
+            if !prefixes.is_empty() {
+                let placeholders: Vec<String> = prefixes.iter().enumerate()
+                    .map(|(i, _)| format!("?{}", i + 1))
+                    .collect();
+                sql.push_str(&format!(" AND prefix IN ({})", placeholders.join(",")));
+                for prefix in prefixes {
+                    params_vec.push(Box::new(prefix.to_string()));
+                }
+            }
+        }
+
+        // Order by file modification time (most recent first)
+        sql.push_str(" ORDER BY file_mtime DESC");
+        sql.push_str(&format!(" LIMIT {}", limit));
+
+        let mut stmt = match self.conn.prepare(&sql) {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
+
+        let rows = match stmt.query_map(params_refs.as_slice(), |row| {
+            let tags_str: Option<String> = row.get(10)?;
+            let tags = tags_str
+                .map(|s| {
+                    s.split(',')
+                        .filter(|t| !t.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+            Ok(CachedEntity {
+                id: row.get(0)?,
+                prefix: row.get(1)?,
+                title: row.get(2)?,
+                status: row.get(3)?,
+                author: row.get(4)?,
+                created: parse_datetime(row.get::<_, String>(5)?),
+                file_path: PathBuf::from(row.get::<_, String>(6)?),
+                priority: row.get(7)?,
+                entity_type: row.get(8)?,
+                category: row.get(9)?,
+                tags,
+            })
+        }) {
+            Ok(r) => r,
+            Err(_) => return vec![],
+        };
+
+        rows.filter_map(|r| r.ok()).collect()
+    }
+
+    /// List all unique tags across all entities
+    pub fn list_all_tags(&self) -> Vec<(String, usize)> {
+        // Query all tags from entities table
+        let mut stmt = match self.conn.prepare(
+            "SELECT tags FROM entities WHERE tags IS NOT NULL AND tags != ''",
+        ) {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+
+        let rows = match stmt.query_map([], |row| {
+            let tags_str: String = row.get(0)?;
+            Ok(tags_str)
+        }) {
+            Ok(r) => r,
+            Err(_) => return vec![],
+        };
+
+        // Count tag occurrences
+        let mut tag_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for row in rows.filter_map(|r| r.ok()) {
+            for tag in row.split(',').filter(|t| !t.is_empty()) {
+                *tag_counts.entry(tag.to_string()).or_insert(0) += 1;
+            }
+        }
+
+        // Sort by count (descending) then alphabetically
+        let mut tags: Vec<(String, usize)> = tag_counts.into_iter().collect();
+        tags.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        tags
+    }
+
+    /// Get entities by tag
+    pub fn list_by_tag(&self, tag: &str, limit: Option<usize>) -> Vec<CachedEntity> {
+        let mut sql = String::from(
+            "SELECT id, prefix, title, status, author, created, file_path, priority, entity_type, category, tags FROM entities WHERE tags LIKE ?1",
+        );
+
+        sql.push_str(" ORDER BY created DESC");
+        if let Some(lim) = limit {
+            sql.push_str(&format!(" LIMIT {}", lim));
+        }
+
+        let mut stmt = match self.conn.prepare(&sql) {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+
+        let pattern = format!("%{}%", tag);
+        let rows = match stmt.query_map(params![pattern], |row| {
+            let tags_str: Option<String> = row.get(10)?;
+            let tags = tags_str
+                .map(|s| {
+                    s.split(',')
+                        .filter(|t| !t.is_empty())
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+            Ok(CachedEntity {
+                id: row.get(0)?,
+                prefix: row.get(1)?,
+                title: row.get(2)?,
+                status: row.get(3)?,
+                author: row.get(4)?,
+                created: parse_datetime(row.get::<_, String>(5)?),
+                file_path: PathBuf::from(row.get::<_, String>(6)?),
+                priority: row.get(7)?,
+                entity_type: row.get(8)?,
+                category: row.get(9)?,
+                tags,
+            })
+        }) {
+            Ok(r) => r,
+            Err(_) => return vec![],
+        };
+
+        rows.filter_map(|r| r.ok()).collect()
+    }
 }

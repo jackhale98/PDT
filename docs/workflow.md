@@ -295,7 +295,7 @@ View pending reviews:
 tdt review list
 
 # Filter by entity type
-tdt review list --type req
+tdt review list -t req
 
 # Show all pending reviews (not just yours)
 tdt review list --all

@@ -9,10 +9,10 @@ use crate::cli::commands::{
     config::ConfigCommands, ctrl::CtrlCommands, dev::DevCommands, diff::DiffArgs, dmm::DmmArgs,
     dsm::DsmArgs, feat::FeatCommands, history::HistoryArgs, import::ImportArgs, init::InitArgs,
     link::LinkCommands, lot::LotCommands, mate::MateCommands, ncr::NcrCommands, proc::ProcCommands,
-    quote::QuoteCommands, report::ReportCommands, req::ReqCommands, risk::RiskCommands,
-    rslt::RsltCommands, schema::SchemaCommands, search::SearchArgs, status::StatusArgs,
-    sup::SupCommands, test::TestCommands, tol::TolCommands, trace::TraceCommands,
-    validate::ValidateArgs, where_used::WhereUsedArgs, work::WorkCommands,
+    quote::QuoteCommands, recent::RecentArgs, report::ReportCommands, req::ReqCommands,
+    risk::RiskCommands, rslt::RsltCommands, schema::SchemaCommands, search::SearchArgs,
+    status::StatusArgs, sup::SupCommands, tags::TagsCommands, test::TestCommands, tol::TolCommands,
+    trace::TraceCommands, validate::ValidateArgs, where_used::WhereUsedArgs, work::WorkCommands,
     workflow::{ApproveArgs, RejectArgs, ReleaseArgs, ReviewCommands, SubmitArgs, TeamCommands},
 };
 
@@ -87,6 +87,8 @@ UTILITIES:
   cache       Entity cache management (rebuild, sync, status, query)
   config      View and modify TDT configuration (show, set, unset)
   search      Search across all entity types
+  recent      Show recently modified entities
+  tags        View and manage entity tags (list, show)
   schema      View entity schemas (list, show) - for AI agent ergonomics
   completions Generate shell completion scripts (bash, zsh, fish, powershell)
   help        Print this message or the help of the given subcommand(s)
@@ -324,6 +326,13 @@ pub enum Commands {
 
     /// Search across all entity types
     Search(SearchArgs),
+
+    /// Show recently modified entities
+    Recent(RecentArgs),
+
+    /// View and manage entity tags (list, show)
+    #[command(subcommand)]
+    Tags(TagsCommands),
 
     /// View entity schemas (list, show) - for AI agent ergonomics
     #[command(subcommand)]

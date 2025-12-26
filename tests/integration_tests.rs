@@ -4322,3 +4322,600 @@ fn test_diff_command() {
             .success();
     }
 }
+
+// ============================================================================
+// Error Handling Tests
+// ============================================================================
+
+#[test]
+fn test_error_invalid_entity_id_format() {
+    let tmp = setup_test_project();
+
+    // Invalid ID format should fail
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "show", "INVALID-ID"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_error_nonexistent_short_id() {
+    let tmp = setup_test_project();
+
+    // Non-existent short ID should fail
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "show", "REQ@999"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_error_invalid_format_option() {
+    let tmp = setup_test_project();
+
+    // Invalid format option should fail
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list", "-f", "invalid_format"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_error_missing_required_argument_cmp() {
+    let tmp = setup_test_project();
+
+    // Component requires part-number in non-interactive mode
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "new", "--title", "Missing PN", "--no-edit"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_error_invalid_risk_severity_value() {
+    let tmp = setup_test_project();
+
+    // FMEA ratings must be positive integers - negative should fail
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "risk",
+            "new",
+            "--title",
+            "Bad Severity",
+            "--severity=-1",
+            "--no-edit",
+        ])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_error_invalid_link_type() {
+    let tmp = setup_test_project();
+
+    let req_id = create_test_requirement(&tmp, "Link Test Req", "input");
+    let test_id = create_test_protocol(&tmp, "Link Test Protocol", "verification");
+
+    if !req_id.is_empty() && !test_id.is_empty() {
+        // Invalid link type should fail
+        tdt()
+            .current_dir(tmp.path())
+            .args(["link", "add", &req_id, "--type", "invalid_type", &test_id])
+            .assert()
+            .failure();
+    }
+}
+
+#[test]
+fn test_error_link_entity_not_found() {
+    let tmp = setup_test_project();
+
+    let req_id = create_test_requirement(&tmp, "Link Source Req", "input");
+
+    if !req_id.is_empty() {
+        // Link to non-existent entity should fail
+        tdt()
+            .current_dir(tmp.path())
+            .args([
+                "link",
+                "add",
+                &req_id,
+                "--type",
+                "verified_by",
+                "TEST-NONEXISTENT",
+            ])
+            .assert()
+            .failure();
+    }
+}
+
+#[test]
+fn test_error_validate_broken_link() {
+    let tmp = setup_test_project();
+
+    // Create a requirement file with a broken link
+    let broken_req_content = r#"
+id: REQ-01HQ5V4ABCD1234EFGH5678JKL
+type: input
+title: Broken Link Requirement
+text: This requirement has a broken link
+status: draft
+priority: medium
+created: 2024-01-15T10:30:00Z
+author: test
+links:
+  verified_by:
+    - TEST-NONEXISTENT
+"#;
+    fs::write(
+        tmp.path()
+            .join("requirements/inputs/REQ-01HQ5V4ABCD1234EFGH5678JKL.tdt.yaml"),
+        broken_req_content,
+    )
+    .unwrap();
+
+    // Validate should report broken links
+    tdt()
+        .current_dir(tmp.path())
+        .args(["link", "check"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_error_trace_from_nonexistent_entity() {
+    let tmp = setup_test_project();
+
+    // Trace from non-existent entity should fail
+    tdt()
+        .current_dir(tmp.path())
+        .args(["trace", "from", "REQ-NONEXISTENT"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn test_error_duplicate_lot_number() {
+    let tmp = setup_test_project();
+
+    // Create first lot
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "lot",
+            "new",
+            "--title",
+            "First Lot",
+            "--lot-number",
+            "LOT-DUP",
+            "--quantity",
+            "100",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Second lot with same number should still succeed (we allow duplicates
+    // as different entity files)
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "lot",
+            "new",
+            "--title",
+            "Second Lot",
+            "--lot-number",
+            "LOT-DUP",
+            "--quantity",
+            "50",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+}
+
+// ============================================================================
+// Edge Case Tests - Unicode and Special Characters
+// ============================================================================
+
+#[test]
+fn test_edge_case_unicode_title() {
+    let tmp = setup_test_project();
+
+    // Create requirement with Unicode title
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Température: 100°C ± 5°C",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created requirement"));
+
+    // Verify it can be listed
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Température"));
+}
+
+#[test]
+fn test_edge_case_japanese_title() {
+    let tmp = setup_test_project();
+
+    // Create requirement with Japanese characters
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "温度要件 - Temperature Requirement",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify it can be listed
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("温度要件"));
+}
+
+#[test]
+fn test_edge_case_emoji_in_title() {
+    let tmp = setup_test_project();
+
+    // Create requirement with emoji
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Safety Check ⚠️ Warning",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify search works
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Safety Check"));
+}
+
+#[test]
+fn test_edge_case_special_characters_in_title() {
+    let tmp = setup_test_project();
+
+    // Create requirement with special characters (avoiding nested quotes for YAML safety)
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Test: <angled> & (parens) [brackets] #hash",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify file was created and content is valid YAML
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_edge_case_very_long_title() {
+    let tmp = setup_test_project();
+
+    // Create requirement with long title (200 chars)
+    let long_title = "A".repeat(200);
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "new", "--title", &long_title, "--type", "input", "--no-edit"])
+        .assert()
+        .success();
+
+    // Should be in list (potentially truncated)
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1 requirement(s) found"));
+}
+
+#[test]
+fn test_edge_case_whitespace_in_title() {
+    let tmp = setup_test_project();
+
+    // Create requirement with extra whitespace (should be handled)
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "  Whitespace  Title  ",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify it was created
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("1 requirement(s) found"));
+}
+
+#[test]
+fn test_edge_case_multiline_text_in_file() {
+    let tmp = setup_test_project();
+
+    // Create a requirement file with multiline text
+    let multiline_req = r#"
+id: REQ-01HQ5V5ABCD1234EFGH5678JKM
+type: input
+title: Multiline Test
+text: |
+  This is a multiline text block.
+  It spans multiple lines.
+  And has various content:
+    - Indented items
+    - More items
+status: draft
+priority: medium
+created: 2024-01-15T10:30:00Z
+author: test
+"#;
+    fs::write(
+        tmp.path()
+            .join("requirements/inputs/REQ-01HQ5V5ABCD1234EFGH5678JKM.tdt.yaml"),
+        multiline_req,
+    )
+    .unwrap();
+
+    // Validate should pass
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate"])
+        .assert()
+        .success();
+
+    // Show should display the content
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "show", "REQ-01HQ5V5"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Multiline Test"));
+}
+
+#[test]
+fn test_edge_case_numeric_string_part_number() {
+    let tmp = setup_test_project();
+
+    // Create component with numeric-looking part number
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "cmp",
+            "new",
+            "--part-number",
+            "12345",
+            "--title",
+            "Numeric PN Component",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify it can be found
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("12345"));
+}
+
+#[test]
+fn test_edge_case_zero_quantity_lot() {
+    let tmp = setup_test_project();
+
+    // Create lot with zero quantity
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "lot",
+            "new",
+            "--title",
+            "Zero Qty Lot",
+            "--lot-number",
+            "LOT-ZERO",
+            "--quantity",
+            "0",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify it was created
+    tdt()
+        .current_dir(tmp.path())
+        .args(["lot", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Zero Qty Lot"));
+}
+
+#[test]
+fn test_edge_case_large_quantity_lot() {
+    let tmp = setup_test_project();
+
+    // Create lot with large quantity
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "lot",
+            "new",
+            "--title",
+            "Large Qty Lot",
+            "--lot-number",
+            "LOT-LARGE",
+            "--quantity",
+            "999999999",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify it was created
+    tdt()
+        .current_dir(tmp.path())
+        .args(["lot", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Large Qty Lot"));
+}
+
+#[test]
+fn test_edge_case_fmea_boundary_values() {
+    let tmp = setup_test_project();
+
+    // Test minimum FMEA values (1)
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "risk",
+            "new",
+            "--title",
+            "Min FMEA Risk",
+            "--severity",
+            "1",
+            "--occurrence",
+            "1",
+            "--detection",
+            "1",
+            "--no-edit",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("RPN: 1")); // 1 * 1 * 1 = 1
+
+    // Test maximum FMEA values (10)
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "risk",
+            "new",
+            "--title",
+            "Max FMEA Risk",
+            "--severity",
+            "10",
+            "--occurrence",
+            "10",
+            "--detection",
+            "10",
+            "--no-edit",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("RPN: 1000")); // 10 * 10 * 10 = 1000
+}
+
+#[test]
+fn test_edge_case_tolerance_stackup_zero_nominal() {
+    let tmp = setup_test_project();
+
+    // Create tolerance stackup with zero nominal
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "tol",
+            "new",
+            "--title",
+            "Zero Nominal Stackup",
+            "--target-name",
+            "Zero Gap",
+            "--target-nominal",
+            "0.0",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify it was created
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Zero Nominal Stackup"));
+}
+
+#[test]
+fn test_edge_case_negative_tolerance_value() {
+    let tmp = setup_test_project();
+
+    // Create tolerance stackup with negative nominal (allowed for offset checks)
+    // Using = syntax to prevent negative value being parsed as flag
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "tol",
+            "new",
+            "--title",
+            "Negative Nominal Stackup",
+            "--target-name",
+            "Offset Check",
+            "--target-nominal=-0.5",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify it was created
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Negative Nominal Stackup"));
+}

@@ -2,6 +2,8 @@
 
 A CLI tool for managing engineering artifacts as plain-text YAML files. TDT provides structured tracking of requirements, risks, tests, and other entities with full traceability and validation.
 
+![TDT Quick Start Demo](demos/quickstart.gif)
+
 ## Features
 
 - **Plain-text YAML files** - Human-readable, git-friendly, diff-able
@@ -270,6 +272,27 @@ tdt search "keyword" --author "Jane"  # Filter by author
 tdt search "v2" --tag "release"       # Filter by tag
 tdt search "term" --count             # Show count only
 tdt search "term" -f json             # Output as JSON
+```
+
+### Recent Activity
+
+```bash
+tdt recent                            # Show 20 most recently modified entities
+tdt recent -n 50                      # Show 50 most recent
+tdt recent -t req,risk                # Filter by entity type
+tdt recent -f short-id                # Output short IDs (for piping)
+tdt recent --count                    # Show count only
+```
+
+### Tags
+
+```bash
+tdt tags list                         # List all tags with usage counts
+tdt tags list -n 10                   # Show top 10 tags
+tdt tags list -f json                 # Output as JSON
+tdt tags show precision               # Show entities with tag "precision"
+tdt tags show thermal -f id           # Output full IDs (for piping)
+tdt tags show urgent --count          # Count entities with tag
 ```
 
 ### Requirements

@@ -357,6 +357,24 @@
       }
     }
 
+    /* Hero Demo GIF */
+    .hero-demo {
+      position: relative;
+    }
+
+    .demo-gif {
+      width: 100%;
+      border-radius: 0 0 8px 8px;
+      display: block;
+    }
+
+    .hero-code-title {
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      margin-left: auto;
+    }
+
     /* Scrolling Marquee */
     .marquee-section {
       padding: 40px 0;
@@ -899,6 +917,77 @@
     .terminal-output .priority-high { color: #ff7b72; }
     .terminal-output .priority-critical { color: #f85149; }
 
+    /* Demo Tabs */
+    .demo-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+      justify-content: center;
+    }
+
+    .demo-tab {
+      padding: 10px 20px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .demo-tab:hover {
+      border-color: var(--accent);
+      color: var(--text-primary);
+    }
+
+    .demo-tab.active {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .demo-container {
+      position: relative;
+    }
+
+    .demo-panel {
+      display: none;
+    }
+
+    .demo-panel.active {
+      display: block;
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .demo-caption {
+      text-align: center;
+      color: var(--text-secondary);
+      margin-top: 16px;
+      font-size: 14px;
+    }
+
+    .demo-placeholder {
+      padding: 60px 24px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .demo-placeholder code {
+      background: var(--bg-elevated);
+      padding: 4px 8px;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+
     /* Footer */
     footer {
       padding: 60px 0;
@@ -1370,8 +1459,11 @@
           <div class="code-dot red"></div>
           <div class="code-dot yellow"></div>
           <div class="code-dot green"></div>
+          <span class="hero-code-title">Quick Start</span>
         </div>
-        <pre><span class="comment"># Initialize a new TDT project</span>
+        <div class="hero-demo">
+          <img src="quickstart.gif" alt="TDT Quick Start Demo" class="demo-gif" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+          <pre style="display:none;"><span class="comment"># Initialize a new TDT project</span>
 <span class="symbol">$</span> <span class="cmd">tdt init</span>
 <span class="output">✓ Initialized TDT project</span>
 
@@ -1381,6 +1473,7 @@
 
 <span class="comment"># List all requirements</span>
 <span class="symbol">$</span> <span class="cmd">tdt req list</span></pre>
+        </div>
       </div>
     </div>
 
@@ -1897,7 +1990,7 @@ REQ-01KCA9X3JQFT8BHK2VCN5M9B
           <p class="workflow-desc">Process multiple entities at once with CSV import, bulk status changes, and pipeline operations.</p>
           <div class="workflow-code">
             <pre><span class="comment"># Import from CSV</span>
-<span class="symbol">$</span> <span class="cmd">tdt import requirements.csv --type req</span>
+<span class="symbol">$</span> <span class="cmd">tdt import req requirements.csv</span>
 
 <span class="comment"># Bulk status update via pipeline</span>
 <span class="symbol">$</span> <span class="cmd">tdt req list --status draft -f id | xargs -I{} tdt req edit {} --status approved</span>
@@ -1977,112 +2070,81 @@ REQ-01KCA9X3JQFT8BHK2VCN5M9B
       <div class="section-header">
         <div class="section-tag">// Live Demo</div>
         <h2 class="section-title">See It in Action</h2>
-        <p class="section-desc">A glimpse of TDT's powerful command-line interface.</p>
+        <p class="section-desc">Watch TDT's powerful command-line workflows in action.</p>
       </div>
 
-      <div class="demo-terminal">
-        <div class="terminal-header">
-          <div class="code-dot red"></div>
-          <div class="code-dot yellow"></div>
-          <div class="code-dot green"></div>
-          <span class="terminal-title">tdt -- ~/my-product</span>
+      <div class="demo-tabs">
+        <button class="demo-tab active" onclick="showDemo('quickstart')">Quick Start</button>
+        <button class="demo-tab" onclick="showDemo('traceability')">Traceability</button>
+        <button class="demo-tab" onclick="showDemo('tolerance')">Tolerance Analysis</button>
+        <button class="demo-tab" onclick="showDemo('fmea')">FMEA</button>
+        <button class="demo-tab" onclick="showDemo('search')">Search & Tags</button>
+      </div>
+
+      <div class="demo-container">
+        <div id="demo-quickstart" class="demo-panel active">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Quick Start</span>
+            </div>
+            <img src="quickstart.gif" alt="Quick Start Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/quickstart.tape</code> to generate this demo</div>'; this.remove();">
+          </div>
+          <p class="demo-caption">Initialize a project, create requirements, and validate your data in seconds.</p>
         </div>
-        <div class="terminal-body">
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd">tdt status</span>
+
+        <div id="demo-traceability" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Requirements Traceability</span>
+            </div>
+            <img src="traceability.gif" alt="Traceability Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/traceability.tape</code> to generate this demo</div>'; this.remove();">
           </div>
-          <div class="terminal-output table"><span style="color: var(--accent)">Tessera Project Status</span>
-════════════════════════════════════════════════════════════════════
+          <p class="demo-caption">Link requirements to tests and components, trace dependencies, and find orphaned items.</p>
+        </div>
 
-<span class="header">REQUIREMENTS                     RISKS</span>
--------------------------------- --------------------------------
-  Total:      <span style="color: var(--info)">24</span>                   Total:      <span style="color: var(--info)">8</span>
-  Verified:   <span class="status-approved">22 (92%)</span>             High:       <span style="color: #f85149">2</span>
-  Unverified: <span style="color: #d29922">2</span>                    Medium:     <span style="color: #d29922">4</span>
-                                   Avg RPN:    <span style="color: var(--info)">106</span>
-
-<span class="header">TESTS                            TOLERANCE ANALYSIS</span>
--------------------------------- --------------------------------
-  Protocols:  <span style="color: var(--info)">18</span>                   Features:   <span style="color: var(--info)">12</span>
-  Executed:   <span style="color: var(--info)">16</span>                   Stackups:   <span style="color: var(--info)">4</span>
-  Pass Rate:  <span class="status-approved">94%</span>                    Passing:  <span class="status-approved">3</span>
-                                     Marginal: <span style="color: #d29922">1</span> ⚠
-
-════════════════════════════════════════════════════════════════════
-Project Health: <span class="status-approved">Healthy</span></div>
-
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd">tdt tol analyze TOL@1</span>
+        <div id="demo-tolerance" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Tolerance Analysis</span>
+            </div>
+            <img src="tolerance.gif" alt="Tolerance Analysis Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/tolerance.tape</code> to generate this demo</div>'; this.remove();">
           </div>
-          <div class="terminal-output">⚙ Analyzing stackup <span class="highlight">TOL@1</span>...
-<span style="color: var(--success)">✓</span> Analysis complete
+          <p class="demo-caption">Perform worst-case, RSS, and Monte Carlo tolerance stackup analysis.</p>
+        </div>
 
-   <span class="header">Worst-Case Analysis:</span>
-     Range: 0.030 to 0.076mm
-     Result: <span class="status-approved">pass</span>
-
-   <span class="header">RSS (Statistical) Analysis:</span>
-     Mean: 0.053 | ±3σ: 0.016
-     Cpk: <span style="color: var(--info)">1.45</span> | Yield: <span class="status-approved">99.99%</span>
-
-   <span class="header">Monte Carlo (10000 iterations):</span>
-     Mean: 0.053 | Std Dev: 0.005
-     Yield: <span class="status-approved">99.87%</span></div>
-
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd">tdt asm bom ASM@1</span>
+        <div id="demo-fmea" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">FMEA Risk Analysis</span>
+            </div>
+            <img src="fmea.gif" alt="FMEA Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/fmea.tape</code> to generate this demo</div>'; this.remove();">
           </div>
-          <div class="terminal-output table"><span class="highlight">ASM@1</span> Linear Actuator Assembly
-<span style="color: var(--text-muted)">├─</span> <span style="color: var(--info)">CMP@1</span> Housing         qty: 1   $45.00
-<span style="color: var(--text-muted)">├─</span> <span style="color: var(--info)">CMP@2</span> Actuator Shaft  qty: 1   $28.00
-<span style="color: var(--text-muted)">├─</span> <span style="color: var(--info)">CMP@3</span> Guide Bushing   qty: 2   $12.50
-<span style="color: var(--text-muted)">└─</span> <span style="color: var(--info)">CMP@4</span> Motor Assembly  qty: 1   $156.00
-────────────────────────────────────────
-   <span class="header">Total:</span> <span style="color: var(--success)">$254.00</span>  Mass: <span style="color: var(--info)">1.85 kg</span></div>
+          <p class="demo-caption">Create and analyze failure modes with severity, occurrence, and detection ratings.</p>
+        </div>
 
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd">tdt trace matrix --rvm</span>
+        <div id="demo-search" class="demo-panel">
+          <div class="demo-terminal">
+            <div class="terminal-header">
+              <div class="code-dot red"></div>
+              <div class="code-dot yellow"></div>
+              <div class="code-dot green"></div>
+              <span class="terminal-title">Search & Tags</span>
+            </div>
+            <img src="recent-tags.gif" alt="Search and Tags Demo" class="demo-gif" onerror="this.parentElement.innerHTML += '<div class=\'demo-placeholder\'>Run <code>vhs demos/recent-tags.tape</code> to generate this demo</div>'; this.remove();">
           </div>
-          <div class="terminal-output"><span class="header">Verification Coverage Report</span>
-════════════════════════════════════════════════════════════
-
-Total requirements:     <span style="color: var(--info)">24</span>
-With verification:      <span class="status-approved">22</span>
-Without verification:   <span style="color: #d29922">2</span>
-
-Coverage: <span class="status-approved">91.7%</span></div>
-
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd">tdt validate</span>
-          </div>
-          <div class="terminal-output"><span style="color: var(--success)">✓</span> All files passed validation!</div>
-
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd">tdt history REQ@1</span>
-          </div>
-          <div class="terminal-output table"><span style="color: #d29922">a3f7c21</span> Update acceptance criteria (2 days ago)
-<span style="color: #d29922">8b2e4d9</span> Add temperature specification (1 week ago)
-<span style="color: #d29922">c1a9f38</span> Initial requirement (2 weeks ago)</div>
-
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd">tdt baseline create v1.0</span>
-          </div>
-          <div class="terminal-output"><span style="color: var(--success)">✓</span> All files passed validation!
-Validation passed.
-
-Created baseline: <span class="highlight">tdt-v1.0</span></div>
-
-          <div class="terminal-line">
-            <span class="terminal-prompt">❯</span>
-            <span class="terminal-cmd" style="animation: blink 1s step-end infinite;">_</span>
-          </div>
+          <p class="demo-caption">Search across all entities, manage tags, and view recent activity.</p>
         </div>
       </div>
     </div>
@@ -2283,6 +2345,22 @@ Created baseline: <span class="highlight">tdt-v1.0</span></div>
         closeMobileMenu();
       }
     });
+
+    // Demo tab switching
+    function showDemo(name) {
+      // Hide all panels
+      document.querySelectorAll('.demo-panel').forEach(panel => {
+        panel.classList.remove('active');
+      });
+      // Deactivate all tabs
+      document.querySelectorAll('.demo-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      // Show selected panel
+      document.getElementById('demo-' + name).classList.add('active');
+      // Activate clicked tab
+      event.target.classList.add('active');
+    }
   </script>
 
 </body>

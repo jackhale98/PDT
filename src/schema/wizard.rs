@@ -726,6 +726,76 @@ impl Default for SchemaWizard {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // WizardResult tests
+    // =========================================================================
+
+    #[test]
+    fn test_wizard_result_default() {
+        let result = WizardResult::default();
+        assert!(result.values.is_empty());
+    }
+
+    #[test]
+    fn test_wizard_result_get_string() {
+        let mut result = WizardResult::default();
+        result
+            .values
+            .insert("title".to_string(), Value::String("Test Title".to_string()));
+
+        assert_eq!(result.get_string("title"), Some("Test Title"));
+        assert_eq!(result.get_string("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_wizard_result_get_i64() {
+        let mut result = WizardResult::default();
+        result
+            .values
+            .insert("count".to_string(), Value::Number(42.into()));
+
+        assert_eq!(result.get_i64("count"), Some(42));
+        assert_eq!(result.get_i64("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_wizard_result_get_f64() {
+        let mut result = WizardResult::default();
+        result.values.insert(
+            "value".to_string(),
+            Value::Number(serde_json::Number::from_f64(3.14).unwrap()),
+        );
+
+        assert!((result.get_f64("value").unwrap() - 3.14).abs() < 0.001);
+        assert_eq!(result.get_f64("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_wizard_result_get_string_returns_none_for_non_string() {
+        let mut result = WizardResult::default();
+        result
+            .values
+            .insert("number".to_string(), Value::Number(42.into()));
+
+        assert_eq!(result.get_string("number"), None);
+    }
+
+    #[test]
+    fn test_wizard_result_get_i64_returns_none_for_float() {
+        let mut result = WizardResult::default();
+        result.values.insert(
+            "float".to_string(),
+            Value::Number(serde_json::Number::from_f64(3.14).unwrap()),
+        );
+
+        // as_i64 returns None for non-integer numbers
+        assert_eq!(result.get_i64("float"), None);
+    }
+
+    // =========================================================================
+    // SchemaWizard tests
+    // =========================================================================
+
     #[test]
     fn test_wizard_creation() {
         let wizard = SchemaWizard::new();

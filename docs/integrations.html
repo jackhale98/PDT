@@ -832,8 +832,8 @@ EOF
 <span class="success">✓ Created baseline: tdt-v1.0-design-freeze</span>
 
 <span class="comment"># Continue development...</span>
-<span class="cmd">$</span> tdt req new --title "Add thermal monitoring"
-<span class="cmd">$</span> tdt risk new --title "Overheating risk"
+<span class="cmd">$</span> tdt req new --title "Add thermal monitoring" -t input --no-edit
+<span class="cmd">$</span> tdt risk new --title "Overheating risk" -t design --no-edit
 
 <span class="comment"># Create another baseline</span>
 <span class="cmd">$</span> tdt baseline create v2.0-release

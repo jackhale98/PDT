@@ -633,10 +633,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         let theme = ColorfulTheme::default();
 
         println!();
-        println!(
-            "{} Target specification",
-            console::style("◆").cyan()
-        );
+        println!("{} Target specification", console::style("◆").cyan());
 
         target_name = Input::with_theme(&theme)
             .with_prompt("Target name")
@@ -1049,7 +1046,12 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
     // Debug mode - trace the RSS calculation step by step
     if args.debug {
         use crate::entities::stackup::Direction;
-        println!("{}", style("=== DEBUG: RSS Calculation Trace ===").yellow().bold());
+        println!(
+            "{}",
+            style("=== DEBUG: RSS Calculation Trace ===")
+                .yellow()
+                .bold()
+        );
         let mut debug_mean = 0.0;
         for (i, contrib) in stackup.contributors.iter().enumerate() {
             let mean_offset = (contrib.plus_tol - contrib.minus_tol) / 2.0;
@@ -1075,7 +1077,10 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
                 debug_mean
             );
         }
-        println!("  {}", style(format!("Final RSS mean: {:.4}", debug_mean)).cyan());
+        println!(
+            "  {}",
+            style(format!("Final RSS mean: {:.4}", debug_mean)).cyan()
+        );
         println!("{}", style("=== END DEBUG ===").yellow().bold());
         println!();
     }

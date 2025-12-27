@@ -842,10 +842,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         let theme = ColorfulTheme::default();
 
         println!();
-        println!(
-            "{} Physical properties",
-            console::style("◆").cyan()
-        );
+        println!("{} Physical properties", console::style("◆").cyan());
 
         mass_kg = if wizard_mass.is_some() {
             wizard_mass

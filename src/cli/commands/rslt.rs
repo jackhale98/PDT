@@ -784,74 +784,76 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let config = Config::load();
 
     // Determine values - either from schema-driven wizard or args
-    let (test_id, verdict, title, category, executed_by, verdict_rationale, duration, notes) = if args.interactive {
-        // Use the schema-driven wizard
-        let wizard = SchemaWizard::new();
-        let result = wizard.run(EntityPrefix::Rslt)?;
+    let (test_id, verdict, title, category, executed_by, verdict_rationale, duration, notes) =
+        if args.interactive {
+            // Use the schema-driven wizard
+            let wizard = SchemaWizard::new();
+            let result = wizard.run(EntityPrefix::Rslt)?;
 
-        let test_id_str = result
-            .get_string("test_id")
-            .map(String::from)
-            .unwrap_or_default();
+            let test_id_str = result
+                .get_string("test_id")
+                .map(String::from)
+                .unwrap_or_default();
 
-        let test_id = if test_id_str.is_empty() {
-            return Err(miette::miette!("Test ID is required"));
+            let test_id = if test_id_str.is_empty() {
+                return Err(miette::miette!("Test ID is required"));
+            } else {
+                EntityId::parse(&test_id_str)
+                    .map_err(|e| miette::miette!("Invalid test ID: {}", e))?
+            };
+
+            let verdict = result
+                .get_string("verdict")
+                .map(|s| match s {
+                    "fail" => Verdict::Fail,
+                    "conditional" => Verdict::Conditional,
+                    "incomplete" => Verdict::Incomplete,
+                    "not_applicable" => Verdict::NotApplicable,
+                    _ => Verdict::Pass,
+                })
+                .unwrap_or(Verdict::Pass);
+
+            let title = result.get_string("title").map(String::from);
+
+            let category = result
+                .get_string("category")
+                .map(String::from)
+                .unwrap_or_default();
+
+            let executed_by = result
+                .get_string("executed_by")
+                .map(String::from)
+                .unwrap_or_else(|| config.author());
+
+            let verdict_rationale = result.get_string("verdict_rationale").map(String::from);
+            let duration = result.get_string("duration").map(String::from);
+            let notes = result.get_string("notes").map(String::from);
+
+            (
+                test_id,
+                verdict,
+                title,
+                category,
+                executed_by,
+                verdict_rationale,
+                duration,
+                notes,
+            )
         } else {
-            EntityId::parse(&test_id_str).map_err(|e| miette::miette!("Invalid test ID: {}", e))?
-        };
+            // Default mode - use args with defaults
+            let test_id = if let Some(test_query) = &args.test {
+                // Try to resolve the test ID
+                let short_ids = ShortIdIndex::load(&project);
+                let resolved = short_ids
+                    .resolve(test_query)
+                    .unwrap_or_else(|| test_query.clone());
+                EntityId::parse(&resolved)
+                    .map_err(|e| miette::miette!("Invalid test ID '{}': {}", test_query, e))?
+            } else {
+                return Err(miette::miette!("Test ID is required. Use --test <TEST_ID>"));
+            };
 
-        let verdict = result
-            .get_string("verdict")
-            .map(|s| match s {
-                "fail" => Verdict::Fail,
-                "conditional" => Verdict::Conditional,
-                "incomplete" => Verdict::Incomplete,
-                "not_applicable" => Verdict::NotApplicable,
-                _ => Verdict::Pass,
-            })
-            .unwrap_or(Verdict::Pass);
-
-        let title = result.get_string("title").map(String::from);
-
-        let category = result
-            .get_string("category")
-            .map(String::from)
-            .unwrap_or_default();
-
-        let executed_by = result
-            .get_string("executed_by")
-            .map(String::from)
-            .unwrap_or_else(|| config.author());
-
-        let verdict_rationale = result.get_string("verdict_rationale").map(String::from);
-        let duration = result.get_string("duration").map(String::from);
-        let notes = result.get_string("notes").map(String::from);
-
-        (
-            test_id,
-            verdict,
-            title,
-            category,
-            executed_by,
-            verdict_rationale,
-            duration,
-            notes,
-        )
-    } else {
-        // Default mode - use args with defaults
-        let test_id = if let Some(test_query) = &args.test {
-            // Try to resolve the test ID
-            let short_ids = ShortIdIndex::load(&project);
-            let resolved = short_ids
-                .resolve(test_query)
-                .unwrap_or_else(|| test_query.clone());
-            EntityId::parse(&resolved)
-                .map_err(|e| miette::miette!("Invalid test ID '{}': {}", test_query, e))?
-        } else {
-            return Err(miette::miette!("Test ID is required. Use --test <TEST_ID>"));
-        };
-
-        let verdict = match args.verdict.to_lowercase().as_str() {
+            let verdict = match args.verdict.to_lowercase().as_str() {
             "pass" => Verdict::Pass,
             "fail" => Verdict::Fail,
             "conditional" => Verdict::Conditional,
@@ -865,12 +867,21 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             }
         };
 
-        let title = args.title;
-        let category = args.category.unwrap_or_default();
-        let executed_by = args.executed_by.unwrap_or_else(|| config.author());
+            let title = args.title;
+            let category = args.category.unwrap_or_default();
+            let executed_by = args.executed_by.unwrap_or_else(|| config.author());
 
-        (test_id, verdict, title, category, executed_by, None, None, None)
-    };
+            (
+                test_id,
+                verdict,
+                title,
+                category,
+                executed_by,
+                None,
+                None,
+                None,
+            )
+        };
 
     // Determine test type by looking up the test
     let test_type = determine_test_type(&project, &test_id)?;
@@ -910,10 +921,8 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         if let Some(ref dur) = duration {
-            yaml_content = yaml_content.replace(
-                "duration: null",
-                &format!("duration: \"{}\"", dur),
-            );
+            yaml_content =
+                yaml_content.replace("duration: null", &format!("duration: \"{}\"", dur));
         }
         if let Some(ref n) = notes {
             if !n.is_empty() {

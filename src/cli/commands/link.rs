@@ -282,10 +282,7 @@ fn run_suspect(args: SuspectCommands) -> Result<()> {
 fn run_suspect_list(args: SuspectListArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
-    println!(
-        "{} Scanning for suspect links...\n",
-        style("→").blue()
-    );
+    println!("{} Scanning for suspect links...\n", style("→").blue());
 
     let mut total_suspect = 0;
     let all_dirs = get_search_dirs_for_query(&project, "");
@@ -321,7 +318,11 @@ fn run_suspect_list(args: SuspectListArgs) -> Result<()> {
                         .and_then(|content| {
                             serde_yml::from_str::<serde_yml::Value>(&content)
                                 .ok()
-                                .and_then(|v| v.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                                .and_then(|v| {
+                                    v.get("id")
+                                        .and_then(|id| id.as_str())
+                                        .map(|s| s.to_string())
+                                })
                         })
                         .unwrap_or_else(|| "unknown".to_string());
 
@@ -458,7 +459,8 @@ fn run_suspect_mark(args: SuspectMarkArgs) -> Result<()> {
         _ => SuspectReason::ManuallyMarked,
     };
 
-    mark_link_suspect(&source.path, &link_type, &target.id.to_string(), reason).into_diagnostic()?;
+    mark_link_suspect(&source.path, &link_type, &target.id.to_string(), reason)
+        .into_diagnostic()?;
 
     println!(
         "{} Marked as suspect: {} --[{}]--> {}",

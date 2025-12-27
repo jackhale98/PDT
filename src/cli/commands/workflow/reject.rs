@@ -76,7 +76,8 @@ impl RejectArgs {
         let mut entities: Vec<(PathBuf, String, String, Status)> = Vec::new();
 
         for id in &ids {
-            let full_id = short_index.resolve(id)
+            let full_id = short_index
+                .resolve(id)
                 .ok_or_else(|| miette::miette!("Cannot resolve ID: {}", id))?;
             let file_path = self.find_entity_file(&project, &full_id)?;
             let (entity_id, title, status) = get_entity_info(&file_path).into_diagnostic()?;
@@ -194,8 +195,12 @@ impl RejectArgs {
 
         if config.workflow.provider != Provider::None {
             if let Some(pr) = self.pr {
-                let provider = ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
-                println!("  {}", provider.format_command(&["pr", "close", &pr.to_string()]));
+                let provider =
+                    ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
+                println!(
+                    "  {}",
+                    provider.format_command(&["pr", "close", &pr.to_string()])
+                );
             }
         }
 
@@ -223,7 +228,8 @@ impl RejectArgs {
         );
 
         // Stage files
-        let paths: Vec<&std::path::Path> = entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
+        let paths: Vec<&std::path::Path> =
+            entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
         git.stage_files(&paths).into_diagnostic()?;
 
         // Commit

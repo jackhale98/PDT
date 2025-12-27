@@ -45,7 +45,11 @@ fn normal_cdf(z: f64) -> f64 {
     let pdf = (-0.5 * z_abs * z_abs).exp() / (2.0 * std::f64::consts::PI).sqrt();
     let cdf = 1.0 - pdf * (B1 * t + B2 * t2 + B3 * t3 + B4 * t4 + B5 * t5);
 
-    if negate { 1.0 - cdf } else { cdf }
+    if negate {
+        1.0 - cdf
+    } else {
+        cdf
+    }
 }
 
 /// Target/gap specification
@@ -745,19 +749,11 @@ mod tests {
         // Test known values from standard normal distribution table
         // Φ(0) = 0.5
         let v0 = normal_cdf(0.0);
-        assert!(
-            (v0 - 0.5).abs() < 1e-6,
-            "Φ(0) = {}, expected 0.5",
-            v0
-        );
+        assert!((v0 - 0.5).abs() < 1e-6, "Φ(0) = {}, expected 0.5", v0);
 
         // Φ(1) ≈ 0.8413
         let v1 = normal_cdf(1.0);
-        assert!(
-            (v1 - 0.8413).abs() < 0.01,
-            "Φ(1) = {}, expected 0.8413",
-            v1
-        );
+        assert!((v1 - 0.8413).abs() < 0.01, "Φ(1) = {}, expected 0.8413", v1);
 
         // Φ(-1) ≈ 0.1587
         let v_neg1 = normal_cdf(-1.0);
@@ -769,19 +765,11 @@ mod tests {
 
         // Φ(2) ≈ 0.9772
         let v2 = normal_cdf(2.0);
-        assert!(
-            (v2 - 0.9772).abs() < 0.01,
-            "Φ(2) = {}, expected 0.9772",
-            v2
-        );
+        assert!((v2 - 0.9772).abs() < 0.01, "Φ(2) = {}, expected 0.9772", v2);
 
         // Φ(3) ≈ 0.9987 (corresponds to ±3σ covering 99.73%)
         let v3 = normal_cdf(3.0);
-        assert!(
-            (v3 - 0.9987).abs() < 0.01,
-            "Φ(3) = {}, expected 0.9987",
-            v3
-        );
+        assert!((v3 - 0.9987).abs() < 0.01, "Φ(3) = {}, expected 0.9987", v3);
 
         // Extreme values
         assert!((normal_cdf(10.0) - 1.0).abs() < 1e-6);
@@ -1071,9 +1059,9 @@ mod tests {
         let mut stackup = Stackup::new(
             "Pin-Hole Clearance",
             "Gap",
-            2.0,   // nominal gap
-            3.0,   // upper limit
-            0.0,   // lower limit
+            2.0, // nominal gap
+            3.0, // upper limit
+            0.0, // lower limit
             "Test",
         );
 
@@ -1083,7 +1071,7 @@ mod tests {
             feature: None,
             direction: Direction::Positive,
             nominal: 10.0,
-            plus_tol: 0.015,  // H7 hole tolerance
+            plus_tol: 0.015, // H7 hole tolerance
             minus_tol: 0.0,
             distribution: Distribution::Normal,
             source: None,
@@ -1096,7 +1084,7 @@ mod tests {
             direction: Direction::Negative,
             nominal: 8.0,
             plus_tol: 0.0,
-            minus_tol: 0.009,  // f7 shaft tolerance
+            minus_tol: 0.009, // f7 shaft tolerance
             distribution: Distribution::Normal,
             source: None,
         });

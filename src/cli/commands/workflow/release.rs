@@ -9,9 +9,7 @@ use crate::cli::args::GlobalOpts;
 use crate::core::entity::Status;
 use crate::core::identity::EntityPrefix;
 use crate::core::shortid::ShortIdIndex;
-use crate::core::workflow::{
-    get_entity_info, get_prefix_from_id, record_release, truncate_id,
-};
+use crate::core::workflow::{get_entity_info, get_prefix_from_id, record_release, truncate_id};
 use crate::core::{Config, Git, Project, TeamRoster, WorkflowEngine};
 
 /// Release approved entities
@@ -113,7 +111,8 @@ impl ReleaseArgs {
         let mut entities: Vec<(PathBuf, String, String, Status)> = Vec::new();
 
         for id in &ids {
-            let full_id = short_index.resolve(id)
+            let full_id = short_index
+                .resolve(id)
                 .ok_or_else(|| miette::miette!("Cannot resolve ID: {}", id))?;
             let file_path = self.find_entity_file(&project, &full_id)?;
             let (entity_id, title, status) = get_entity_info(&file_path).into_diagnostic()?;
@@ -200,7 +199,12 @@ impl ReleaseArgs {
         for entry in WalkDir::new(project.root())
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "yaml").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "yaml")
+                    .unwrap_or(false)
+            })
             .filter(|e| e.path().to_string_lossy().contains(".tdt.yaml"))
         {
             if let Ok((id, _, status)) = get_entity_info(entry.path()) {
@@ -242,10 +246,7 @@ impl ReleaseArgs {
         bail!("Entity file not found: {}", id)
     }
 
-    fn print_dry_run(
-        &self,
-        entities: &[(PathBuf, String, String, Status)],
-    ) -> Result<()> {
+    fn print_dry_run(&self, entities: &[(PathBuf, String, String, Status)]) -> Result<()> {
         println!("\nWould execute:");
 
         for (path, _id, _, _) in entities {
@@ -287,7 +288,8 @@ impl ReleaseArgs {
         );
 
         // Stage files
-        let paths: Vec<&std::path::Path> = entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
+        let paths: Vec<&std::path::Path> =
+            entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
         git.stage_files(&paths).into_diagnostic()?;
 
         // Commit

@@ -23,7 +23,7 @@ pub use entity::Entity;
 pub use git::{Git, GitError};
 pub use identity::{EntityId, EntityPrefix, IdParseError};
 pub use project::{Project, ProjectError};
-pub use provider::{Provider, ProviderClient, ProviderError, PrInfo, PrState};
+pub use provider::{PrInfo, PrState, Provider, ProviderClient, ProviderError};
 pub use shortid::ShortIdIndex;
 pub use suspect::{
     clear_link_suspect, get_suspect_links, has_suspect_links, mark_link_suspect, ExtendedLinkRef,

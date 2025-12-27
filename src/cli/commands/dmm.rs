@@ -511,9 +511,7 @@ fn output_dot(dmm: &Dmm, full_ids: bool, row_type: EntityType, col_type: EntityT
     println!();
 
     // Row entities cluster
-    println!(
-        "  subgraph cluster_rows {{",
-    );
+    println!("  subgraph cluster_rows {{",);
     println!("    label=\"{}\";", row_type.display_name());
     println!("    style=dashed;");
     println!("    color=gray;");
@@ -530,9 +528,7 @@ fn output_dot(dmm: &Dmm, full_ids: bool, row_type: EntityType, col_type: EntityT
     println!();
 
     // Column entities cluster
-    println!(
-        "  subgraph cluster_cols {{",
-    );
+    println!("  subgraph cluster_cols {{",);
     println!("    label=\"{}\";", col_type.display_name());
     println!("    style=dashed;");
     println!("    color=gray;");

@@ -1485,11 +1485,7 @@ impl EntityCache {
     }
 
     /// List recently modified entities (by file modification time)
-    pub fn list_recent(
-        &self,
-        type_prefixes: Option<&[&str]>,
-        limit: usize,
-    ) -> Vec<CachedEntity> {
+    pub fn list_recent(&self, type_prefixes: Option<&[&str]>, limit: usize) -> Vec<CachedEntity> {
         let mut sql = String::from(
             "SELECT id, prefix, title, status, author, created, file_path, priority, entity_type, category, tags, file_mtime FROM entities WHERE 1=1",
         );
@@ -1498,7 +1494,9 @@ impl EntityCache {
         // Filter by entity types
         if let Some(prefixes) = type_prefixes {
             if !prefixes.is_empty() {
-                let placeholders: Vec<String> = prefixes.iter().enumerate()
+                let placeholders: Vec<String> = prefixes
+                    .iter()
+                    .enumerate()
                     .map(|(i, _)| format!("?{}", i + 1))
                     .collect();
                 sql.push_str(&format!(" AND prefix IN ({})", placeholders.join(",")));
@@ -1554,9 +1552,10 @@ impl EntityCache {
     /// List all unique tags across all entities
     pub fn list_all_tags(&self) -> Vec<(String, usize)> {
         // Query all tags from entities table
-        let mut stmt = match self.conn.prepare(
-            "SELECT tags FROM entities WHERE tags IS NOT NULL AND tags != ''",
-        ) {
+        let mut stmt = match self
+            .conn
+            .prepare("SELECT tags FROM entities WHERE tags IS NOT NULL AND tags != ''")
+        {
             Ok(s) => s,
             Err(_) => return vec![],
         };
@@ -1570,7 +1569,8 @@ impl EntityCache {
         };
 
         // Count tag occurrences
-        let mut tag_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut tag_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         for row in rows.filter_map(|r| r.ok()) {
             for tag in row.split(',').filter(|t| !t.is_empty()) {
                 *tag_counts.entry(tag.to_string()).or_insert(0) += 1;

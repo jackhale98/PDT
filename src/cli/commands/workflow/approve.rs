@@ -11,8 +11,8 @@ use crate::cli::args::GlobalOpts;
 use crate::core::entity::Status;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::workflow::{
-    get_approval_status, get_entity_info, get_prefix_from_id, record_approval_ext,
-    truncate_id, would_be_duplicate_approval, ApprovalOptions,
+    get_approval_status, get_entity_info, get_prefix_from_id, record_approval_ext, truncate_id,
+    would_be_duplicate_approval, ApprovalOptions,
 };
 use crate::core::{Config, Git, Project, Provider, ProviderClient, TeamRoster, WorkflowEngine};
 
@@ -99,19 +99,19 @@ impl ApproveArgs {
             .or_else(|| std::env::var("USERNAME").ok())
             .unwrap_or_else(|| "Unknown".to_string());
 
-        let approver_email = current_user
-            .map(|u| u.email.clone())
-            .or_else(|| if has_git { git.user_email().ok() } else { None });
+        let approver_email = current_user.map(|u| u.email.clone()).or_else(|| {
+            if has_git {
+                git.user_email().ok()
+            } else {
+                None
+            }
+        });
 
         let approver_role = current_user.and_then(|u| u.roles.first().copied());
 
         if self.verbose {
             if let Some(user) = current_user {
-                eprintln!(
-                    "Approving as {} ({:?})",
-                    user.name,
-                    user.roles
-                );
+                eprintln!("Approving as {} ({:?})", user.name, user.roles);
             }
         }
 
@@ -126,7 +126,8 @@ impl ApproveArgs {
         let mut entities: Vec<(PathBuf, String, String, Status)> = Vec::new();
 
         for id in &ids {
-            let full_id = short_index.resolve(id)
+            let full_id = short_index
+                .resolve(id)
                 .ok_or_else(|| miette::miette!("Cannot resolve ID: {}", id))?;
             let file_path = self.find_entity_file(&project, &full_id)?;
             let (entity_id, title, status) = get_entity_info(&file_path).into_diagnostic()?;
@@ -163,7 +164,12 @@ impl ApproveArgs {
             // Check authorization
             if !self.force {
                 if let Some(prefix) = get_prefix_from_id(&entity_id) {
-                    if let Err(e) = engine.can_transition(Status::Review, Status::Approved, prefix, current_user) {
+                    if let Err(e) = engine.can_transition(
+                        Status::Review,
+                        Status::Approved,
+                        prefix,
+                        current_user,
+                    ) {
                         bail!("{}", e);
                     }
                 }
@@ -194,7 +200,11 @@ impl ApproveArgs {
                             "      Approvals: {}/{} {}",
                             status.current_approvals,
                             status.required_approvals,
-                            if status.requirements_met { "(ready to approve)" } else { "(more approvals needed)" }
+                            if status.requirements_met {
+                                "(ready to approve)"
+                            } else {
+                                "(more approvals needed)"
+                            }
                         );
                     }
                 }
@@ -250,20 +260,22 @@ impl ApproveArgs {
             if let Ok(status) = get_approval_status(file_path, requirements) {
                 println!(
                     "  Approvals: {}/{}",
-                    status.current_approvals,
-                    status.required_approvals
+                    status.current_approvals, status.required_approvals
                 );
                 if !status.approvers.is_empty() {
                     println!("  Approvers: {}", status.approvers.join(", "));
                 }
                 if !status.missing_roles.is_empty() {
-                    let roles: Vec<String> = status.missing_roles.iter().map(|r| r.to_string()).collect();
+                    let roles: Vec<String> =
+                        status.missing_roles.iter().map(|r| r.to_string()).collect();
                     println!("  Missing roles: {}", roles.join(", "));
                 }
                 if status.requirements_met {
                     println!("  Ready for approval transition");
                 } else {
-                    let remaining = status.required_approvals.saturating_sub(status.current_approvals);
+                    let remaining = status
+                        .required_approvals
+                        .saturating_sub(status.current_approvals);
                     if remaining > 0 {
                         println!("  Need {} more approval(s)", remaining);
                     }
@@ -341,7 +353,9 @@ impl ApproveArgs {
 
             let commit_message = if entities.len() == 1 {
                 let (_, id, title, _) = &entities[0];
-                config.workflow.format_approve_message(&truncate_id(id), title)
+                config
+                    .workflow
+                    .format_approve_message(&truncate_id(id), title)
             } else {
                 format!("Approve {} entities", entities.len())
             };
@@ -349,10 +363,17 @@ impl ApproveArgs {
 
             if config.workflow.provider != Provider::None {
                 if let Some(pr) = self.pr {
-                    let provider = ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
-                    println!("  {}", provider.format_command(&["pr", "review", &pr.to_string(), "--approve"]));
+                    let provider =
+                        ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
+                    println!(
+                        "  {}",
+                        provider.format_command(&["pr", "review", &pr.to_string(), "--approve"])
+                    );
                     if self.merge || (config.workflow.auto_merge && !self.no_merge) {
-                        println!("  {}", provider.format_command(&["pr", "merge", &pr.to_string()]));
+                        println!(
+                            "  {}",
+                            provider.format_command(&["pr", "merge", &pr.to_string()])
+                        );
                     }
                 }
             }
@@ -469,13 +490,16 @@ impl ApproveArgs {
 
         if should_commit {
             // Stage files
-            let paths: Vec<&std::path::Path> = entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
+            let paths: Vec<&std::path::Path> =
+                entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
             git.stage_files(&paths).into_diagnostic()?;
 
             // Commit (with or without GPG signature)
             let commit_message = if entities.len() == 1 {
                 let (_, id, title, _) = &entities[0];
-                config.workflow.format_approve_message(&truncate_id(id), title)
+                config
+                    .workflow
+                    .format_approve_message(&truncate_id(id), title)
             } else {
                 format!("Approve {} entities", entities.len())
             };

@@ -4216,7 +4216,10 @@ fn test_link_remove() {
             .args(["link", "show", &req_id])
             .assert()
             .success()
-            .stdout(predicate::str::contains("No links").or(predicate::str::contains("verified_by").not()));
+            .stdout(
+                predicate::str::contains("No links")
+                    .or(predicate::str::contains("verified_by").not()),
+            );
     }
 }
 
@@ -4789,7 +4792,15 @@ fn test_edge_case_very_long_title() {
     let long_title = "A".repeat(200);
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "new", "--title", &long_title, "--type", "input", "--no-edit"])
+        .args([
+            "req",
+            "new",
+            "--title",
+            &long_title,
+            "--type",
+            "input",
+            "--no-edit",
+        ])
         .assert()
         .success();
 

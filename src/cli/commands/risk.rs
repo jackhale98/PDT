@@ -827,20 +827,11 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             .map(String::from)
             .unwrap_or_default();
 
-        let severity = result
-            .get_i64("severity")
-            .map(|n| n as u8)
-            .unwrap_or(5);
+        let severity = result.get_i64("severity").map(|n| n as u8).unwrap_or(5);
 
-        let occurrence = result
-            .get_i64("occurrence")
-            .map(|n| n as u8)
-            .unwrap_or(5);
+        let occurrence = result.get_i64("occurrence").map(|n| n as u8).unwrap_or(5);
 
-        let detection = result
-            .get_i64("detection")
-            .map(|n| n as u8)
-            .unwrap_or(5);
+        let detection = result.get_i64("detection").map(|n| n as u8).unwrap_or(5);
 
         // Extract FMEA text fields
         let description = result.get_string("description").map(String::from);

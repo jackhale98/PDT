@@ -245,7 +245,10 @@ impl Git {
         }
 
         let mut args = vec!["add"];
-        let path_strings: Vec<String> = paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        let path_strings: Vec<String> = paths
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
         for path in &path_strings {
             args.push(path);
         }
@@ -321,12 +324,7 @@ impl Git {
         let output = self.run(&["remote"])?;
         if output.success && !output.stdout.is_empty() {
             // Return first remote (usually "origin")
-            Ok(output
-                .stdout
-                .lines()
-                .next()
-                .unwrap_or("origin")
-                .to_string())
+            Ok(output.stdout.lines().next().unwrap_or("origin").to_string())
         } else {
             Ok("origin".to_string())
         }

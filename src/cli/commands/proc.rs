@@ -1120,12 +1120,16 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
                 if let Some(ctrls) = controls_by_process.get(&proc_id) {
                     for (i, (ctrl_short, ctrl_title)) in ctrls.iter().enumerate() {
                         let ctrl_node = format!("{}_ctrl_{}", node_id, i);
-                        let ctrl_label = format!("{}\\n{}", ctrl_short, truncate_str(ctrl_title, 25));
+                        let ctrl_label =
+                            format!("{}\\n{}", ctrl_short, truncate_str(ctrl_title, 25));
                         println!(
                             "  \"{}\" [label=\"{}\" shape=diamond fillcolor=khaki style=filled fontsize=10];",
                             ctrl_node, ctrl_label
                         );
-                        println!("  \"{}\" -> \"{}\" [style=dashed arrowhead=none];", node_id, ctrl_node);
+                        println!(
+                            "  \"{}\" -> \"{}\" [style=dashed arrowhead=none];",
+                            node_id, ctrl_node
+                        );
                     }
                 }
             }

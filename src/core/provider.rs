@@ -244,7 +244,9 @@ impl ProviderClient {
 
         let args = match self.provider {
             Provider::GitHub => {
-                let mut args = vec!["pr", "create", "--title", title, "--body", body, "--base", base];
+                let mut args = vec![
+                    "pr", "create", "--title", title, "--body", body, "--base", base,
+                ];
                 if draft {
                     args.push("--draft");
                 }
@@ -252,8 +254,16 @@ impl ProviderClient {
             }
             Provider::GitLab => {
                 let mut args = vec![
-                    "mr", "create", "--title", title, "--description", body, "--target-branch", base,
-                    "--remove-source-branch", "--yes",
+                    "mr",
+                    "create",
+                    "--title",
+                    title,
+                    "--description",
+                    body,
+                    "--target-branch",
+                    base,
+                    "--remove-source-branch",
+                    "--yes",
                 ];
                 if draft {
                     args.push("--draft");
@@ -375,12 +385,14 @@ impl ProviderClient {
 
         let args = match self.provider {
             Provider::GitHub => vec![
-                "pr", "list", "--search", "review-requested:@me", "--json",
+                "pr",
+                "list",
+                "--search",
+                "review-requested:@me",
+                "--json",
                 "number,url,title,author,headRefName,state",
             ],
-            Provider::GitLab => vec![
-                "mr", "list", "--reviewer=@me", "--state=opened",
-            ],
+            Provider::GitLab => vec!["mr", "list", "--reviewer=@me", "--state=opened"],
             Provider::None => return Err(ProviderError::NotConfigured),
         };
 
@@ -399,12 +411,14 @@ impl ProviderClient {
 
         let args = match self.provider {
             Provider::GitHub => vec![
-                "pr", "list", "--head", branch, "--json",
+                "pr",
+                "list",
+                "--head",
+                branch,
+                "--json",
                 "number,url,title,author,headRefName,state",
             ],
-            Provider::GitLab => vec![
-                "mr", "list", "--source-branch", branch, "--state=opened",
-            ],
+            Provider::GitLab => vec!["mr", "list", "--source-branch", branch, "--state=opened"],
             Provider::None => return Err(ProviderError::NotConfigured),
         };
 
@@ -426,7 +440,10 @@ impl ProviderClient {
         let pr_str = pr_number.to_string();
         let args = match self.provider {
             Provider::GitHub => vec![
-                "pr", "view", &pr_str, "--json",
+                "pr",
+                "view",
+                &pr_str,
+                "--json",
                 "number,url,title,author,headRefName,state",
             ],
             Provider::GitLab => vec!["mr", "view", &pr_str],
@@ -438,9 +455,9 @@ impl ProviderClient {
         match self.provider {
             Provider::GitHub => {
                 let prs = self.parse_github_pr_list(&format!("[{}]", output))?;
-                prs.into_iter().next().ok_or_else(|| ProviderError::PrNotFound {
-                    branch: pr_str,
-                })
+                prs.into_iter()
+                    .next()
+                    .ok_or_else(|| ProviderError::PrNotFound { branch: pr_str })
             }
             Provider::GitLab => {
                 // Parse single MR view output
@@ -454,9 +471,7 @@ impl ProviderClient {
     fn extract_pr_number(&self, url: &str) -> Option<u64> {
         // URLs like https://github.com/owner/repo/pull/123
         // or https://gitlab.com/owner/repo/-/merge_requests/123
-        url.rsplit('/')
-            .next()
-            .and_then(|s| s.parse().ok())
+        url.rsplit('/').next().and_then(|s| s.parse().ok())
     }
 
     /// Parse GitHub PR list JSON output

@@ -84,10 +84,7 @@ impl std::str::FromStr for Asil {
             "B" => Ok(Asil::B),
             "C" => Ok(Asil::C),
             "D" => Ok(Asil::D),
-            _ => Err(format!(
-                "Unknown ASIL: {}. Expected QM, A, B, C, or D",
-                s
-            )),
+            _ => Err(format!("Unknown ASIL: {}. Expected QM, A, B, C, or D", s)),
         }
     }
 }
@@ -132,10 +129,7 @@ impl std::str::FromStr for Dal {
             "C" => Ok(Dal::C),
             "B" => Ok(Dal::B),
             "A" => Ok(Dal::A),
-            _ => Err(format!(
-                "Unknown DAL: {}. Expected E, D, C, B, or A",
-                s
-            )),
+            _ => Err(format!("Unknown DAL: {}. Expected E, D, C, B, or A", s)),
         }
     }
 }

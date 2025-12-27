@@ -440,7 +440,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         || args.untested
         || args.failed
         || args.passing
-        || !matches!(args.level, LevelFilter::All);  // level not in cache yet
+        || !matches!(args.level, LevelFilter::All); // level not in cache yet
     let needs_full_entities = needs_full_output || needs_complex_filters;
 
     // Pre-load test results if we need verification status filters

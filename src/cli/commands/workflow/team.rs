@@ -175,18 +175,25 @@ fn run_whoami(_global: &GlobalOpts) -> Result<()> {
 
     // Show what they can approve
     println!("\nAuthorization:");
-    println!("  Can approve: {}", if user.is_admin() {
-        "All entities (admin)".to_string()
-    } else {
-        user.roles
-            .iter()
-            .map(|r| r.to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
-    });
+    println!(
+        "  Can approve: {}",
+        if user.is_admin() {
+            "All entities (admin)".to_string()
+        } else {
+            user.roles
+                .iter()
+                .map(|r| r.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        }
+    );
     println!(
         "  Can release: {}",
-        if roster.can_release(user) { "Yes" } else { "No" }
+        if roster.can_release(user) {
+            "Yes"
+        } else {
+            "No"
+        }
     );
 
     Ok(())
@@ -266,8 +273,8 @@ impl TeamRemoveArgs {
     pub fn run(&self, _global: &GlobalOpts) -> Result<()> {
         let project = Project::discover().into_diagnostic()?;
 
-        let mut roster = TeamRoster::load(&project)
-            .ok_or_else(|| miette!("No team roster found."))?;
+        let mut roster =
+            TeamRoster::load(&project).ok_or_else(|| miette!("No team roster found."))?;
 
         let member = roster
             .find_member(&self.username)
@@ -277,7 +284,10 @@ impl TeamRemoveArgs {
 
         // Confirm if not --yes
         if !self.yes {
-            print!("Remove {} ({}) from team roster? [y/N] ", name, self.username);
+            print!(
+                "Remove {} ({}) from team roster? [y/N] ",
+                name, self.username
+            );
             std::io::Write::flush(&mut std::io::stdout()).into_diagnostic()?;
             let mut input = String::new();
             std::io::stdin().read_line(&mut input).into_diagnostic()?;

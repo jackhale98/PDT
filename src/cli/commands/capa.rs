@@ -569,7 +569,13 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         println!();
         println!("{} Source information", console::style("◆").cyan());
 
-        let source_options = ["ncr", "audit", "customer_complaint", "trend_analysis", "risk"];
+        let source_options = [
+            "ncr",
+            "audit",
+            "customer_complaint",
+            "trend_analysis",
+            "risk",
+        ];
         let source_selection = Select::with_theme(&theme)
             .with_prompt("Source type")
             .items(&source_options)
@@ -639,10 +645,8 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         if let Some(ref num) = capa_number {
-            yaml_content = yaml_content.replace(
-                "capa_number: null",
-                &format!("capa_number: \"{}\"", num),
-            );
+            yaml_content =
+                yaml_content.replace("capa_number: null", &format!("capa_number: \"{}\"", num));
         }
         if let Some(ref status) = capa_status {
             yaml_content = yaml_content.replace(

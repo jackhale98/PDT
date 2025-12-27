@@ -1271,7 +1271,10 @@ revision: 1
     fn hardcoded_requirement_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
         let req_type = ctx.req_type.clone().unwrap_or_else(|| "input".to_string());
-        let level = ctx.req_level.clone().unwrap_or_else(|| "system".to_string());
+        let level = ctx
+            .req_level
+            .clone()
+            .unwrap_or_else(|| "system".to_string());
         let priority = ctx.priority.clone().unwrap_or_else(|| "medium".to_string());
         let category = ctx.category.clone().unwrap_or_default();
         let created = ctx.created.to_rfc3339();

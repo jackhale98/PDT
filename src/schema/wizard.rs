@@ -420,7 +420,9 @@ impl SchemaWizard {
                     .default(default_idx)
                     .interact()
                     .into_diagnostic()
-                    .map_err(|e| miette::miette!("Failed to read selection for '{}': {}", field.name, e))?;
+                    .map_err(|e| {
+                        miette::miette!("Failed to read selection for '{}': {}", field.name, e)
+                    })?;
 
                 Ok(Some(Value::String(values[selection].clone())))
             }
@@ -457,7 +459,10 @@ impl SchemaWizard {
                     .validate_with(move |input: &String| -> std::result::Result<(), String> {
                         // Check for whitespace-only on required fields
                         if is_required && input.trim().is_empty() {
-                            return Err(format!("'{}' is required and cannot be empty or whitespace-only", field_name));
+                            return Err(format!(
+                                "'{}' is required and cannot be empty or whitespace-only",
+                                field_name
+                            ));
                         }
 
                         // Allow empty for optional fields
@@ -526,9 +531,9 @@ impl SchemaWizard {
                         }
 
                         // Must be a valid integer
-                        let parsed: i64 = input.parse().map_err(|_| {
-                            format!("'{}' is not a valid integer", input)
-                        })?;
+                        let parsed: i64 = input
+                            .parse()
+                            .map_err(|_| format!("'{}' is not a valid integer", input))?;
 
                         // Validate bounds
                         if let Some(min) = min_val {
@@ -552,7 +557,9 @@ impl SchemaWizard {
                     Ok(None)
                 } else {
                     // Safe to unwrap because validation passed
-                    let parsed: i64 = value.parse().expect("validation should have caught invalid integer");
+                    let parsed: i64 = value
+                        .parse()
+                        .expect("validation should have caught invalid integer");
                     Ok(Some(Value::Number(parsed.into())))
                 }
             }
@@ -594,9 +601,9 @@ impl SchemaWizard {
                         }
 
                         // Must be a valid number
-                        let parsed: f64 = input.parse().map_err(|_| {
-                            format!("'{}' is not a valid number", input)
-                        })?;
+                        let parsed: f64 = input
+                            .parse()
+                            .map_err(|_| format!("'{}' is not a valid number", input))?;
 
                         // Reject NaN and Infinity
                         if parsed.is_nan() {
@@ -628,10 +635,13 @@ impl SchemaWizard {
                     Ok(None)
                 } else {
                     // Safe to unwrap because validation passed
-                    let parsed: f64 = value.parse().expect("validation should have caught invalid number");
+                    let parsed: f64 = value
+                        .parse()
+                        .expect("validation should have caught invalid number");
                     // from_f64 returns None for NaN/Infinity, but we already validated against those
-                    let num = serde_json::Number::from_f64(parsed)
-                        .ok_or_else(|| miette::miette!("Invalid number value for '{}'", field.name))?;
+                    let num = serde_json::Number::from_f64(parsed).ok_or_else(|| {
+                        miette::miette!("Invalid number value for '{}'", field.name)
+                    })?;
                     Ok(Some(Value::Number(num)))
                 }
             }

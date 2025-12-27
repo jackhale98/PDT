@@ -248,7 +248,9 @@ impl TeamRoster {
 
     /// Get members with a specific role
     pub fn members_with_role(&self, role: Role) -> impl Iterator<Item = &TeamMember> {
-        self.members.iter().filter(move |m| m.active && m.has_role(role))
+        self.members
+            .iter()
+            .filter(move |m| m.active && m.has_role(role))
     }
 
     /// Generate default team.yaml template content

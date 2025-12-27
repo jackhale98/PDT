@@ -149,11 +149,7 @@ impl ReviewListArgs {
                     };
                     println!(
                         "{:<12} {:<8} {:<40} {:<15} #{}",
-                        item.short_id,
-                        item.entity_type,
-                        title,
-                        item.author,
-                        item.pr_number
+                        item.short_id, item.entity_type, title, item.author, item.pr_number
                     );
                 }
 
@@ -185,7 +181,12 @@ impl ReviewListArgs {
         for entry in WalkDir::new(project.root())
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "yaml").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "yaml")
+                    .unwrap_or(false)
+            })
             .filter(|e| e.path().to_string_lossy().contains(".tdt.yaml"))
         {
             if let Ok((id, title, status)) = get_entity_info(entry.path()) {
@@ -208,7 +209,8 @@ impl ReviewListArgs {
 
                 // If not --all, filter to what user can approve
                 if !self.all {
-                    if let (Some(ref r), Some(ref p), Some(user)) = (&roster, &prefix, current_user) {
+                    if let (Some(ref r), Some(ref p), Some(user)) = (&roster, &prefix, current_user)
+                    {
                         if !r.can_approve(user, *p) {
                             continue;
                         }
@@ -222,11 +224,14 @@ impl ReviewListArgs {
                     short_id: truncate_id(&id),
                     entity_type,
                     title,
-                    can_approve: prefix.map(|p| {
-                        roster.as_ref().map(|r| {
-                            current_user.map(|u| r.can_approve(u, p)).unwrap_or(true)
-                        }).unwrap_or(true)
-                    }).unwrap_or(true),
+                    can_approve: prefix
+                        .map(|p| {
+                            roster
+                                .as_ref()
+                                .map(|r| current_user.map(|u| r.can_approve(u, p)).unwrap_or(true))
+                                .unwrap_or(true)
+                        })
+                        .unwrap_or(true),
                 });
             }
         }
@@ -270,10 +275,7 @@ impl ReviewListArgs {
                     let can_approve = if item.can_approve { "Yes" } else { "No" };
                     println!(
                         "{:<15} {:<8} {:<50} {}",
-                        item.short_id,
-                        item.entity_type,
-                        title,
-                        can_approve
+                        item.short_id, item.entity_type, title, can_approve
                     );
                 }
 
@@ -303,7 +305,12 @@ fn run_summary(_global: &GlobalOpts) -> Result<()> {
     for entry in WalkDir::new(project.root())
         .into_iter()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|ext| ext == "yaml").unwrap_or(false))
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "yaml")
+                .unwrap_or(false)
+        })
         .filter(|e| e.path().to_string_lossy().contains(".tdt.yaml"))
     {
         if let Ok((id, _, status)) = get_entity_info(entry.path()) {
@@ -321,7 +328,13 @@ fn run_summary(_global: &GlobalOpts) -> Result<()> {
     println!("\nWorkflow Summary\n");
     println!("Status        Count");
     println!("{}", "-".repeat(25));
-    for status in [Status::Draft, Status::Review, Status::Approved, Status::Released, Status::Obsolete] {
+    for status in [
+        Status::Draft,
+        Status::Review,
+        Status::Approved,
+        Status::Released,
+        Status::Obsolete,
+    ] {
         let count = by_status.get(&status).unwrap_or(&0);
         println!("{:<13} {}", status, count);
     }

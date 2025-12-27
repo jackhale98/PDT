@@ -370,10 +370,9 @@ pub fn update_entity_status(file_path: &Path, new_status: Status) -> Result<(), 
     }
 
     // Serialize back
-    let new_contents =
-        serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
-            message: e.to_string(),
-        })?;
+    let new_contents = serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
+        message: e.to_string(),
+    })?;
 
     std::fs::write(file_path, new_contents)?;
     Ok(())
@@ -495,10 +494,9 @@ pub fn record_approval_ext(
         }
     }
 
-    let new_contents =
-        serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
-            message: e.to_string(),
-        })?;
+    let new_contents = serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
+        message: e.to_string(),
+    })?;
 
     std::fs::write(file_path, new_contents)?;
     Ok(())
@@ -558,8 +556,7 @@ fn check_approval_requirements(
         .copied()
         .collect();
 
-    let requirements_met =
-        current_approvals >= required_approvals && missing_roles.is_empty();
+    let requirements_met = current_approvals >= required_approvals && missing_roles.is_empty();
 
     ApprovalStatus {
         current_approvals,
@@ -669,10 +666,9 @@ pub fn record_rejection(
         }
     }
 
-    let new_contents =
-        serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
-            message: e.to_string(),
-        })?;
+    let new_contents = serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
+        message: e.to_string(),
+    })?;
 
     std::fs::write(file_path, new_contents)?;
     Ok(())
@@ -705,10 +701,9 @@ pub fn record_release(file_path: &Path, releaser: &str) -> Result<(), WorkflowEr
         );
     }
 
-    let new_contents =
-        serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
-            message: e.to_string(),
-        })?;
+    let new_contents = serde_yml::to_string(&doc).map_err(|e| WorkflowError::YamlError {
+        message: e.to_string(),
+    })?;
 
     std::fs::write(file_path, new_contents)?;
     Ok(())
@@ -800,7 +795,10 @@ mod tests {
     fn test_allowed_transitions() {
         let engine = WorkflowEngine::new(None, WorkflowConfig::with_defaults());
 
-        assert_eq!(engine.allowed_transitions(Status::Draft), vec![Status::Review]);
+        assert_eq!(
+            engine.allowed_transitions(Status::Draft),
+            vec![Status::Review]
+        );
         assert_eq!(
             engine.allowed_transitions(Status::Review),
             vec![Status::Approved, Status::Draft]
@@ -940,7 +938,10 @@ status: review
     #[test]
     fn test_get_prefix_from_id() {
         assert_eq!(get_prefix_from_id("REQ-01KCWY20"), Some(EntityPrefix::Req));
-        assert_eq!(get_prefix_from_id("RISK-01KCWY20"), Some(EntityPrefix::Risk));
+        assert_eq!(
+            get_prefix_from_id("RISK-01KCWY20"),
+            Some(EntityPrefix::Risk)
+        );
         assert_eq!(get_prefix_from_id("CMP-01KCWY20"), Some(EntityPrefix::Cmp));
         assert_eq!(get_prefix_from_id("INVALID-01KCWY20"), None);
     }

@@ -9,7 +9,9 @@ use crate::cli::args::GlobalOpts;
 use crate::core::entity::Status;
 use crate::core::identity::EntityPrefix;
 use crate::core::shortid::ShortIdIndex;
-use crate::core::workflow::{get_entity_info, get_prefix_from_id, truncate_id, update_entity_status};
+use crate::core::workflow::{
+    get_entity_info, get_prefix_from_id, truncate_id, update_entity_status,
+};
 use crate::core::{Config, Git, Project, Provider, ProviderClient, TeamRoster};
 
 /// Submit entities for review (creates PR if provider configured)
@@ -94,7 +96,8 @@ impl SubmitArgs {
         let mut entities: Vec<(PathBuf, String, String, Status)> = Vec::new();
 
         for id in &ids {
-            let full_id = short_index.resolve(id)
+            let full_id = short_index
+                .resolve(id)
                 .ok_or_else(|| miette::miette!("Cannot resolve ID: {}", id))?;
             let file_path = self.find_entity_file(&project, &full_id)?;
             let (entity_id, title, status) = get_entity_info(&file_path).into_diagnostic()?;
@@ -178,7 +181,12 @@ impl SubmitArgs {
         for entry in WalkDir::new(project.root())
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "yaml").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "yaml")
+                    .unwrap_or(false)
+            })
             .filter(|e| e.path().to_string_lossy().contains(".tdt.yaml"))
         {
             if let Ok((id, _, status)) = get_entity_info(entry.path()) {
@@ -234,7 +242,11 @@ impl SubmitArgs {
             let short = truncate_id(id);
             let prefix = id.split('-').next().unwrap_or("ENT");
             let ulid_part = id.split('-').nth(1).unwrap_or("");
-            let short_ulid = if ulid_part.len() > 8 { &ulid_part[..8] } else { ulid_part };
+            let short_ulid = if ulid_part.len() > 8 {
+                &ulid_part[..8]
+            } else {
+                ulid_part
+            };
             (
                 config.workflow.format_branch(prefix, short_ulid),
                 config.workflow.format_submit_message(&short, title),
@@ -266,9 +278,24 @@ impl SubmitArgs {
         if !self.no_pr && config.workflow.provider != Provider::None {
             let provider = ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
             let pr_cmd = if self.draft {
-                provider.format_command(&["pr", "create", "--title", &pr_title, "--base", &config.workflow.base_branch, "--draft"])
+                provider.format_command(&[
+                    "pr",
+                    "create",
+                    "--title",
+                    &pr_title,
+                    "--base",
+                    &config.workflow.base_branch,
+                    "--draft",
+                ])
             } else {
-                provider.format_command(&["pr", "create", "--title", &pr_title, "--base", &config.workflow.base_branch])
+                provider.format_command(&[
+                    "pr",
+                    "create",
+                    "--title",
+                    &pr_title,
+                    "--base",
+                    &config.workflow.base_branch,
+                ])
             };
             println!("  {}", pr_cmd);
         }
@@ -291,7 +318,11 @@ impl SubmitArgs {
             let short = truncate_id(id);
             let prefix = id.split('-').next().unwrap_or("ENT");
             let ulid_part = id.split('-').nth(1).unwrap_or("");
-            let short_ulid = if ulid_part.len() > 8 { &ulid_part[..8] } else { ulid_part };
+            let short_ulid = if ulid_part.len() > 8 {
+                &ulid_part[..8]
+            } else {
+                ulid_part
+            };
             (
                 config.workflow.format_branch(prefix, short_ulid),
                 config.workflow.format_submit_message(&short, title),
@@ -309,7 +340,11 @@ impl SubmitArgs {
                 format!("review/batch-{}", date),
                 format!("Submit {} entities for review", entities.len()),
                 format!("Submit {} entities for review", entities.len()),
-                format!("Submitting {} entities for review.\n\n**Entities:**\n{}", entities.len(), entity_list),
+                format!(
+                    "Submitting {} entities for review.\n\n**Entities:**\n{}",
+                    entities.len(),
+                    entity_list
+                ),
             )
         };
 
@@ -317,7 +352,8 @@ impl SubmitArgs {
         if self.verbose {
             eprintln!("  Creating branch: {}", branch_name);
         }
-        git.create_and_checkout_branch(&branch_name).into_diagnostic()?;
+        git.create_and_checkout_branch(&branch_name)
+            .into_diagnostic()?;
         println!("  Created branch: {}", branch_name);
 
         // Update status in each entity
@@ -327,10 +363,14 @@ impl SubmitArgs {
                 eprintln!("  Updated status: draft → review in {}", truncate_id(id));
             }
         }
-        println!("  Changed status: draft → review ({} entities)", entities.len());
+        println!(
+            "  Changed status: draft → review ({} entities)",
+            entities.len()
+        );
 
         // Stage files
-        let paths: Vec<&std::path::Path> = entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
+        let paths: Vec<&std::path::Path> =
+            entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
         git.stage_files(&paths).into_diagnostic()?;
 
         // Commit
@@ -346,7 +386,12 @@ impl SubmitArgs {
             let provider = ProviderClient::new(config.workflow.provider, project.root())
                 .with_verbose(self.verbose);
 
-            match provider.create_pr(&pr_title, &pr_body, &config.workflow.base_branch, self.draft) {
+            match provider.create_pr(
+                &pr_title,
+                &pr_body,
+                &config.workflow.base_branch,
+                self.draft,
+            ) {
                 Ok(pr_info) => {
                     println!("  Created PR #{}: {}", pr_info.number, pr_info.url);
                 }

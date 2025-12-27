@@ -198,7 +198,9 @@ pub fn has_suspect_links(file_path: &Path) -> Result<bool, SuspectError> {
                     for link in seq {
                         // Check if it's an extended link with suspect=true
                         if let Some(link_map) = link.as_mapping() {
-                            if let Some(suspect) = link_map.get(&serde_yml::Value::String("suspect".to_string())) {
+                            if let Some(suspect) =
+                                link_map.get(&serde_yml::Value::String("suspect".to_string()))
+                            {
                                 if suspect.as_bool() == Some(true) {
                                     return Ok(true);
                                 }
@@ -294,12 +296,11 @@ pub fn mark_link_suspect(
                         // Handle both simple and extended links
                         let matches = match link {
                             serde_yml::Value::String(id) => id == target_id,
-                            serde_yml::Value::Mapping(map) => {
-                                map.get(&serde_yml::Value::String("id".to_string()))
-                                    .and_then(|v| v.as_str())
-                                    .map(|id| id == target_id)
-                                    .unwrap_or(false)
-                            }
+                            serde_yml::Value::Mapping(map) => map
+                                .get(&serde_yml::Value::String("id".to_string()))
+                                .and_then(|v| v.as_str())
+                                .map(|id| id == target_id)
+                                .unwrap_or(false),
                             _ => false,
                         };
 
@@ -317,10 +318,16 @@ pub fn mark_link_suspect(
                             new_link.insert(
                                 serde_yml::Value::String("suspect_reason".to_string()),
                                 serde_yml::Value::String(match reason {
-                                    SuspectReason::RevisionChanged => "revision_changed".to_string(),
-                                    SuspectReason::StatusRegressed => "status_regressed".to_string(),
+                                    SuspectReason::RevisionChanged => {
+                                        "revision_changed".to_string()
+                                    }
+                                    SuspectReason::StatusRegressed => {
+                                        "status_regressed".to_string()
+                                    }
                                     SuspectReason::ManuallyMarked => "manually_marked".to_string(),
-                                    SuspectReason::ContentModified => "content_modified".to_string(),
+                                    SuspectReason::ContentModified => {
+                                        "content_modified".to_string()
+                                    }
                                 }),
                             );
                             new_link.insert(
@@ -336,10 +343,9 @@ pub fn mark_link_suspect(
         }
     }
 
-    let new_contents =
-        serde_yml::to_string(&doc).map_err(|e| SuspectError::YamlError {
-            message: e.to_string(),
-        })?;
+    let new_contents = serde_yml::to_string(&doc).map_err(|e| SuspectError::YamlError {
+        message: e.to_string(),
+    })?;
 
     std::fs::write(file_path, new_contents)?;
     Ok(())
@@ -394,10 +400,9 @@ pub fn clear_link_suspect(
         }
     }
 
-    let new_contents =
-        serde_yml::to_string(&doc).map_err(|e| SuspectError::YamlError {
-            message: e.to_string(),
-        })?;
+    let new_contents = serde_yml::to_string(&doc).map_err(|e| SuspectError::YamlError {
+        message: e.to_string(),
+    })?;
 
     std::fs::write(file_path, new_contents)?;
     Ok(())
@@ -423,10 +428,7 @@ mod tests {
         let link = LinkRef::Extended(ext);
         assert_eq!(link.id(), "TEST-01ABC");
         assert!(link.is_suspect());
-        assert_eq!(
-            link.suspect_reason(),
-            Some(&SuspectReason::RevisionChanged)
-        );
+        assert_eq!(link.suspect_reason(), Some(&SuspectReason::RevisionChanged));
     }
 
     #[test]
@@ -435,10 +437,7 @@ mod tests {
         link.mark_suspect(SuspectReason::StatusRegressed);
 
         assert!(link.is_suspect());
-        assert_eq!(
-            link.suspect_reason(),
-            Some(&SuspectReason::StatusRegressed)
-        );
+        assert_eq!(link.suspect_reason(), Some(&SuspectReason::StatusRegressed));
     }
 
     #[test]
@@ -536,8 +535,13 @@ links:
         .unwrap();
 
         // Mark as suspect
-        mark_link_suspect(&file, "verified_by", "TEST-01ABC", SuspectReason::RevisionChanged)
-            .unwrap();
+        mark_link_suspect(
+            &file,
+            "verified_by",
+            "TEST-01ABC",
+            SuspectReason::RevisionChanged,
+        )
+        .unwrap();
         assert!(has_suspect_links(&file).unwrap());
 
         // Clear suspect
@@ -551,10 +555,19 @@ links:
 
     #[test]
     fn test_suspect_reason_display() {
-        assert_eq!(SuspectReason::RevisionChanged.to_string(), "revision changed");
-        assert_eq!(SuspectReason::StatusRegressed.to_string(), "status regressed");
+        assert_eq!(
+            SuspectReason::RevisionChanged.to_string(),
+            "revision changed"
+        );
+        assert_eq!(
+            SuspectReason::StatusRegressed.to_string(),
+            "status regressed"
+        );
         assert_eq!(SuspectReason::ManuallyMarked.to_string(), "manually marked");
-        assert_eq!(SuspectReason::ContentModified.to_string(), "content modified");
+        assert_eq!(
+            SuspectReason::ContentModified.to_string(),
+            "content modified"
+        );
     }
 
     #[test]

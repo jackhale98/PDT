@@ -398,9 +398,7 @@ pub fn run(args: ValidateArgs) -> Result<()> {
             style(stats.suspect_links).yellow(),
             style(stats.files_with_suspect_links).yellow()
         );
-        println!(
-            "                  Run 'tdt link suspect list' to review"
-        );
+        println!("                  Run 'tdt link suspect list' to review");
     }
 
     println!();

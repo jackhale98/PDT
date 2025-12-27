@@ -527,8 +527,8 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let config = Config::load();
 
     let title: String;
+    let document_number: Option<String>;
     let mut description: Option<String> = None;
-    let mut document_number: Option<String> = None;
     let mut revision: Option<String> = None;
     let mut estimated_duration: Option<f64> = None;
 
@@ -592,10 +592,8 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         if let Some(ref rev) = revision {
-            yaml_content = yaml_content.replace(
-                "revision: \"A\"",
-                &format!("revision: \"{}\"", rev),
-            );
+            yaml_content =
+                yaml_content.replace("revision: \"A\"", &format!("revision: \"{}\"", rev));
         }
         if let Some(dur) = estimated_duration {
             yaml_content = yaml_content.replace(

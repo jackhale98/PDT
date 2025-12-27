@@ -111,26 +111,15 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
         OutputFormat::Tsv | OutputFormat::Auto => {
-            println!(
-                "{} unique tags in project:",
-                style(tags.len()).cyan()
-            );
+            println!("{} unique tags in project:", style(tags.len()).cyan());
             println!();
 
             // Header
-            println!(
-                "{:<30} {:<10}",
-                style("TAG").bold(),
-                style("COUNT").bold()
-            );
+            println!("{:<30} {:<10}", style("TAG").bold(), style("COUNT").bold());
             println!("{}", "-".repeat(42));
 
             for (tag, count) in &tags {
-                println!(
-                    "{:<30} {:<10}",
-                    style(tag).yellow(),
-                    count
-                );
+                println!("{:<30} {:<10}", style(tag).yellow(), count);
             }
 
             println!();
@@ -186,7 +175,10 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 
     // No results
     if results.is_empty() {
-        println!("No entities found with tag '{}'.", style(&args.tag).yellow());
+        println!(
+            "No entities found with tag '{}'.",
+            style(&args.tag).yellow()
+        );
         return Ok(());
     }
 

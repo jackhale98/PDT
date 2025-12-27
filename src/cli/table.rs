@@ -476,8 +476,8 @@ impl CellValue {
             CellValue::AnalysisResult(s) => s.len(),
             CellValue::Cpk(opt) => opt.map_or(1, |c| format!("{:.2}", c).len()),
             CellValue::YieldPct(opt) => opt.map_or(1, |y| format!("{:.1}%", y).len()),
-            CellValue::Critical(_) => 3, // "yes" or "no"
-            CellValue::Date(_) => 10,    // "YYYY-MM-DD"
+            CellValue::Critical(_) => 3,  // "yes" or "no"
+            CellValue::Date(_) => 10,     // "YYYY-MM-DD"
             CellValue::DateTime(_) => 16, // "YYYY-MM-DD HH:MM"
             CellValue::Number(n) => n.to_string().len(),
             CellValue::Float(f, precision) => format!("{:.prec$}", f, prec = precision).len(),
@@ -624,7 +624,11 @@ impl<'a> TableFormatter<'a> {
         let widths = self.calculate_widths(rows, visible_columns);
 
         // Header row - always start with SHORT
-        let mut header_parts = vec![format!("{:<width$}", style("SHORT").bold().dim(), width = widths[0])];
+        let mut header_parts = vec![format!(
+            "{:<width$}",
+            style("SHORT").bold().dim(),
+            width = widths[0]
+        )];
         let mut width_idx = 1;
 
         for col in self.columns {
@@ -665,7 +669,11 @@ impl<'a> TableFormatter<'a> {
     }
 
     fn output_tsv_row_truncated(&self, row: &TableRow, visible_columns: &[&str], widths: &[usize]) {
-        let mut row_parts = vec![format!("{:<width$}", style(&row.short_id).cyan(), width = widths[0])];
+        let mut row_parts = vec![format!(
+            "{:<width$}",
+            style(&row.short_id).cyan(),
+            width = widths[0]
+        )];
         let mut width_idx = 1;
 
         for col in self.columns {

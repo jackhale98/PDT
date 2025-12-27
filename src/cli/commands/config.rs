@@ -89,10 +89,7 @@ const VALID_KEYS: &[(&str, &str)] = &[
     ),
     // Workflow configuration
     ("workflow.enabled", "Enable workflow commands (true/false)"),
-    (
-        "workflow.provider",
-        "Git provider: github, gitlab, or none",
-    ),
+    ("workflow.provider", "Git provider: github, gitlab, or none"),
     (
         "workflow.auto_commit",
         "Auto-commit on status changes (true/false)",

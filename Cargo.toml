@@ -10,6 +10,13 @@ readme = "README.md"
 keywords = ["engineering", "requirements", "traceability", "fmea", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 authors = ["Jack Hale"]
+exclude = [
+    "docs/*.gif",       # Demo GIFs (served from GitHub Pages)
+    "docs/*.html",      # Website HTML files
+    "demos/",           # VHS demo scripts
+    "scripts/",         # Development scripts
+    ".github/",         # CI workflows
+]
 
 [lib]
 name = "tdt"
@@ -65,3 +72,11 @@ insta = { version = "1", features = ["yaml"] }
 
 [target."cfg(unix)".dependencies]
 libc = "0.2.178"
+
+# Optimize release builds for size
+[profile.release]
+opt-level = "z"         # Optimize for size
+lto = true              # Enable Link Time Optimization
+codegen-units = 1       # Better optimization (slower compile)
+panic = "abort"         # Smaller panic handling
+strip = true            # Strip symbols from binary

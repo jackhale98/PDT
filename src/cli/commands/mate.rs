@@ -570,7 +570,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         .with_title(&title)
         .with_feature_a(&feature_a)
         .with_feature_b(&feature_b)
-        .with_mate_type(&mate_type.to_string());
+        .with_mate_type(mate_type.to_string());
 
     let yaml_content = generator
         .generate_mate(&ctx)

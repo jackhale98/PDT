@@ -111,10 +111,7 @@ impl TeamListArgs {
             }
             _ => {
                 println!("\nTeam Members\n");
-                println!(
-                    "{:<20} {:<25} {:<15} {}",
-                    "NAME", "EMAIL", "USERNAME", "ROLES"
-                );
+                println!("{:<20} {:<25} {:<15} ROLES", "NAME", "EMAIL", "USERNAME");
                 println!("{}", "-".repeat(75));
 
                 for member in members {

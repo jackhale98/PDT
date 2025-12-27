@@ -457,7 +457,7 @@ impl ProviderClient {
                 let prs = self.parse_github_pr_list(&format!("[{}]", output))?;
                 prs.into_iter()
                     .next()
-                    .ok_or_else(|| ProviderError::PrNotFound { branch: pr_str })
+                    .ok_or(ProviderError::PrNotFound { branch: pr_str })
             }
             Provider::GitLab => {
                 // Parse single MR view output

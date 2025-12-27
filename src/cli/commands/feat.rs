@@ -634,7 +634,7 @@ fn feat_to_row(
             CellValue::Type(feat.feature_type.to_string()),
         )
         .cell("component", CellValue::Text(component_display))
-        .cell("status", CellValue::Status(feat.status.clone()))
+        .cell("status", CellValue::Status(feat.status))
         .cell("author", CellValue::Text(feat.author.clone()))
         .cell("created", CellValue::DateTime(feat.created))
 }

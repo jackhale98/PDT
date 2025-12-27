@@ -174,7 +174,7 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
         output.push_str(&ncr_table.build().with(Style::markdown()).to_string());
 
         // Aging summary
-        output.push_str("\n");
+        output.push('\n');
         output.push_str(&format!(
             "*Aging: {} NCRs > 30 days, {} NCRs > 60 days*\n",
             ncrs_over_30_days, ncrs_over_60_days

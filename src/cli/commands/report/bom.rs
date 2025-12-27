@@ -213,12 +213,10 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
             let item_id = item.component_id.to_string();
             if item_id.starts_with("CMP-") {
                 component_set.insert(item_id);
-            } else if item_id.starts_with("ASM-") {
-                if !visited.contains(&item_id) {
-                    visited.insert(item_id.clone());
-                    if let Some(asm) = assembly_map.get(&item_id) {
-                        collect_bom_components(&asm.bom, assembly_map, component_set, visited);
-                    }
+            } else if item_id.starts_with("ASM-") && !visited.contains(&item_id) {
+                visited.insert(item_id.clone());
+                if let Some(asm) = assembly_map.get(&item_id) {
+                    collect_bom_components(&asm.bom, assembly_map, component_set, visited);
                 }
             }
         }

@@ -540,7 +540,7 @@ fn asm_to_row(asm: &Assembly, short_ids: &ShortIdIndex) -> TableRow {
         .cell("id", CellValue::Id(asm.id.to_string()))
         .cell("part-number", CellValue::Text(asm.part_number.clone()))
         .cell("title", CellValue::Text(asm.title.clone()))
-        .cell("status", CellValue::Status(asm.status.clone()))
+        .cell("status", CellValue::Status(asm.status))
         .cell("author", CellValue::Text(asm.author.clone()))
         .cell("created", CellValue::DateTime(asm.created))
 }

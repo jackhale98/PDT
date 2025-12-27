@@ -556,34 +556,31 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         .collect();
 
     // Sort
-    deviations.sort_by(|a, b| {
-        let cmp = match args.sort {
-            ListColumn::Id => a.id.to_string().cmp(&b.id.to_string()),
-            ListColumn::Title => a.title.cmp(&b.title),
-            ListColumn::DevNumber => a.deviation_number.cmp(&b.deviation_number),
-            ListColumn::DevType => a
-                .deviation_type
-                .to_string()
-                .cmp(&b.deviation_type.to_string()),
-            ListColumn::Category => a.category.to_string().cmp(&b.category.to_string()),
-            ListColumn::Risk => {
-                let a_ord = match a.risk.level {
-                    RiskLevel::High => 0,
-                    RiskLevel::Medium => 1,
-                    RiskLevel::Low => 2,
-                };
-                let b_ord = match b.risk.level {
-                    RiskLevel::High => 0,
-                    RiskLevel::Medium => 1,
-                    RiskLevel::Low => 2,
-                };
-                a_ord.cmp(&b_ord)
-            }
-            ListColumn::DevStatus => a.dev_status.to_string().cmp(&b.dev_status.to_string()),
-            ListColumn::Author => a.author.cmp(&b.author),
-            ListColumn::Created => a.created.cmp(&b.created),
-        };
-        cmp
+    deviations.sort_by(|a, b| match args.sort {
+        ListColumn::Id => a.id.to_string().cmp(&b.id.to_string()),
+        ListColumn::Title => a.title.cmp(&b.title),
+        ListColumn::DevNumber => a.deviation_number.cmp(&b.deviation_number),
+        ListColumn::DevType => a
+            .deviation_type
+            .to_string()
+            .cmp(&b.deviation_type.to_string()),
+        ListColumn::Category => a.category.to_string().cmp(&b.category.to_string()),
+        ListColumn::Risk => {
+            let a_ord = match a.risk.level {
+                RiskLevel::High => 0,
+                RiskLevel::Medium => 1,
+                RiskLevel::Low => 2,
+            };
+            let b_ord = match b.risk.level {
+                RiskLevel::High => 0,
+                RiskLevel::Medium => 1,
+                RiskLevel::Low => 2,
+            };
+            a_ord.cmp(&b_ord)
+        }
+        ListColumn::DevStatus => a.dev_status.to_string().cmp(&b.dev_status.to_string()),
+        ListColumn::Author => a.author.cmp(&b.author),
+        ListColumn::Created => a.created.cmp(&b.created),
     });
 
     if args.reverse {
@@ -833,9 +830,9 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let generator = TemplateGenerator::new().map_err(|e| miette::miette!("{}", e))?;
     let mut ctx = TemplateContext::new(id.clone(), config.author())
         .with_title(&title)
-        .with_dev_type(&dev_type.to_string())
-        .with_category(&category.to_string())
-        .with_risk_level(&risk_level.to_string());
+        .with_dev_type(dev_type.to_string())
+        .with_category(category.to_string())
+        .with_risk_level(risk_level.to_string());
 
     if let Some(ref dn) = deviation_number {
         ctx = ctx.with_deviation_number(dn);

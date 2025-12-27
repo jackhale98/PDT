@@ -199,7 +199,7 @@ pub fn has_suspect_links(file_path: &Path) -> Result<bool, SuspectError> {
                         // Check if it's an extended link with suspect=true
                         if let Some(link_map) = link.as_mapping() {
                             if let Some(suspect) =
-                                link_map.get(&serde_yml::Value::String("suspect".to_string()))
+                                link_map.get(serde_yml::Value::String("suspect".to_string()))
                             {
                                 if suspect.as_bool() == Some(true) {
                                     return Ok(true);
@@ -238,19 +238,19 @@ pub fn get_suspect_links(
                         // Check if it's an extended link with suspect=true
                         if let Some(link_map) = link.as_mapping() {
                             let is_suspect = link_map
-                                .get(&serde_yml::Value::String("suspect".to_string()))
+                                .get(serde_yml::Value::String("suspect".to_string()))
                                 .and_then(|v| v.as_bool())
                                 .unwrap_or(false);
 
                             if is_suspect {
                                 let target_id = link_map
-                                    .get(&serde_yml::Value::String("id".to_string()))
+                                    .get(serde_yml::Value::String("id".to_string()))
                                     .and_then(|v| v.as_str())
                                     .unwrap_or("")
                                     .to_string();
 
                                 let reason = link_map
-                                    .get(&serde_yml::Value::String("suspect_reason".to_string()))
+                                    .get(serde_yml::Value::String("suspect_reason".to_string()))
                                     .and_then(|v| v.as_str())
                                     .map(|s| match s {
                                         "revision_changed" => SuspectReason::RevisionChanged,
@@ -297,7 +297,7 @@ pub fn mark_link_suspect(
                         let matches = match link {
                             serde_yml::Value::String(id) => id == target_id,
                             serde_yml::Value::Mapping(map) => map
-                                .get(&serde_yml::Value::String("id".to_string()))
+                                .get(serde_yml::Value::String("id".to_string()))
                                 .and_then(|v| v.as_str())
                                 .map(|id| id == target_id)
                                 .unwrap_or(false),
@@ -373,16 +373,16 @@ pub fn clear_link_suspect(
                     for link in seq.iter_mut() {
                         if let serde_yml::Value::Mapping(map) = link {
                             let id_matches = map
-                                .get(&serde_yml::Value::String("id".to_string()))
+                                .get(serde_yml::Value::String("id".to_string()))
                                 .and_then(|v| v.as_str())
                                 .map(|id| id == target_id)
                                 .unwrap_or(false);
 
                             if id_matches {
                                 // Clear suspect status
-                                map.remove(&serde_yml::Value::String("suspect".to_string()));
-                                map.remove(&serde_yml::Value::String("suspect_reason".to_string()));
-                                map.remove(&serde_yml::Value::String("suspect_since".to_string()));
+                                map.remove(serde_yml::Value::String("suspect".to_string()));
+                                map.remove(serde_yml::Value::String("suspect_reason".to_string()));
+                                map.remove(serde_yml::Value::String("suspect_since".to_string()));
 
                                 // Add verified revision if provided
                                 if let Some(rev) = verified_revision {

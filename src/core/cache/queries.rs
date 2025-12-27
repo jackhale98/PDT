@@ -157,7 +157,7 @@ impl EntityCache {
 
         if let Some(ref status) = filter.status {
             sql.push_str(" AND status = ?");
-            params_vec.push(Box::new(status.clone()));
+            params_vec.push(Box::new(*status));
         }
 
         if let Some(ref author) = filter.author {
@@ -167,7 +167,7 @@ impl EntityCache {
 
         if let Some(ref priority) = filter.priority {
             sql.push_str(" AND priority = ?");
-            params_vec.push(Box::new(priority.clone()));
+            params_vec.push(Box::new(*priority));
         }
 
         if let Some(ref entity_type) = filter.entity_type {

@@ -58,7 +58,7 @@ pub fn run(cmd: SchemaCommands) -> Result<()> {
 
 fn list_schemas() -> Result<()> {
     println!("Available entity schemas:\n");
-    println!("{:<8} {:<20} {}", "TYPE", "TITLE", "DESCRIPTION");
+    println!("{:<8} {:<20} DESCRIPTION", "TYPE", "TITLE");
     println!("{}", "-".repeat(70));
 
     for (name, content) in SCHEMAS {
@@ -118,10 +118,7 @@ fn show_schema(args: ShowArgs) -> Result<()> {
     // Properties
     if let Some(props) = schema["properties"].as_object() {
         println!("Fields:");
-        println!(
-            "{:<20} {:<12} {:<8} {}",
-            "NAME", "TYPE", "REQ", "DESCRIPTION"
-        );
+        println!("{:<20} {:<12} {:<8} DESCRIPTION", "NAME", "TYPE", "REQ");
         println!("{}", "-".repeat(80));
 
         // Sort properties for consistent display

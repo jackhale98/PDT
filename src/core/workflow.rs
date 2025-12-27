@@ -511,13 +511,13 @@ fn check_approval_requirements(
     let mut roles_present: Vec<Role> = Vec::new();
 
     // Get existing approvals
-    if let Some(approvals) = map.get(&serde_yml::Value::String("approvals".to_string())) {
+    if let Some(approvals) = map.get(serde_yml::Value::String("approvals".to_string())) {
         if let Some(seq) = approvals.as_sequence() {
             for approval in seq {
                 if let Some(approval_map) = approval.as_mapping() {
                     // Get approver name
                     if let Some(approver) = approval_map
-                        .get(&serde_yml::Value::String("approver".to_string()))
+                        .get(serde_yml::Value::String("approver".to_string()))
                         .and_then(|v| v.as_str())
                     {
                         if requirements.require_unique_approvers {
@@ -531,7 +531,7 @@ fn check_approval_requirements(
 
                     // Get role
                     if let Some(role_str) = approval_map
-                        .get(&serde_yml::Value::String("role".to_string()))
+                        .get(serde_yml::Value::String("role".to_string()))
                         .and_then(|v| v.as_str())
                     {
                         if let Ok(role) = role_str.parse::<Role>() {
@@ -599,12 +599,12 @@ pub fn would_be_duplicate_approval(
         })?;
 
     if let Some(map) = doc.as_mapping() {
-        if let Some(approvals) = map.get(&serde_yml::Value::String("approvals".to_string())) {
+        if let Some(approvals) = map.get(serde_yml::Value::String("approvals".to_string())) {
             if let Some(seq) = approvals.as_sequence() {
                 for approval in seq {
                     if let Some(approval_map) = approval.as_mapping() {
                         if let Some(existing_approver) = approval_map
-                            .get(&serde_yml::Value::String("approver".to_string()))
+                            .get(serde_yml::Value::String("approver".to_string()))
                             .and_then(|v| v.as_str())
                         {
                             if existing_approver.eq_ignore_ascii_case(approver) {

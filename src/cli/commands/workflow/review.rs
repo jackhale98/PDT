@@ -136,8 +136,8 @@ impl ReviewListArgs {
                 // Table format
                 println!("\nPending reviews:\n");
                 println!(
-                    "{:<12} {:<8} {:<40} {:<15} {}",
-                    "SHORT", "TYPE", "TITLE", "AUTHOR", "PR"
+                    "{:<12} {:<8} {:<40} {:<15} PR",
+                    "SHORT", "TYPE", "TITLE", "AUTHOR"
                 );
                 println!("{}", "-".repeat(90));
 
@@ -260,10 +260,7 @@ impl ReviewListArgs {
             _ => {
                 // Table format
                 println!("\nItems pending review:\n");
-                println!(
-                    "{:<15} {:<8} {:<50} {}",
-                    "SHORT", "TYPE", "TITLE", "CAN APPROVE"
-                );
+                println!("{:<15} {:<8} {:<50} CAN APPROVE", "SHORT", "TYPE", "TITLE");
                 println!("{}", "-".repeat(85));
 
                 for item in items {

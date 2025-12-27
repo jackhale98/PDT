@@ -66,7 +66,7 @@ pub struct DmmArgs {
     #[arg(value_enum)]
     pub col_type: EntityType,
 
-    /// Output format: table, csv, json
+    /// Output format: table, csv, dot (graphviz), json
     #[arg(long, short = 'o', default_value = "table")]
     pub output: String,
 
@@ -207,6 +207,7 @@ pub fn run(args: DmmArgs, _global: &GlobalOpts) -> Result<()> {
     // Output
     match args.output.as_str() {
         "csv" => output_csv(&dmm, args.full_ids),
+        "dot" => output_dot(&dmm, args.full_ids, args.row_type, args.col_type),
         "json" => output_json(&dmm, args.row_type, args.col_type),
         _ => output_table(
             &dmm,
@@ -500,6 +501,72 @@ fn output_csv(dmm: &Dmm, full_ids: bool) {
             }
         }
         println!();
+    }
+}
+
+fn output_dot(dmm: &Dmm, full_ids: bool, row_type: EntityType, col_type: EntityType) {
+    println!("digraph DMM {{");
+    println!("  rankdir=LR;");
+    println!("  node [shape=box];");
+    println!();
+
+    // Row entities cluster
+    println!(
+        "  subgraph cluster_rows {{",
+    );
+    println!("    label=\"{}\";", row_type.display_name());
+    println!("    style=dashed;");
+    println!("    color=gray;");
+    for e in &dmm.row_entities {
+        let node_id = e.id.replace('-', "_");
+        let label = if full_ids {
+            format!("{}\\n{}", e.id, truncate_title(&e.title, 20))
+        } else {
+            format!("{}\\n{}", e.short_id, truncate_title(&e.title, 20))
+        };
+        println!("    \"{}\" [label=\"{}\"];", node_id, label);
+    }
+    println!("  }}");
+    println!();
+
+    // Column entities cluster
+    println!(
+        "  subgraph cluster_cols {{",
+    );
+    println!("    label=\"{}\";", col_type.display_name());
+    println!("    style=dashed;");
+    println!("    color=gray;");
+    for e in &dmm.col_entities {
+        let node_id = e.id.replace('-', "_");
+        let label = if full_ids {
+            format!("{}\\n{}", e.id, truncate_title(&e.title, 20))
+        } else {
+            format!("{}\\n{}", e.short_id, truncate_title(&e.title, 20))
+        };
+        println!("    \"{}\" [label=\"{}\"];", node_id, label);
+    }
+    println!("  }}");
+    println!();
+
+    // Edges
+    for (i, row) in dmm.row_entities.iter().enumerate() {
+        for (j, col) in dmm.col_entities.iter().enumerate() {
+            if dmm.matrix[i][j] {
+                let row_node = row.id.replace('-', "_");
+                let col_node = col.id.replace('-', "_");
+                println!("  \"{}\" -> \"{}\";", row_node, col_node);
+            }
+        }
+    }
+
+    println!("}}");
+}
+
+fn truncate_title(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}...", &s[..max_len.saturating_sub(3)])
     }
 }
 

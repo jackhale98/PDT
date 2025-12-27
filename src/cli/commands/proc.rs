@@ -319,6 +319,10 @@ pub struct FlowArgs {
     /// Show work instructions
     #[arg(long, short = 'w')]
     pub work_instructions: bool,
+
+    /// Output format: table, dot (graphviz)
+    #[arg(long, short = 'o', default_value = "table")]
+    pub output: String,
 }
 
 /// Run a process subcommand
@@ -1067,6 +1071,77 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
             return Ok(());
         }
         _ => {}
+    }
+
+    // DOT/Graphviz output
+    if args.output == "dot" {
+        println!("digraph ProcessFlow {{");
+        println!("  rankdir=TB;");
+        println!("  node [shape=box, style=rounded];");
+        println!();
+
+        // Create nodes for each process
+        for proc in &processes {
+            let proc_id = proc.id.to_string();
+            let node_id = proc_id.replace('-', "_");
+            let op_num = proc.operation_number.as_deref().unwrap_or("???");
+
+            // Build label with details
+            let mut label_parts = vec![format!("[{}] {}", op_num, proc.title)];
+            label_parts.push(format!("Type: {}", proc.process_type));
+            if let Some(cycle) = proc.cycle_time_minutes {
+                if let Some(setup) = proc.setup_time_minutes {
+                    label_parts.push(format!("Cycle: {:.0}m | Setup: {:.0}m", cycle, setup));
+                } else {
+                    label_parts.push(format!("Cycle: {:.0}m", cycle));
+                }
+            }
+
+            let label = label_parts.join("\\n");
+
+            // Color by process type
+            let color = match proc.process_type {
+                ProcessType::Machining => "lightblue",
+                ProcessType::Assembly => "lightgreen",
+                ProcessType::Inspection => "lightyellow",
+                ProcessType::Test => "lightyellow",
+                ProcessType::Finishing => "lavender",
+                ProcessType::Packaging => "lightgray",
+                _ => "white",
+            };
+
+            println!(
+                "  \"{}\" [label=\"{}\" fillcolor={} style=\"rounded,filled\"];",
+                node_id, label, color
+            );
+
+            // Add control nodes if requested
+            if args.controls {
+                if let Some(ctrls) = controls_by_process.get(&proc_id) {
+                    for (i, (ctrl_short, ctrl_title)) in ctrls.iter().enumerate() {
+                        let ctrl_node = format!("{}_ctrl_{}", node_id, i);
+                        let ctrl_label = format!("{}\\n{}", ctrl_short, truncate_str(ctrl_title, 25));
+                        println!(
+                            "  \"{}\" [label=\"{}\" shape=diamond fillcolor=khaki style=filled fontsize=10];",
+                            ctrl_node, ctrl_label
+                        );
+                        println!("  \"{}\" -> \"{}\" [style=dashed arrowhead=none];", node_id, ctrl_node);
+                    }
+                }
+            }
+        }
+
+        println!();
+
+        // Create edges between consecutive processes
+        for i in 0..processes.len().saturating_sub(1) {
+            let from_id = processes[i].id.to_string().replace('-', "_");
+            let to_id = processes[i + 1].id.to_string().replace('-', "_");
+            println!("  \"{}\" -> \"{}\";", from_id, to_id);
+        }
+
+        println!("}}");
+        return Ok(());
     }
 
     // Human-readable flow diagram

@@ -44,6 +44,21 @@
       "default": "mechanical",
       "description": "Component category"
     },
+    "sw_class": {
+      "type": ["string", "null"],
+      "enum": ["A", "B", "C", null],
+      "description": "IEC 62304 Software Safety Class (A, B, or C)"
+    },
+    "asil": {
+      "type": ["string", "null"],
+      "enum": ["QM", "A", "B", "C", "D", null],
+      "description": "ISO 26262 Automotive Safety Integrity Level"
+    },
+    "dal": {
+      "type": ["string", "null"],
+      "enum": ["E", "D", "C", "B", "A", null],
+      "description": "DO-178C Design Assurance Level"
+    },
     "material": {
       "type": ["string", "null"],
       "description": "Material specification"

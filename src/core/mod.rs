@@ -10,6 +10,7 @@ pub mod loader;
 pub mod project;
 pub mod provider;
 pub mod shortid;
+pub mod suspect;
 pub mod team;
 pub mod workflow;
 
@@ -24,5 +25,9 @@ pub use identity::{EntityId, EntityPrefix, IdParseError};
 pub use project::{Project, ProjectError};
 pub use provider::{Provider, ProviderClient, ProviderError, PrInfo, PrState};
 pub use shortid::ShortIdIndex;
+pub use suspect::{
+    clear_link_suspect, get_suspect_links, has_suspect_links, mark_link_suspect, ExtendedLinkRef,
+    LinkRef, SuspectError, SuspectReason, SuspectSummary,
+};
 pub use team::{Role, TeamMember, TeamRoster};
 pub use workflow::{WorkflowConfig, WorkflowEngine, WorkflowError};

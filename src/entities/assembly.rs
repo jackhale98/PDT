@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::{EntityId, EntityPrefix};
+use crate::entities::safety::{Asil, Dal, SwClass};
 
 /// BOM line item - references a component with quantity
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +84,18 @@ pub struct Assembly {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub subassemblies: Vec<String>,
 
+    /// IEC 62304 Software Safety Class (optional, for software items)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sw_class: Option<SwClass>,
+
+    /// ISO 26262 ASIL (optional, for automotive items)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asil: Option<Asil>,
+
+    /// DO-178C DAL (optional, for aerospace items)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dal: Option<Dal>,
+
     /// Associated documents
     #[serde(default)]
     pub documents: Vec<Document>,
@@ -154,6 +167,9 @@ impl Default for Assembly {
             description: None,
             bom: Vec::new(),
             subassemblies: Vec::new(),
+            sw_class: None,
+            asil: None,
+            dal: None,
             documents: Vec::new(),
             tags: Vec::new(),
             status: Status::default(),

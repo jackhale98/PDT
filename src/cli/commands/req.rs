@@ -16,7 +16,7 @@ use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
-use crate::entities::requirement::{Requirement, RequirementType};
+use crate::entities::requirement::{Level, Requirement, RequirementType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
@@ -76,6 +76,40 @@ impl From<CliPriority> for Priority {
     }
 }
 
+/// CLI-friendly level enum for V-model hierarchy
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum CliLevel {
+    Stakeholder,
+    System,
+    Subsystem,
+    Component,
+    Detail,
+}
+
+impl std::fmt::Display for CliLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CliLevel::Stakeholder => write!(f, "stakeholder"),
+            CliLevel::System => write!(f, "system"),
+            CliLevel::Subsystem => write!(f, "subsystem"),
+            CliLevel::Component => write!(f, "component"),
+            CliLevel::Detail => write!(f, "detail"),
+        }
+    }
+}
+
+impl From<CliLevel> for Level {
+    fn from(cli: CliLevel) -> Self {
+        match cli {
+            CliLevel::Stakeholder => Level::Stakeholder,
+            CliLevel::System => Level::System,
+            CliLevel::Subsystem => Level::Subsystem,
+            CliLevel::Component => Level::Component,
+            CliLevel::Detail => Level::Detail,
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum ReqCommands {
     /// List requirements with filtering
@@ -118,11 +152,24 @@ pub enum PriorityFilter {
     All,
 }
 
+/// Level filter for V-model hierarchy
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum LevelFilter {
+    Stakeholder,
+    System,
+    Subsystem,
+    Component,
+    Detail,
+    /// All levels
+    All,
+}
+
 /// Columns to display in list output
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum ListColumn {
     Id,
     Type,
+    Level,
     Title,
     Status,
     Priority,
@@ -137,6 +184,7 @@ impl std::fmt::Display for ListColumn {
         match self {
             ListColumn::Id => write!(f, "id"),
             ListColumn::Type => write!(f, "type"),
+            ListColumn::Level => write!(f, "level"),
             ListColumn::Title => write!(f, "title"),
             ListColumn::Status => write!(f, "status"),
             ListColumn::Priority => write!(f, "priority"),
@@ -152,6 +200,7 @@ impl std::fmt::Display for ListColumn {
 const REQ_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("id", "ID", 17),
     ColumnDef::new("type", "TYPE", 8),
+    ColumnDef::new("level", "LEVEL", 11),
     ColumnDef::new("title", "TITLE", 35),
     ColumnDef::new("status", "STATUS", 10),
     ColumnDef::new("priority", "PRI", 10),
@@ -176,6 +225,10 @@ pub struct ListArgs {
     /// Filter by priority
     #[arg(long, short = 'p', default_value = "all")]
     pub priority: PriorityFilter,
+
+    /// Filter by V-model level
+    #[arg(long, short = 'l', default_value = "all")]
+    pub level: LevelFilter,
 
     /// Filter by category (exact match)
     #[arg(long, short = 'c')]
@@ -276,6 +329,10 @@ pub struct NewArgs {
     /// Priority
     #[arg(long, short = 'p', default_value = "medium")]
     pub priority: CliPriority,
+
+    /// V-model hierarchy level
+    #[arg(long, short = 'l', default_value = "system")]
+    pub level: CliLevel,
 
     /// Tags (comma-separated)
     #[arg(long, value_delimiter = ',')]
@@ -382,7 +439,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         || args.unverified
         || args.untested
         || args.failed
-        || args.passing;
+        || args.passing
+        || !matches!(args.level, LevelFilter::All);  // level not in cache yet
     let needs_full_entities = needs_full_output || needs_complex_filters;
 
     // Pre-load test results if we need verification status filters
@@ -488,6 +546,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         match args.sort {
             ListColumn::Id => cached_reqs.sort_by(|a, b| a.id.cmp(&b.id)),
             ListColumn::Type => cached_reqs.sort_by(|a, b| a.req_type.cmp(&b.req_type)),
+            ListColumn::Level => {} // Level not in cache, uses full entity path when filtered
             ListColumn::Title => cached_reqs.sort_by(|a, b| a.title.cmp(&b.title)),
             ListColumn::Status => cached_reqs.sort_by(|a, b| a.status.cmp(&b.status)),
             ListColumn::Priority => {
@@ -571,6 +630,16 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             ReqTypeFilter::Input => req.req_type == RequirementType::Input,
             ReqTypeFilter::Output => req.req_type == RequirementType::Output,
             ReqTypeFilter::All => true,
+        };
+
+        // Level filter (V-model hierarchy)
+        let level_match = match args.level {
+            LevelFilter::Stakeholder => req.level == Level::Stakeholder,
+            LevelFilter::System => req.level == Level::System,
+            LevelFilter::Subsystem => req.level == Level::Subsystem,
+            LevelFilter::Component => req.level == Level::Component,
+            LevelFilter::Detail => req.level == Level::Detail,
+            LevelFilter::All => true,
         };
 
         // Status filter (for full entity mode and Active filter)
@@ -678,6 +747,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         };
 
         type_match
+            && level_match
             && status_match
             && priority_match
             && category_match
@@ -717,6 +787,17 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         ListColumn::Id => reqs.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
         ListColumn::Type => {
             reqs.sort_by(|a, b| a.req_type.to_string().cmp(&b.req_type.to_string()))
+        }
+        ListColumn::Level => {
+            // Sort by V-model level (stakeholder > system > subsystem > component > detail)
+            let level_order = |l: &Level| match l {
+                Level::Stakeholder => 0,
+                Level::System => 1,
+                Level::Subsystem => 2,
+                Level::Component => 3,
+                Level::Detail => 4,
+            };
+            reqs.sort_by(|a, b| level_order(&a.level).cmp(&level_order(&b.level)));
         }
         ListColumn::Title => reqs.sort_by(|a, b| a.title.cmp(&b.title)),
         ListColumn::Status => reqs.sort_by(|a, b| a.status.to_string().cmp(&b.status.to_string())),
@@ -814,6 +895,7 @@ fn requirement_to_row(req: &Requirement, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(req.id.to_string(), short_ids)
         .cell("id", CellValue::Id(req.id.to_string()))
         .cell("type", CellValue::Type(req.req_type.to_string()))
+        .cell("level", CellValue::Text(req.level.to_string()))
         .cell("title", CellValue::Text(req.title.clone()))
         .cell("status", CellValue::Status(req.status))
         .cell("priority", CellValue::Priority(req.priority))
@@ -873,6 +955,10 @@ fn cached_requirement_to_row(
             "type",
             CellValue::Type(req.req_type.clone().unwrap_or_else(|| "input".to_string())),
         )
+        .cell(
+            "level",
+            CellValue::Text(req.level.clone().unwrap_or_else(|| "system".to_string())),
+        )
         .cell("title", CellValue::Text(req.title.clone()))
         .cell("status", CellValue::Status(req.status))
         .cell("priority", CellValue::OptionalPriority(req.priority))
@@ -890,7 +976,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let config = Config::load();
 
     // Determine values - either from schema-driven wizard or args
-    let (req_type, title, priority, category, tags, text, rationale, acceptance_criteria) =
+    let (req_type, level, title, priority, category, tags, text, rationale, acceptance_criteria) =
         if args.interactive {
             // Use the schema-driven wizard
             let wizard = SchemaWizard::new();
@@ -904,6 +990,17 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
                     _ => RequirementType::Input,
                 })
                 .unwrap_or(RequirementType::Input);
+
+            let level = result
+                .get_string("level")
+                .map(|s| match s {
+                    "stakeholder" => Level::Stakeholder,
+                    "subsystem" => Level::Subsystem,
+                    "component" => Level::Component,
+                    "detail" => Level::Detail,
+                    _ => Level::System,
+                })
+                .unwrap_or(Level::System);
 
             let title = result
                 .get_string("title")
@@ -954,6 +1051,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
 
             (
                 req_type,
+                level,
                 title,
                 priority,
                 category,
@@ -965,6 +1063,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         } else {
             // Default mode - use args with defaults
             let req_type: RequirementType = args.r#type.into();
+            let level: Level = args.level.into();
             let title = args.title.unwrap_or_else(|| "New Requirement".to_string());
             let priority: Priority = args.priority.into();
             let category = args.category.unwrap_or_default();
@@ -972,6 +1071,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
 
             (
                 req_type,
+                level,
                 title,
                 priority,
                 category,
@@ -990,6 +1090,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let mut ctx = TemplateContext::new(id.clone(), author)
         .with_title(&title)
         .with_req_type(req_type.to_string())
+        .with_level(level.to_string())
         .with_priority(priority.to_string())
         .with_category(&category);
 

@@ -19,6 +19,7 @@ pub struct TemplateContext {
     pub created: DateTime<Utc>,
     pub title: Option<String>,
     pub req_type: Option<String>,
+    pub req_level: Option<String>,
     pub risk_type: Option<String>,
     pub priority: Option<String>,
     pub category: Option<String>,
@@ -101,6 +102,7 @@ impl TemplateContext {
             created: Utc::now(),
             title: None,
             req_type: None,
+            req_level: None,
             risk_type: None,
             priority: None,
             category: None,
@@ -167,6 +169,11 @@ impl TemplateContext {
 
     pub fn with_req_type(mut self, req_type: impl Into<String>) -> Self {
         self.req_type = Some(req_type.into());
+        self
+    }
+
+    pub fn with_level(mut self, level: impl Into<String>) -> Self {
+        self.req_level = Some(level.into());
         self
     }
 
@@ -489,6 +496,12 @@ impl TemplateGenerator {
         context.insert(
             "req_type",
             &ctx.req_type.clone().unwrap_or_else(|| "input".to_string()),
+        );
+        context.insert(
+            "req_level",
+            &ctx.req_level
+                .clone()
+                .unwrap_or_else(|| "system".to_string()),
         );
         context.insert(
             "priority",
@@ -1258,6 +1271,7 @@ revision: 1
     fn hardcoded_requirement_template(&self, ctx: &TemplateContext) -> String {
         let title = ctx.title.clone().unwrap_or_default();
         let req_type = ctx.req_type.clone().unwrap_or_else(|| "input".to_string());
+        let level = ctx.req_level.clone().unwrap_or_else(|| "system".to_string());
         let priority = ctx.priority.clone().unwrap_or_else(|| "medium".to_string());
         let category = ctx.category.clone().unwrap_or_default();
         let created = ctx.created.to_rfc3339();
@@ -1274,6 +1288,7 @@ revision: 1
 
 id: {id}
 type: {req_type}
+level: {level}
 title: "{title}"
 
 source:
@@ -1310,6 +1325,7 @@ revision: 1
             id = ctx.id,
             title = title,
             req_type = req_type,
+            level = level,
             priority = priority,
             category = category,
             tags = tags,

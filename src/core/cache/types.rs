@@ -137,6 +137,7 @@ pub struct CachedRequirement {
     pub status: Status,
     pub priority: Option<Priority>,
     pub req_type: Option<String>,
+    pub level: Option<String>,
     pub category: Option<String>,
     pub author: String,
     pub created: DateTime<Utc>,

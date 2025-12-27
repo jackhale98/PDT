@@ -44,6 +44,7 @@ impl EntityCache {
                 file_hash TEXT NOT NULL,
                 priority TEXT,
                 entity_type TEXT,
+                level TEXT,
                 category TEXT,
                 tags TEXT
             );

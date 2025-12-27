@@ -1,9 +1,11 @@
 //! Workflow engine for status transitions and approvals
 //!
 //! Provides status transition validation and YAML manipulation for entity approval workflows.
+//! Supports multi-signature approvals with configurable requirements per entity type.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 use thiserror::Error;
 
@@ -11,6 +13,41 @@ use crate::core::entity::Status;
 use crate::core::identity::EntityPrefix;
 use crate::core::provider::Provider;
 use crate::core::team::{Role, TeamMember, TeamRoster};
+
+/// Approval requirements for an entity type
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct ApprovalRequirements {
+    /// Minimum number of approvals required (default: 1)
+    pub min_approvals: u32,
+
+    /// Required roles - at least one approver from each role (optional)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_roles: Vec<Role>,
+
+    /// Require different approvers (no duplicate approvals from same person)
+    #[serde(default = "default_require_unique")]
+    pub require_unique_approvers: bool,
+
+    /// Require GPG-signed commits for approvals (for 21 CFR Part 11 compliance)
+    #[serde(default)]
+    pub require_signature: bool,
+}
+
+fn default_require_unique() -> bool {
+    true
+}
+
+impl Default for ApprovalRequirements {
+    fn default() -> Self {
+        Self {
+            min_approvals: 1,
+            required_roles: Vec::new(),
+            require_unique_approvers: true,
+            require_signature: false,
+        }
+    }
+}
 
 /// Workflow configuration from project config
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -42,6 +79,14 @@ pub struct WorkflowConfig {
 
     /// Target branch for PRs (default: "main")
     pub base_branch: String,
+
+    /// Default approval requirements for all entity types
+    #[serde(default)]
+    pub default_approvals: ApprovalRequirements,
+
+    /// Per-entity-type approval requirements (overrides default)
+    #[serde(default)]
+    pub approvals: HashMap<String, ApprovalRequirements>,
 }
 
 impl WorkflowConfig {
@@ -57,7 +102,15 @@ impl WorkflowConfig {
             submit_message: "Submit {id}: {title}".to_string(),
             approve_message: "Approve {id}: {title}".to_string(),
             base_branch: "main".to_string(),
+            default_approvals: ApprovalRequirements::default(),
+            approvals: HashMap::new(),
         }
+    }
+
+    /// Get approval requirements for an entity type
+    pub fn get_approval_requirements(&self, prefix: EntityPrefix) -> &ApprovalRequirements {
+        let key = prefix.to_string();
+        self.approvals.get(&key).unwrap_or(&self.default_approvals)
     }
 
     /// Format a branch name for the given entity
@@ -105,6 +158,19 @@ pub enum WorkflowError {
 
     #[error("Current user not found in team roster")]
     UserNotInRoster,
+
+    #[error("Insufficient approvals: {current}/{required} (need {remaining} more)")]
+    InsufficientApprovals {
+        current: u32,
+        required: u32,
+        remaining: u32,
+    },
+
+    #[error("Missing required role approval: {role}")]
+    MissingRoleApproval { role: String },
+
+    #[error("Duplicate approval not allowed: {approver} has already approved")]
+    DuplicateApprover { approver: String },
 
     #[error("Failed to parse YAML: {message}")]
     YamlError { message: String },
@@ -235,12 +301,46 @@ impl WorkflowEngine {
 }
 
 /// Approval record stored in entity YAML
+///
+/// This is the "electronic signature" for the approval - the approver's identity
+/// and timestamp constitute the signature. For 21 CFR Part 11 compliance,
+/// GPG signatures can be required via `require_signature` config option.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApprovalRecord {
+    /// Name of the approver
     pub approver: String,
+    /// Email of the approver
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    /// Role of the approver
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<String>,
+    /// Timestamp of the approval
     pub timestamp: DateTime<Utc>,
+    /// Comment/message with the approval
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub comment: Option<String>,
+    /// Whether the approval commit was GPG-signed and verified (for Part 11 compliance)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature_verified: Option<bool>,
+    /// GPG key ID used to sign (for Part 11 compliance)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signing_key: Option<String>,
+}
+
+/// Result of checking approval requirements
+#[derive(Debug, Clone)]
+pub struct ApprovalStatus {
+    /// Current number of valid approvals
+    pub current_approvals: u32,
+    /// Required number of approvals
+    pub required_approvals: u32,
+    /// Whether all requirements are met
+    pub requirements_met: bool,
+    /// Roles that still need to approve
+    pub missing_roles: Vec<Role>,
+    /// List of unique approvers
+    pub approvers: Vec<String>,
 }
 
 /// Rejection record stored in entity YAML
@@ -279,12 +379,45 @@ pub fn update_entity_status(file_path: &Path, new_status: Status) -> Result<(), 
     Ok(())
 }
 
-/// Record an approval in an entity's YAML file
+/// Options for recording an approval
+#[derive(Debug, Clone, Default)]
+pub struct ApprovalOptions {
+    /// Approver's name
+    pub approver: String,
+    /// Approver's email
+    pub email: Option<String>,
+    /// Approver's role
+    pub role: Option<Role>,
+    /// Approval comment
+    pub comment: Option<String>,
+    /// Whether the commit was GPG-signed and verified
+    pub signature_verified: Option<bool>,
+    /// GPG key ID used for signing
+    pub signing_key: Option<String>,
+}
+
+/// Record an approval in an entity's YAML file (legacy single-approval)
 pub fn record_approval(
     file_path: &Path,
     approver: &str,
     role: Option<Role>,
     comment: Option<&str>,
+) -> Result<(), WorkflowError> {
+    let options = ApprovalOptions {
+        approver: approver.to_string(),
+        role,
+        comment: comment.map(|s| s.to_string()),
+        ..Default::default()
+    };
+    record_approval_ext(file_path, &options, None)
+}
+
+/// Record an approval with multi-approval support
+/// Automatically transitions to "approved" status when requirements are met
+pub fn record_approval_ext(
+    file_path: &Path,
+    options: &ApprovalOptions,
+    requirements: Option<&ApprovalRequirements>,
 ) -> Result<(), WorkflowError> {
     let contents = std::fs::read_to_string(file_path)?;
 
@@ -294,19 +427,19 @@ pub fn record_approval(
         })?;
 
     if let Some(map) = doc.as_mapping_mut() {
-        // Update status to approved
-        map.insert(
-            serde_yml::Value::String("status".to_string()),
-            serde_yml::Value::String("approved".to_string()),
-        );
-
-        // Create approval record
+        // Create approval record (this is the "electronic signature")
         let mut approval = serde_yml::Mapping::new();
         approval.insert(
             serde_yml::Value::String("approver".to_string()),
-            serde_yml::Value::String(approver.to_string()),
+            serde_yml::Value::String(options.approver.clone()),
         );
-        if let Some(r) = role {
+        if let Some(ref email) = options.email {
+            approval.insert(
+                serde_yml::Value::String("email".to_string()),
+                serde_yml::Value::String(email.clone()),
+            );
+        }
+        if let Some(r) = options.role {
             approval.insert(
                 serde_yml::Value::String("role".to_string()),
                 serde_yml::Value::String(r.to_string()),
@@ -316,10 +449,23 @@ pub fn record_approval(
             serde_yml::Value::String("timestamp".to_string()),
             serde_yml::Value::String(Utc::now().to_rfc3339()),
         );
-        if let Some(c) = comment {
+        if let Some(ref c) = options.comment {
             approval.insert(
                 serde_yml::Value::String("comment".to_string()),
-                serde_yml::Value::String(c.to_string()),
+                serde_yml::Value::String(c.clone()),
+            );
+        }
+        // GPG signature fields (for Part 11 compliance)
+        if let Some(verified) = options.signature_verified {
+            approval.insert(
+                serde_yml::Value::String("signature_verified".to_string()),
+                serde_yml::Value::Bool(verified),
+            );
+        }
+        if let Some(ref key) = options.signing_key {
+            approval.insert(
+                serde_yml::Value::String("signing_key".to_string()),
+                serde_yml::Value::String(key.clone()),
             );
         }
 
@@ -332,6 +478,21 @@ pub fn record_approval(
         if let Some(seq) = approvals.as_sequence_mut() {
             seq.push(serde_yml::Value::Mapping(approval));
         }
+
+        // Check if we should transition to approved status
+        let should_approve = if let Some(reqs) = requirements {
+            check_approval_requirements(map, reqs).requirements_met
+        } else {
+            // Default behavior: single approval transitions to approved
+            true
+        };
+
+        if should_approve {
+            map.insert(
+                serde_yml::Value::String("status".to_string()),
+                serde_yml::Value::String("approved".to_string()),
+            );
+        }
     }
 
     let new_contents =
@@ -341,6 +502,125 @@ pub fn record_approval(
 
     std::fs::write(file_path, new_contents)?;
     Ok(())
+}
+
+/// Check if approval requirements are met for an entity
+fn check_approval_requirements(
+    map: &serde_yml::Mapping,
+    requirements: &ApprovalRequirements,
+) -> ApprovalStatus {
+    let mut approvers: Vec<String> = Vec::new();
+    let mut roles_present: Vec<Role> = Vec::new();
+
+    // Get existing approvals
+    if let Some(approvals) = map.get(&serde_yml::Value::String("approvals".to_string())) {
+        if let Some(seq) = approvals.as_sequence() {
+            for approval in seq {
+                if let Some(approval_map) = approval.as_mapping() {
+                    // Get approver name
+                    if let Some(approver) = approval_map
+                        .get(&serde_yml::Value::String("approver".to_string()))
+                        .and_then(|v| v.as_str())
+                    {
+                        if requirements.require_unique_approvers {
+                            if !approvers.contains(&approver.to_string()) {
+                                approvers.push(approver.to_string());
+                            }
+                        } else {
+                            approvers.push(approver.to_string());
+                        }
+                    }
+
+                    // Get role
+                    if let Some(role_str) = approval_map
+                        .get(&serde_yml::Value::String("role".to_string()))
+                        .and_then(|v| v.as_str())
+                    {
+                        if let Ok(role) = role_str.parse::<Role>() {
+                            if !roles_present.contains(&role) {
+                                roles_present.push(role);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let current_approvals = approvers.len() as u32;
+    let required_approvals = requirements.min_approvals;
+
+    // Check which required roles are missing
+    let missing_roles: Vec<Role> = requirements
+        .required_roles
+        .iter()
+        .filter(|r| !roles_present.contains(r))
+        .copied()
+        .collect();
+
+    let requirements_met =
+        current_approvals >= required_approvals && missing_roles.is_empty();
+
+    ApprovalStatus {
+        current_approvals,
+        required_approvals,
+        requirements_met,
+        missing_roles,
+        approvers,
+    }
+}
+
+/// Get approval status for an entity file
+pub fn get_approval_status(
+    file_path: &Path,
+    requirements: &ApprovalRequirements,
+) -> Result<ApprovalStatus, WorkflowError> {
+    let contents = std::fs::read_to_string(file_path)?;
+
+    let doc: serde_yml::Value =
+        serde_yml::from_str(&contents).map_err(|e| WorkflowError::YamlError {
+            message: e.to_string(),
+        })?;
+
+    let map = doc.as_mapping().ok_or_else(|| WorkflowError::YamlError {
+        message: "Expected YAML mapping".to_string(),
+    })?;
+
+    Ok(check_approval_requirements(map, requirements))
+}
+
+/// Check if a new approval would be a duplicate
+pub fn would_be_duplicate_approval(
+    file_path: &Path,
+    approver: &str,
+) -> Result<bool, WorkflowError> {
+    let contents = std::fs::read_to_string(file_path)?;
+
+    let doc: serde_yml::Value =
+        serde_yml::from_str(&contents).map_err(|e| WorkflowError::YamlError {
+            message: e.to_string(),
+        })?;
+
+    if let Some(map) = doc.as_mapping() {
+        if let Some(approvals) = map.get(&serde_yml::Value::String("approvals".to_string())) {
+            if let Some(seq) = approvals.as_sequence() {
+                for approval in seq {
+                    if let Some(approval_map) = approval.as_mapping() {
+                        if let Some(existing_approver) = approval_map
+                            .get(&serde_yml::Value::String("approver".to_string()))
+                            .and_then(|v| v.as_str())
+                        {
+                            if existing_approver.eq_ignore_ascii_case(approver) {
+                                return Ok(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(false)
 }
 
 /// Record a rejection in an entity's YAML file
@@ -663,5 +943,226 @@ status: review
         assert_eq!(get_prefix_from_id("RISK-01KCWY20"), Some(EntityPrefix::Risk));
         assert_eq!(get_prefix_from_id("CMP-01KCWY20"), Some(EntityPrefix::Cmp));
         assert_eq!(get_prefix_from_id("INVALID-01KCWY20"), None);
+    }
+
+    #[test]
+    fn test_approval_requirements_default() {
+        let reqs = ApprovalRequirements::default();
+        assert_eq!(reqs.min_approvals, 1);
+        assert!(reqs.required_roles.is_empty());
+        assert!(reqs.require_unique_approvers);
+    }
+
+    #[test]
+    fn test_multi_approval_config_parsing() {
+        let yaml = r#"
+enabled: true
+approvals:
+  RISK:
+    min_approvals: 2
+    required_roles: [engineering, quality]
+"#;
+        let config: WorkflowConfig = serde_yml::from_str(yaml).unwrap();
+        let risk_reqs = config.approvals.get("RISK").unwrap();
+        assert_eq!(risk_reqs.min_approvals, 2);
+        assert_eq!(risk_reqs.required_roles.len(), 2);
+    }
+
+    #[test]
+    fn test_get_approval_requirements() {
+        let mut config = WorkflowConfig::with_defaults();
+        config.default_approvals.min_approvals = 1;
+        config.approvals.insert(
+            "RISK".to_string(),
+            ApprovalRequirements {
+                min_approvals: 2,
+                required_roles: vec![Role::Engineering, Role::Quality],
+                require_unique_approvers: true,
+                require_signature: false,
+            },
+        );
+
+        // RISK should use specific requirements
+        let risk_reqs = config.get_approval_requirements(EntityPrefix::Risk);
+        assert_eq!(risk_reqs.min_approvals, 2);
+
+        // REQ should use default requirements
+        let req_reqs = config.get_approval_requirements(EntityPrefix::Req);
+        assert_eq!(req_reqs.min_approvals, 1);
+    }
+
+    #[test]
+    fn test_multi_approval_single_approval_stays_in_review() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("test.yaml");
+
+        std::fs::write(
+            &file,
+            r#"id: RISK-TEST
+title: Test Risk
+status: review
+"#,
+        )
+        .unwrap();
+
+        let requirements = ApprovalRequirements {
+            min_approvals: 2,
+            required_roles: vec![],
+            require_unique_approvers: true,
+            require_signature: false,
+        };
+
+        let options = ApprovalOptions {
+            approver: "jsmith".to_string(),
+            role: Some(Role::Engineering),
+            comment: Some("First approval".to_string()),
+            ..Default::default()
+        };
+
+        record_approval_ext(&file, &options, Some(&requirements)).unwrap();
+
+        // With 2 required and only 1 approval, status should still be review
+        let contents = std::fs::read_to_string(&file).unwrap();
+        assert!(contents.contains("status: review"));
+        assert!(contents.contains("approver: jsmith"));
+    }
+
+    #[test]
+    fn test_multi_approval_transitions_when_requirements_met() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("test.yaml");
+
+        std::fs::write(
+            &file,
+            r#"id: RISK-TEST
+title: Test Risk
+status: review
+"#,
+        )
+        .unwrap();
+
+        let requirements = ApprovalRequirements {
+            min_approvals: 2,
+            required_roles: vec![],
+            require_unique_approvers: true,
+            require_signature: false,
+        };
+
+        // First approval
+        let options1 = ApprovalOptions {
+            approver: "jsmith".to_string(),
+            role: Some(Role::Engineering),
+            comment: Some("First approval".to_string()),
+            ..Default::default()
+        };
+        record_approval_ext(&file, &options1, Some(&requirements)).unwrap();
+
+        // Second approval
+        let options2 = ApprovalOptions {
+            approver: "bwilson".to_string(),
+            role: Some(Role::Quality),
+            comment: Some("Second approval".to_string()),
+            ..Default::default()
+        };
+        record_approval_ext(&file, &options2, Some(&requirements)).unwrap();
+
+        // With 2 required and 2 approvals, status should be approved
+        let contents = std::fs::read_to_string(&file).unwrap();
+        assert!(contents.contains("status: approved"));
+    }
+
+    #[test]
+    fn test_get_approval_status() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("test.yaml");
+
+        std::fs::write(
+            &file,
+            r#"id: RISK-TEST
+title: Test Risk
+status: review
+approvals:
+  - approver: jsmith
+    role: engineering
+    timestamp: 2024-01-01T00:00:00Z
+"#,
+        )
+        .unwrap();
+
+        let requirements = ApprovalRequirements {
+            min_approvals: 2,
+            required_roles: vec![Role::Engineering, Role::Quality],
+            require_unique_approvers: true,
+            require_signature: false,
+        };
+
+        let status = get_approval_status(&file, &requirements).unwrap();
+        assert_eq!(status.current_approvals, 1);
+        assert_eq!(status.required_approvals, 2);
+        assert!(!status.requirements_met);
+        assert_eq!(status.missing_roles.len(), 1); // Quality is missing
+        assert!(status.missing_roles.contains(&Role::Quality));
+    }
+
+    #[test]
+    fn test_would_be_duplicate_approval() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("test.yaml");
+
+        std::fs::write(
+            &file,
+            r#"id: REQ-TEST
+title: Test Requirement
+status: review
+approvals:
+  - approver: jsmith
+    timestamp: 2024-01-01T00:00:00Z
+"#,
+        )
+        .unwrap();
+
+        // jsmith has already approved
+        assert!(would_be_duplicate_approval(&file, "jsmith").unwrap());
+        // bwilson has not approved
+        assert!(!would_be_duplicate_approval(&file, "bwilson").unwrap());
+        // Case insensitive
+        assert!(would_be_duplicate_approval(&file, "JSMITH").unwrap());
+    }
+
+    #[test]
+    fn test_unique_approvers_required() {
+        let tmp = tempdir().unwrap();
+        let file = tmp.path().join("test.yaml");
+
+        std::fs::write(
+            &file,
+            r#"id: RISK-TEST
+title: Test Risk
+status: review
+"#,
+        )
+        .unwrap();
+
+        // Two approvals but require_unique_approvers is true
+        let requirements = ApprovalRequirements {
+            min_approvals: 2,
+            required_roles: vec![],
+            require_unique_approvers: true,
+            require_signature: false,
+        };
+
+        // First approval by jsmith
+        let options1 = ApprovalOptions {
+            approver: "jsmith".to_string(),
+            ..Default::default()
+        };
+        record_approval_ext(&file, &options1, Some(&requirements)).unwrap();
+
+        // Duplicate approval by jsmith (only counts as 1)
+        record_approval_ext(&file, &options1, Some(&requirements)).unwrap();
+
+        // Should still be in review (only 1 unique approver)
+        let contents = std::fs::read_to_string(&file).unwrap();
+        assert!(contents.contains("status: review"));
     }
 }

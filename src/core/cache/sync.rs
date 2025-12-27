@@ -103,6 +103,7 @@ impl EntityCache {
 
         let priority = value["priority"].as_str();
         let entity_type = value["type"].as_str();
+        let level = value["level"].as_str();
         let category = value["category"].as_str();
         let tags: Option<String> = value["tags"].as_sequence().map(|seq| {
             seq.iter()
@@ -120,8 +121,8 @@ impl EntityCache {
             .execute(
                 r#"INSERT OR REPLACE INTO entities
                    (id, prefix, title, status, author, created, file_path, file_mtime, file_hash,
-                    priority, entity_type, category, tags)
-                   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"#,
+                    priority, entity_type, level, category, tags)
+                   VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"#,
                 params![
                     id,
                     prefix,
@@ -134,6 +135,7 @@ impl EntityCache {
                     hash,
                     priority,
                     entity_type,
+                    level,
                     category,
                     tags
                 ],

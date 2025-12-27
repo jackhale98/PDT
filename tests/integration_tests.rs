@@ -483,6 +483,152 @@ fn test_req_list_sort_reverse() {
     );
 }
 
+#[test]
+fn test_req_new_with_level() {
+    let tmp = setup_test_project();
+
+    // Create a stakeholder-level requirement
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Stakeholder Need",
+            "--type",
+            "input",
+            "--level",
+            "stakeholder",
+            "--no-edit",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Stakeholder Need"));
+
+    // Verify the file contains the correct level
+    let files: Vec<_> = std::fs::read_dir(tmp.path().join("requirements/inputs"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+    assert_eq!(files.len(), 1);
+
+    let content = std::fs::read_to_string(files[0].path()).unwrap();
+    assert!(content.contains("level: stakeholder"));
+}
+
+#[test]
+fn test_req_list_filter_by_level() {
+    let tmp = setup_test_project();
+
+    // Create requirements at different V-model levels
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Stakeholder Need",
+            "--type",
+            "input",
+            "--level",
+            "stakeholder",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "System Requirement",
+            "--type",
+            "input",
+            "--level",
+            "system",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Component Spec",
+            "--type",
+            "output",
+            "--level",
+            "component",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Filter by stakeholder level - should only show the stakeholder need
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list", "--level", "stakeholder"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Stakeholder Need"))
+        .stdout(predicate::str::contains("System Requirement").not())
+        .stdout(predicate::str::contains("Component Spec").not());
+
+    // Filter by component level - should only show the component spec
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list", "--level", "component"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Component Spec"))
+        .stdout(predicate::str::contains("Stakeholder Need").not());
+
+    // Filter by all - should show all requirements
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list", "--level", "all"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("3 requirement(s)"));
+}
+
+#[test]
+fn test_req_level_defaults_to_system() {
+    let tmp = setup_test_project();
+
+    // Create a requirement without specifying level
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Default Level Req",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Verify the file contains the default system level
+    let files: Vec<_> = std::fs::read_dir(tmp.path().join("requirements/inputs"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+    assert_eq!(files.len(), 1);
+
+    let content = std::fs::read_to_string(files[0].path()).unwrap();
+    assert!(content.contains("level: system"));
+}
+
 // ============================================================================
 // Risk Command Tests
 // ============================================================================

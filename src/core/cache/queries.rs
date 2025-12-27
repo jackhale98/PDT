@@ -330,7 +330,7 @@ impl EntityCache {
         limit: Option<usize>,
     ) -> Vec<CachedRequirement> {
         let mut sql = String::from(
-            r#"SELECT e.id, e.title, e.status, e.priority, e.entity_type, e.category,
+            r#"SELECT e.id, e.title, e.status, e.priority, e.entity_type, e.level, e.category,
                       e.author, e.created, e.tags, e.file_path
                FROM entities e
                WHERE e.prefix = 'REQ'"#,
@@ -384,7 +384,7 @@ impl EntityCache {
             params_vec.iter().map(|p| p.as_ref()).collect();
 
         let rows = match stmt.query_map(params_refs.as_slice(), |row| {
-            let tags_str: Option<String> = row.get(8)?;
+            let tags_str: Option<String> = row.get(9)?;
             let tags = tags_str
                 .map(|s| {
                     s.split(',')
@@ -399,11 +399,12 @@ impl EntityCache {
                 status: row.get(2)?,
                 priority: row.get(3)?,
                 req_type: row.get(4)?,
-                category: row.get(5)?,
-                author: row.get(6)?,
-                created: parse_datetime(row.get::<_, String>(7)?),
+                level: row.get(5)?,
+                category: row.get(6)?,
+                author: row.get(7)?,
+                created: parse_datetime(row.get::<_, String>(8)?),
                 tags,
-                file_path: PathBuf::from(row.get::<_, String>(9)?),
+                file_path: PathBuf::from(row.get::<_, String>(10)?),
             })
         }) {
             Ok(r) => r,

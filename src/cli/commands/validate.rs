@@ -9,6 +9,7 @@ use walkdir::WalkDir;
 
 use crate::core::cache::EntityCache;
 use crate::core::project::Project;
+use crate::core::suspect::get_suspect_links;
 use crate::core::EntityPrefix;
 use crate::entities::feature::Feature;
 use crate::entities::mate::{FitAnalysis, Mate};
@@ -67,6 +68,8 @@ struct ValidationStats {
     total_warnings: usize,
     files_fixed: usize,
     analysis_rerun: usize,
+    suspect_links: usize,
+    files_with_suspect_links: usize,
 }
 
 /// Loader for full Feature entities needed for validation calculations
@@ -75,6 +78,15 @@ struct ValidationStats {
 /// Validation needs full Feature data for FitAnalysis calculations.
 struct FeatureLoader {
     features: HashMap<String, Feature>,
+}
+
+/// Truncate an ID string for display
+fn truncate_id(id: &str) -> String {
+    if id.len() > 16 {
+        format!("{}...", &id[..13])
+    } else {
+        id.to_string()
+    }
 }
 
 /// Extract entity ID from YAML content
@@ -327,6 +339,32 @@ pub fn run(args: ValidateArgs) -> Result<()> {
                 }
             }
         }
+
+        // Check for suspect links
+        if let Ok(suspect_links) = get_suspect_links(path) {
+            if !suspect_links.is_empty() {
+                stats.files_with_suspect_links += 1;
+                stats.suspect_links += suspect_links.len();
+                stats.total_warnings += suspect_links.len();
+
+                if !args.summary {
+                    println!(
+                        "{} {} - {} suspect link(s)",
+                        style("!").yellow(),
+                        format_path_with_alias(path, Some(&content), &cache),
+                        suspect_links.len()
+                    );
+                    for (link_type, target_id, reason) in &suspect_links {
+                        println!(
+                            "    {} → {} ({})",
+                            style(link_type).cyan(),
+                            truncate_id(target_id),
+                            style(reason.to_string()).dim()
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // Print summary
@@ -351,6 +389,17 @@ pub fn run(args: ValidateArgs) -> Result<()> {
         println!(
             "  Analysis rerun: {} (Monte Carlo/RSS/Worst-case)",
             style(stats.analysis_rerun).cyan()
+        );
+    }
+
+    if stats.suspect_links > 0 {
+        println!(
+            "  Suspect links:  {} in {} file(s)",
+            style(stats.suspect_links).yellow(),
+            style(stats.files_with_suspect_links).yellow()
+        );
+        println!(
+            "                  Run 'tdt link suspect list' to review"
         );
     }
 

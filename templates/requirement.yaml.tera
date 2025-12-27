@@ -3,6 +3,7 @@
 
 id: {{ id }}
 type: {{ req_type }}
+level: {{ req_level }}
 title: "{{ title }}"
 
 source:

@@ -253,6 +253,86 @@ tdt link check
 tdt link add --help
 ```
 
+## Suspect Links
+
+When an entity is modified (revision increment, status regression, or content changes), its incoming links may need to be reviewed to ensure they're still valid. TDT tracks these as "suspect" links.
+
+### Why Links Become Suspect
+
+| Reason | Description |
+|--------|-------------|
+| `revision_changed` | Target entity's revision was incremented |
+| `status_regressed` | Target entity's status regressed (e.g., approved → draft) |
+| `content_modified` | Target entity's content was modified |
+| `manually_marked` | User manually marked the link as suspect |
+
+### Suspect Link Format
+
+Suspect links use an extended format in YAML:
+
+```yaml
+links:
+  verified_by:
+    - TEST-01ABC...                  # Simple link (not suspect)
+    - id: TEST-02DEF...              # Extended link (suspect)
+      suspect: true
+      suspect_reason: revision_changed
+      suspect_since: 2024-01-15T10:30:00Z
+```
+
+### Managing Suspect Links
+
+```bash
+# List all suspect links in the project
+tdt link suspect list
+
+# Filter by entity type
+tdt link suspect list -t RISK
+
+# Review suspect links for a specific entity
+tdt link suspect review REQ@1
+
+# Clear suspect status after review
+tdt link suspect clear REQ@1 TEST@1 -t verified_by
+
+# Clear all suspect links for an entity
+tdt link suspect clear REQ@1
+
+# Manually mark a link as suspect
+tdt link suspect mark REQ@1 TEST@1 -r revision_changed
+```
+
+### Suspect Link Validation
+
+The `tdt validate` command reports suspect links as warnings:
+
+```bash
+$ tdt validate
+→ Validating 15 file(s)...
+
+! REQ-01ABC... - 2 suspect link(s)
+    verified_by → TEST-02DEF... (revision changed)
+    allocated_to → FEAT-03GHI... (status regressed)
+
+────────────────────────────────────────────────────────────
+Validation Summary
+────────────────────────────────────────────────────────────
+  Files checked:  15
+  Files passed:   15
+  Files failed:   0
+  Total errors:   0
+  Total warnings: 2
+  Suspect links:  2 in 1 file(s)
+                  Run 'tdt link suspect list' to review
+```
+
+### Best Practices for Suspect Links
+
+1. **Review regularly** - Check for suspect links after significant changes
+2. **Clear after verification** - Clear suspect status only after verifying the link is still valid
+3. **Use in CI/CD** - Add `tdt link suspect list --count` to your CI pipeline
+4. **Document reviews** - Use the `--verified-revision` flag when clearing to record the revision you verified against
+
 ## When to Use Each Type
 
 ### Use Structural Relationships When:

@@ -102,6 +102,32 @@ const VALID_KEYS: &[(&str, &str)] = &[
         "Merge PR automatically on approval (true/false)",
     ),
     ("workflow.base_branch", "Target branch for PRs (e.g., main)"),
+    // Default approval requirements
+    (
+        "workflow.default_approvals.min_approvals",
+        "Default minimum approvals required (number)",
+    ),
+    (
+        "workflow.default_approvals.require_unique_approvers",
+        "Require different approvers (true/false)",
+    ),
+    (
+        "workflow.default_approvals.require_signature",
+        "Require GPG-signed approvals for Part 11 (true/false)",
+    ),
+    // Per-entity approval requirements (examples)
+    (
+        "workflow.approvals.RISK.min_approvals",
+        "Min approvals for RISK entities",
+    ),
+    (
+        "workflow.approvals.RISK.require_signature",
+        "Require GPG signature for RISK approvals",
+    ),
+    (
+        "workflow.approvals.REQ.min_approvals",
+        "Min approvals for REQ entities",
+    ),
 ];
 
 /// Run a config subcommand

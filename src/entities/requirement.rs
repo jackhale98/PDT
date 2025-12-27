@@ -25,6 +25,51 @@ impl std::fmt::Display for RequirementType {
     }
 }
 
+/// Requirement level in V-model hierarchy
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum Level {
+    /// Stakeholder/user needs - top of V-model
+    Stakeholder,
+    /// System-level requirements
+    #[default]
+    System,
+    /// Subsystem-level requirements
+    Subsystem,
+    /// Component-level requirements
+    Component,
+    /// Detailed implementation requirements
+    Detail,
+}
+
+impl std::fmt::Display for Level {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Level::Stakeholder => write!(f, "stakeholder"),
+            Level::System => write!(f, "system"),
+            Level::Subsystem => write!(f, "subsystem"),
+            Level::Component => write!(f, "component"),
+            Level::Detail => write!(f, "detail"),
+        }
+    }
+}
+
+impl std::str::FromStr for Level {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "stakeholder" => Ok(Level::Stakeholder),
+            "system" => Ok(Level::System),
+            "subsystem" => Ok(Level::Subsystem),
+            "component" => Ok(Level::Component),
+            "detail" => Ok(Level::Detail),
+            _ => Err(format!("Unknown level: {}", s)),
+        }
+    }
+}
+
 /// Source reference for a requirement
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Source {
@@ -78,6 +123,10 @@ pub struct Requirement {
     /// Requirement type (input or output)
     #[serde(rename = "type")]
     pub req_type: RequirementType,
+
+    /// Requirement level in V-model hierarchy
+    #[serde(default)]
+    pub level: Level,
 
     /// Short title
     pub title: String,
@@ -168,6 +217,7 @@ impl Requirement {
         Self {
             id: EntityId::new(crate::core::EntityPrefix::Req),
             req_type,
+            level: Level::default(),
             title,
             source: None,
             category: None,
@@ -182,6 +232,12 @@ impl Requirement {
             author,
             revision: 1,
         }
+    }
+
+    /// Create a new requirement with a specific level
+    pub fn with_level(mut self, level: Level) -> Self {
+        self.level = level;
+        self
     }
 }
 
@@ -217,5 +273,138 @@ mod tests {
 
         let yaml = serde_yml::to_string(&req).unwrap();
         assert!(yaml.contains("type: input"));
+    }
+
+    // ========== Level enum tests ==========
+
+    #[test]
+    fn test_level_default_is_system() {
+        assert_eq!(Level::default(), Level::System);
+    }
+
+    #[test]
+    fn test_level_serialization() {
+        // Test all variants serialize to lowercase
+        assert_eq!(
+            serde_yml::to_string(&Level::Stakeholder).unwrap().trim(),
+            "stakeholder"
+        );
+        assert_eq!(
+            serde_yml::to_string(&Level::System).unwrap().trim(),
+            "system"
+        );
+        assert_eq!(
+            serde_yml::to_string(&Level::Subsystem).unwrap().trim(),
+            "subsystem"
+        );
+        assert_eq!(
+            serde_yml::to_string(&Level::Component).unwrap().trim(),
+            "component"
+        );
+        assert_eq!(
+            serde_yml::to_string(&Level::Detail).unwrap().trim(),
+            "detail"
+        );
+    }
+
+    #[test]
+    fn test_level_deserialization() {
+        assert_eq!(
+            serde_yml::from_str::<Level>("stakeholder").unwrap(),
+            Level::Stakeholder
+        );
+        assert_eq!(
+            serde_yml::from_str::<Level>("system").unwrap(),
+            Level::System
+        );
+        assert_eq!(
+            serde_yml::from_str::<Level>("subsystem").unwrap(),
+            Level::Subsystem
+        );
+        assert_eq!(
+            serde_yml::from_str::<Level>("component").unwrap(),
+            Level::Component
+        );
+        assert_eq!(
+            serde_yml::from_str::<Level>("detail").unwrap(),
+            Level::Detail
+        );
+    }
+
+    #[test]
+    fn test_level_display() {
+        assert_eq!(Level::Stakeholder.to_string(), "stakeholder");
+        assert_eq!(Level::System.to_string(), "system");
+        assert_eq!(Level::Subsystem.to_string(), "subsystem");
+        assert_eq!(Level::Component.to_string(), "component");
+        assert_eq!(Level::Detail.to_string(), "detail");
+    }
+
+    #[test]
+    fn test_level_from_str() {
+        assert_eq!("stakeholder".parse::<Level>().unwrap(), Level::Stakeholder);
+        assert_eq!("system".parse::<Level>().unwrap(), Level::System);
+        assert_eq!("SYSTEM".parse::<Level>().unwrap(), Level::System); // case insensitive
+        assert_eq!("Subsystem".parse::<Level>().unwrap(), Level::Subsystem);
+        assert!("invalid".parse::<Level>().is_err());
+    }
+
+    #[test]
+    fn test_requirement_with_level() {
+        let req = Requirement::new(
+            RequirementType::Input,
+            "Test".to_string(),
+            "Text".to_string(),
+            "test".to_string(),
+        )
+        .with_level(Level::Stakeholder);
+
+        assert_eq!(req.level, Level::Stakeholder);
+    }
+
+    #[test]
+    fn test_requirement_level_serializes() {
+        let req = Requirement::new(
+            RequirementType::Input,
+            "Test".to_string(),
+            "Text".to_string(),
+            "test".to_string(),
+        )
+        .with_level(Level::Component);
+
+        let yaml = serde_yml::to_string(&req).unwrap();
+        assert!(yaml.contains("level: component"));
+    }
+
+    #[test]
+    fn test_requirement_default_level_is_system() {
+        let req = Requirement::new(
+            RequirementType::Input,
+            "Test".to_string(),
+            "Text".to_string(),
+            "test".to_string(),
+        );
+
+        assert_eq!(req.level, Level::System);
+        let yaml = serde_yml::to_string(&req).unwrap();
+        assert!(yaml.contains("level: system"));
+    }
+
+    #[test]
+    fn test_requirement_without_level_deserializes_to_default() {
+        // Simulate an old requirement file without level field
+        // Use a valid 26-character ULID (same format as generated: 01KDGJC92W6EBFGZ5SJW6MFGW6)
+        let yaml = r#"
+id: REQ-01KDGJC92W6EBFGZ5SJW6MFGW6
+type: input
+title: "Test"
+text: "The system shall do something."
+priority: medium
+status: draft
+created: "2024-01-01T00:00:00Z"
+author: "test"
+"#;
+        let req: Requirement = serde_yml::from_str(yaml).unwrap();
+        assert_eq!(req.level, Level::System); // Default
     }
 }

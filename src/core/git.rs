@@ -362,6 +362,83 @@ impl Git {
     pub fn format_command(args: &[&str]) -> String {
         format!("git {}", args.join(" "))
     }
+
+    /// Commit staged changes with GPG signing
+    pub fn commit_signed(&self, message: &str) -> Result<String, GitError> {
+        let output = self.run(&["commit", "-S", "-m", message])?;
+        if output.success {
+            // Get the commit hash
+            let hash_output = self.run(&["rev-parse", "HEAD"])?;
+            Ok(hash_output.stdout)
+        } else {
+            // If signing fails, provide a helpful message
+            if output.stderr.contains("gpg") || output.stderr.contains("signing") {
+                return Err(GitError::CommandFailed {
+                    message: format!(
+                        "Failed to sign commit. Configure GPG signing with:\n\
+                         git config --global user.signingkey <YOUR_KEY_ID>\n\
+                         Original error: {}",
+                        output.stderr
+                    ),
+                });
+            }
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Verify the signature of a commit
+    /// Returns Ok(Some(signer)) if valid, Ok(None) if no signature, Err if invalid
+    pub fn verify_commit_signature(&self, commit: &str) -> Result<Option<String>, GitError> {
+        let output = self.run(&["verify-commit", "--raw", commit])?;
+
+        // Check status: "git verify-commit" returns 0 for valid, 1 for invalid/missing
+        if output.success {
+            // Parse the signer from gpg output (typically in stderr)
+            // Look for "Good signature from" line
+            for line in output.stderr.lines() {
+                if line.contains("Good signature from") {
+                    // Extract signer info
+                    if let Some(start) = line.find('"') {
+                        if let Some(end) = line.rfind('"') {
+                            return Ok(Some(line[start + 1..end].to_string()));
+                        }
+                    }
+                    return Ok(Some(line.to_string()));
+                }
+            }
+            // Signature verified but couldn't parse signer
+            Ok(Some("verified".to_string()))
+        } else {
+            // Check if it's just missing (no signature) or actually invalid
+            if output.stderr.contains("no signature found")
+                || output.stderr.contains("unsigned commit")
+            {
+                Ok(None)
+            } else {
+                // Signature exists but is invalid
+                Err(GitError::CommandFailed {
+                    message: format!("Invalid signature: {}", output.stderr),
+                })
+            }
+        }
+    }
+
+    /// Check if GPG signing is configured
+    pub fn signing_configured(&self) -> bool {
+        self.run(&["config", "user.signingkey"])
+            .map(|o| o.success && !o.stdout.is_empty())
+            .unwrap_or(false)
+    }
+
+    /// Get the GPG signing key ID
+    pub fn signing_key(&self) -> Option<String> {
+        self.run(&["config", "user.signingkey"])
+            .ok()
+            .filter(|o| o.success && !o.stdout.is_empty())
+            .map(|o| o.stdout)
+    }
 }
 
 #[cfg(test)]

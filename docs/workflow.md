@@ -1,12 +1,14 @@
 # TDT Workflow & Collaboration
 
-This document describes the git-integrated workflow features in TDT (Tessera Design Toolkit).
+This document describes the workflow features in TDT (Tessera Design Toolkit).
 
 ## Overview
 
-TDT provides opt-in workflow commands that help teams collaborate on product data using git and GitHub/GitLab. These features are designed for users who may not be familiar with git, providing a guided experience for common review and approval workflows.
+TDT provides workflow commands that help teams collaborate on product data with git-based version control. The commands are designed to be **git-transparent** - users run simple TDT commands and git operations happen automatically in the background.
 
-**Key Principle**: These features are completely optional. Git-savvy users can continue using standard git commands directly.
+**For non-git users**: You just run `tdt approve REQ@1` - TDT handles all the git operations for you.
+
+**For git users**: All git operations are visible with `--verbose`, and you can always use git commands directly.
 
 ## Status Workflow
 
@@ -19,8 +21,8 @@ Draft → Review → Approved → Released
 | Status | Description |
 |--------|-------------|
 | `draft` | Initial state, work in progress |
-| `review` | Submitted for review (PR created) |
-| `approved` | Approved by authorized reviewer |
+| `review` | Submitted for review |
+| `approved` | Approved by authorized reviewers |
 | `released` | Officially released for use |
 
 ## Configuration
@@ -31,9 +33,25 @@ Enable workflow features in `.tdt/config.yaml`:
 workflow:
   enabled: true
   provider: github    # github, gitlab, or none
-  auto_commit: true   # Auto-commit status changes
+  auto_commit: true   # Auto-commit status changes (recommended)
   auto_merge: false   # Merge PR on approval
   base_branch: main   # Target branch for PRs
+
+  # Default approval requirements (applies to all entity types)
+  default_approvals:
+    min_approvals: 1
+    require_unique_approvers: true
+
+  # Per-entity-type approval requirements
+  approvals:
+    RISK:
+      min_approvals: 2
+      required_roles: [engineering, quality]
+    REQ:
+      min_approvals: 2
+    NCR:
+      min_approvals: 2
+      required_roles: [quality]
 ```
 
 ### Configuration Keys
@@ -45,6 +63,17 @@ workflow:
 | `workflow.auto_commit` | Auto-commit on status changes | `true` |
 | `workflow.auto_merge` | Merge PR automatically on approval | `false` |
 | `workflow.base_branch` | Target branch for PRs | `main` |
+| `workflow.default_approvals` | Default approval requirements | See below |
+| `workflow.approvals.<TYPE>` | Per-entity-type approval requirements | See below |
+
+### Approval Requirements
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `min_approvals` | Minimum number of approvals required | `1` |
+| `required_roles` | List of roles that must provide at least one approval | `[]` |
+| `require_unique_approvers` | Prevent same person from approving twice | `true` |
+| `require_signature` | Require GPG-signed commits (for 21 CFR Part 11) | `false` |
 
 ### Setting via CLI
 
@@ -60,6 +89,17 @@ tdt config set workflow.provider gitlab
 # Manual mode (no PR integration)
 tdt config set workflow.enabled true
 tdt config set workflow.provider none
+
+# Set default approval requirements
+tdt config set workflow.default_approvals.min_approvals 2
+tdt config set workflow.default_approvals.require_unique_approvers true
+
+# Set per-entity requirements (e.g., for RISK entities)
+tdt config set workflow.approvals.RISK.min_approvals 2
+tdt config set workflow.approvals.RISK.require_signature true
+
+# View all available config keys
+tdt config keys
 ```
 
 ## Team Roster
@@ -168,10 +208,10 @@ tdt submit REQ@1 --no-pr
 
 ## Approve Command
 
-Approve entities under review:
+Approve entities under review. This is designed to be simple - just run `tdt approve` and everything is handled automatically:
 
 ```bash
-# Single entity
+# Simple approval
 tdt approve REQ@1
 
 # Multiple entities
@@ -186,6 +226,12 @@ tdt approve REQ@1 --merge
 # With approval message
 tdt approve REQ@1 -m "Looks good"
 
+# Check approval status without adding approval
+tdt approve REQ@1 --status
+
+# Skip git commit (just update YAML files)
+tdt approve REQ@1 --no-commit
+
 # Skip authorization check (admin)
 tdt approve REQ@1 --force
 ```
@@ -198,20 +244,165 @@ tdt approve REQ@1 --force
 | `--message` | `-m` | Approval comment |
 | `--merge` | | Merge PR after approval |
 | `--no-merge` | | Skip merge even if auto_merge enabled |
+| `--no-commit` | | Skip git commit (just update YAML files) |
+| `--sign` | `-S` | GPG-sign the approval commit (for Part 11 compliance) |
+| `--status` | | Show approval status without adding an approval |
 | `--force` | | Skip authorization check |
 | `--yes` | `-y` | Skip confirmation prompt |
 | `--dry-run` | | Show what would be done |
 | `--verbose` | `-v` | Print commands as they run |
 
+### Multi-Signature Approvals
+
+When `min_approvals > 1` is configured for an entity type, approvals are accumulated until the requirements are met:
+
+```bash
+# First approval (entity stays in Review status)
+$ tdt approve RISK@1 -m "Engineering approval"
+  Recorded approval by jsmith for 1 entities
+  Committed: "Approve RISK-01KCWY20: Motor failure"
+1 entities need more approvals before transitioning to 'approved' status.
+
+# Check current approval status
+$ tdt approve RISK@1 --status
+RISK-01KCWY20  Motor failure analysis
+  Status: review
+  Approvals: 1/2
+  Approvers: jsmith
+  Missing roles: quality
+  Need 1 more approval(s)
+
+# Second approval (meets requirements, transitions to Approved)
+$ tdt approve RISK@1 -m "Quality approval"
+  Recorded approval by bwilson for 1 entities
+  Committed: "Approve RISK-01KCWY20: Motor failure"
+1 entities fully approved.
+```
+
 ### What Approve Does
 
 1. Validates entities are in Review status
-2. Verifies user has approval authorization
-3. Changes status to Approved
-4. Records approval metadata (who, when, role)
-5. Commits changes
-6. Adds approval to PR (if provider configured)
-7. Optionally merges PR
+2. Verifies user has approval authorization (if team roster configured)
+3. Checks for duplicate approvals (if require_unique_approvers is enabled)
+4. Records approval as an "electronic signature" (approver name, email, role, timestamp)
+5. Checks if approval requirements are met for the entity type
+6. If requirements met: Changes status to Approved
+7. If requirements not met: Entity stays in Review status
+8. Commits changes (if git available and auto_commit enabled)
+9. Adds approval to PR (if provider configured)
+10. Optionally merges PR (only if all entities are fully approved)
+
+### Approval Records (Electronic Signatures)
+
+Each approval is recorded in the entity YAML file as an "electronic signature":
+
+```yaml
+approvals:
+  - approver: "Jane Smith"
+    email: "jane@example.com"
+    role: engineering
+    timestamp: 2024-01-15T10:30:00Z
+    comment: "Reviewed, looks good"
+  - approver: "Bob Wilson"
+    email: "bob@example.com"
+    role: quality
+    timestamp: 2024-01-15T14:22:00Z
+    comment: "Quality approved"
+    signature_verified: true        # GPG signature verified
+    signing_key: "ABC123DEF456"     # GPG key ID
+```
+
+This provides a complete audit trail of who approved what and when.
+
+## 21 CFR Part 11 Compliance
+
+For FDA-regulated industries (medical devices, pharmaceuticals, biotech), TDT supports [21 CFR Part 11](https://www.fda.gov/regulatory-information/search-fda-guidance-documents/part-11-electronic-records-electronic-signatures-scope-and-application) compliance through GPG-signed approvals.
+
+### Why GPG Signatures?
+
+Part 11 requires electronic signatures to be:
+- **Unique to an individual** - GPG keys are personal and password-protected
+- **Verifiable** - Signatures can be cryptographically verified
+- **Inextricably linked to the record** - Git commits bind the signature to exact content
+
+Combined with Git's immutable audit trail, this satisfies Part 11's requirements for electronic records and signatures.
+
+### Enabling Part 11 Mode
+
+```yaml
+# .tdt/config.yaml
+workflow:
+  enabled: true
+  provider: github
+
+  # Require GPG signatures for all approvals
+  default_approvals:
+    min_approvals: 2
+    require_signature: true
+
+  # Or require signatures only for specific entity types
+  approvals:
+    RISK:
+      min_approvals: 2
+      required_roles: [engineering, quality]
+      require_signature: true
+    REQ:
+      min_approvals: 2
+      require_signature: true
+```
+
+### Using GPG-Signed Approvals
+
+```bash
+# Approve with GPG signature
+tdt approve REQ@1 --sign
+
+# If require_signature is enabled, --sign is required
+tdt approve RISK@1 --sign -m "Quality review complete"
+```
+
+### Setting Up GPG Signing
+
+Before using GPG-signed approvals, each team member needs to configure GPG signing:
+
+1. **Generate a GPG key** (if you don't have one):
+   ```bash
+   gpg --full-generate-key
+   ```
+
+2. **Configure Git to use your key**:
+   ```bash
+   # List your keys to find the key ID
+   gpg --list-secret-keys --keyid-format=long
+
+   # Configure Git
+   git config --global user.signingkey YOUR_KEY_ID
+   git config --global commit.gpgsign true
+   ```
+
+3. **Add your public key to GitHub/GitLab** for verification badges
+
+For detailed instructions, see:
+- [GitHub: Managing commit signature verification](https://docs.github.com/en/authentication/managing-commit-signature-verification)
+- [GitLab: Signing commits with GPG](https://docs.gitlab.com/ee/user/project/repository/signed_commits/gpg.html)
+
+### Part 11 Compliance Checklist
+
+Using TDT with GPG signing satisfies several Part 11 requirements:
+
+| Part 11 Requirement | TDT Feature |
+|---------------------|-------------|
+| Audit trail (§11.10(e)) | Git commit history with timestamps |
+| Unique user identification (§11.100) | GPG keys + team roster |
+| Signature meaning (§11.50) | Approval comments and role |
+| Non-repudiation (§11.200) | GPG cryptographic signatures |
+| Record integrity (§11.10(c)) | Git hash-linked commits |
+
+**Note**: Technology alone doesn't ensure compliance. You also need:
+- System validation documentation (IQ/OQ/PQ)
+- Standard Operating Procedures (SOPs)
+- Training records
+- Periodic audits
 
 ## Reject Command
 
@@ -434,6 +625,12 @@ tdt release REQ@1
 ```
 
 ## Best Practices
+
+### For Teams New to Git
+
+1. **Just use TDT commands** - Run `tdt approve`, `tdt submit`, etc. Git happens automatically
+2. **Use `--verbose`** - See what git commands are running to learn
+3. **Use `--dry-run`** - Preview what will happen before executing
 
 ### For Teams
 

@@ -1,4 +1,6 @@
 //! Approve command - Approve entities under review
+//!
+//! Supports multi-signature approvals with configurable requirements per entity type.
 
 use clap::Args;
 use miette::{bail, IntoDiagnostic, Result};
@@ -9,7 +11,8 @@ use crate::cli::args::GlobalOpts;
 use crate::core::entity::Status;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::workflow::{
-    get_entity_info, get_prefix_from_id, record_approval, truncate_id,
+    get_approval_status, get_entity_info, get_prefix_from_id, record_approval_ext,
+    truncate_id, would_be_duplicate_approval, ApprovalOptions,
 };
 use crate::core::{Config, Git, Project, Provider, ProviderClient, TeamRoster, WorkflowEngine};
 
@@ -28,7 +31,7 @@ pub struct ApproveArgs {
     #[arg(long, short = 'm')]
     pub message: Option<String>,
 
-    /// Merge PR after approval
+    /// Merge PR after approval (requires git)
     #[arg(long)]
     pub merge: bool,
 
@@ -51,6 +54,18 @@ pub struct ApproveArgs {
     /// Print commands as they run
     #[arg(long, short = 'v')]
     pub verbose: bool,
+
+    /// Skip git commit (just update YAML files)
+    #[arg(long)]
+    pub no_commit: bool,
+
+    /// GPG-sign the approval commit (for 21 CFR Part 11 compliance)
+    #[arg(long, short = 'S')]
+    pub sign: bool,
+
+    /// Show approval status without adding an approval
+    #[arg(long)]
+    pub status: bool,
 }
 
 impl ApproveArgs {
@@ -64,28 +79,29 @@ impl ApproveArgs {
                 "Workflow features are not enabled.\n\
                  Add the following to .tdt/config.yaml:\n\n\
                  workflow:\n\
-                 \x20 enabled: true\n\
-                 \x20 provider: github  # or gitlab, or none"
+                 \x20 enabled: true"
             );
         }
 
         let git = Git::new(project.root());
+        let has_git = git.is_repo();
 
-        // Verify we're in a git repo
-        if !git.is_repo() {
-            bail!("Not a git repository.");
-        }
-
-        // Load team roster (optional)
+        // Load team roster (optional but recommended for role-based approvals)
         let roster = TeamRoster::load(&project);
         let engine = WorkflowEngine::new(roster.clone(), config.workflow.clone());
 
-        // Get current user
+        // Get current user - from roster, then git config, then fallback
         let current_user = engine.current_user();
         let approver_name = current_user
             .map(|u| u.name.clone())
-            .or_else(|| git.user_name().ok())
+            .or_else(|| if has_git { git.user_name().ok() } else { None })
+            .or_else(|| std::env::var("USER").ok())
+            .or_else(|| std::env::var("USERNAME").ok())
             .unwrap_or_else(|| "Unknown".to_string());
+
+        let approver_email = current_user
+            .map(|u| u.email.clone())
+            .or_else(|| if has_git { git.user_email().ok() } else { None });
 
         let approver_role = current_user.and_then(|u| u.roles.first().copied());
 
@@ -115,12 +131,33 @@ impl ApproveArgs {
             let file_path = self.find_entity_file(&project, &full_id)?;
             let (entity_id, title, status) = get_entity_info(&file_path).into_diagnostic()?;
 
+            // For --status, show approval status and continue
+            if self.status {
+                self.show_approval_status(&file_path, &entity_id, &title, status, &config)?;
+                continue;
+            }
+
             if status != Status::Review {
                 bail!(
                     "Entity {} is not in review status (current: {})",
                     entity_id,
                     status
                 );
+            }
+
+            // Check for duplicate approval (if require_unique_approvers is enabled)
+            if let Some(prefix) = get_prefix_from_id(&entity_id) {
+                let requirements = config.workflow.get_approval_requirements(prefix);
+                if requirements.require_unique_approvers {
+                    let is_duplicate = would_be_duplicate_approval(&file_path, &approver_name)
+                        .into_diagnostic()?;
+                    if is_duplicate && !self.force {
+                        bail!(
+                            "You have already approved {}. Use --force to add a duplicate approval.",
+                            entity_id
+                        );
+                    }
+                }
             }
 
             // Check authorization
@@ -135,6 +172,11 @@ impl ApproveArgs {
             entities.push((file_path, entity_id, title, status));
         }
 
+        // If --status was used, we're done
+        if self.status {
+            return Ok(());
+        }
+
         // Show what we're about to do
         println!(
             "Approving {} entities as {}...",
@@ -142,13 +184,25 @@ impl ApproveArgs {
             approver_name
         );
         if self.verbose || self.dry_run {
-            for (_, id, title, _) in &entities {
+            for (path, id, title, _) in &entities {
                 println!("  {}  {}", truncate_id(id), title);
+                // Show current approval status
+                if let Some(prefix) = get_prefix_from_id(id) {
+                    let requirements = config.workflow.get_approval_requirements(prefix);
+                    if let Ok(status) = get_approval_status(path, requirements) {
+                        println!(
+                            "      Approvals: {}/{} {}",
+                            status.current_approvals,
+                            status.required_approvals,
+                            if status.requirements_met { "(ready to approve)" } else { "(more approvals needed)" }
+                        );
+                    }
+                }
             }
         }
 
         if self.dry_run {
-            self.print_dry_run(&entities, &config)?;
+            self.print_dry_run(&entities, &config, has_git)?;
             println!("\nNo changes made (dry run).");
             return Ok(());
         }
@@ -166,8 +220,57 @@ impl ApproveArgs {
         }
 
         // Execute the approval
-        self.execute_approve(&project, &config, &git, &entities, &approver_name, approver_role)?;
+        self.execute_approve(
+            &project,
+            &config,
+            &git,
+            has_git,
+            &entities,
+            &approver_name,
+            approver_email.as_deref(),
+            approver_role,
+        )?;
 
+        Ok(())
+    }
+
+    fn show_approval_status(
+        &self,
+        file_path: &PathBuf,
+        entity_id: &str,
+        title: &str,
+        current_status: Status,
+        config: &Config,
+    ) -> Result<()> {
+        println!("{}  {}", truncate_id(entity_id), title);
+        println!("  Status: {}", current_status);
+
+        if let Some(prefix) = get_prefix_from_id(entity_id) {
+            let requirements = config.workflow.get_approval_requirements(prefix);
+            if let Ok(status) = get_approval_status(file_path, requirements) {
+                println!(
+                    "  Approvals: {}/{}",
+                    status.current_approvals,
+                    status.required_approvals
+                );
+                if !status.approvers.is_empty() {
+                    println!("  Approvers: {}", status.approvers.join(", "));
+                }
+                if !status.missing_roles.is_empty() {
+                    let roles: Vec<String> = status.missing_roles.iter().map(|r| r.to_string()).collect();
+                    println!("  Missing roles: {}", roles.join(", "));
+                }
+                if status.requirements_met {
+                    println!("  Ready for approval transition");
+                } else {
+                    let remaining = status.required_approvals.saturating_sub(status.current_approvals);
+                    if remaining > 0 {
+                        println!("  Need {} more approval(s)", remaining);
+                    }
+                }
+            }
+        }
+        println!();
         Ok(())
     }
 
@@ -214,6 +317,7 @@ impl ApproveArgs {
         &self,
         entities: &[(PathBuf, String, String, Status)],
         config: &Config,
+        has_git: bool,
     ) -> Result<()> {
         println!("\nWould execute:");
 
@@ -223,23 +327,33 @@ impl ApproveArgs {
                 .unwrap_or(path)
                 .display();
             println!("  [record approval in {}]", rel_path);
-            println!("  git add {}", rel_path);
         }
 
-        let commit_message = if entities.len() == 1 {
-            let (_, id, title, _) = &entities[0];
-            config.workflow.format_approve_message(&truncate_id(id), title)
-        } else {
-            format!("Approve {} entities", entities.len())
-        };
-        println!("  git commit -m \"{}\"", commit_message);
+        // Git operations only if available and auto_commit enabled
+        if has_git && config.workflow.auto_commit && !self.no_commit {
+            for (path, _id, _, _) in entities {
+                let rel_path = path
+                    .strip_prefix(std::env::current_dir().into_diagnostic()?)
+                    .unwrap_or(path)
+                    .display();
+                println!("  git add {}", rel_path);
+            }
 
-        if config.workflow.provider != Provider::None {
-            if let Some(pr) = self.pr {
-                let provider = ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
-                println!("  {}", provider.format_command(&["pr", "review", &pr.to_string(), "--approve"]));
-                if self.merge || (config.workflow.auto_merge && !self.no_merge) {
-                    println!("  {}", provider.format_command(&["pr", "merge", &pr.to_string()]));
+            let commit_message = if entities.len() == 1 {
+                let (_, id, title, _) = &entities[0];
+                config.workflow.format_approve_message(&truncate_id(id), title)
+            } else {
+                format!("Approve {} entities", entities.len())
+            };
+            println!("  git commit -m \"{}\"", commit_message);
+
+            if config.workflow.provider != Provider::None {
+                if let Some(pr) = self.pr {
+                    let provider = ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
+                    println!("  {}", provider.format_command(&["pr", "review", &pr.to_string(), "--approve"]));
+                    if self.merge || (config.workflow.auto_merge && !self.no_merge) {
+                        println!("  {}", provider.format_command(&["pr", "merge", &pr.to_string()]));
+                    }
                 }
             }
         }
@@ -252,65 +366,184 @@ impl ApproveArgs {
         project: &Project,
         config: &Config,
         git: &Git,
+        has_git: bool,
         entities: &[(PathBuf, String, String, Status)],
         approver_name: &str,
+        approver_email: Option<&str>,
         approver_role: Option<crate::core::team::Role>,
     ) -> Result<()> {
-        // Record approval in each entity
-        for (path, id, _, _) in entities {
-            record_approval(path, approver_name, approver_role, self.message.as_deref()).into_diagnostic()?;
-            if self.verbose {
-                eprintln!("  Recorded approval in {}", truncate_id(id));
+        let mut fully_approved = 0;
+        let mut pending_more_approvals = 0;
+
+        // Check if any entity requires GPG signature
+        let mut signature_required = false;
+        for (_, id, _, _) in entities {
+            if let Some(prefix) = get_prefix_from_id(id) {
+                let reqs = config.workflow.get_approval_requirements(prefix);
+                if reqs.require_signature {
+                    signature_required = true;
+                    break;
+                }
             }
         }
+
+        // If signature is required but --sign not provided, error
+        if signature_required && !self.sign {
+            bail!(
+                "GPG signature required for this entity type.\n\
+                 Use --sign (-S) flag to sign the approval.\n\n\
+                 To set up GPG signing, see: https://docs.github.com/en/authentication/managing-commit-signature-verification"
+            );
+        }
+
+        // Check GPG is configured if --sign is requested
+        if self.sign && has_git && !git.signing_configured() {
+            bail!(
+                "GPG signing requested but not configured.\n\
+                 Configure with: git config --global user.signingkey <KEY_ID>\n\n\
+                 For setup instructions, see: https://docs.github.com/en/authentication/managing-commit-signature-verification"
+            );
+        }
+
+        // Record approval in each entity (this is the "electronic signature")
+        for (path, id, _, _) in entities {
+            let prefix = get_prefix_from_id(id);
+            let requirements = prefix
+                .map(|p| config.workflow.get_approval_requirements(p))
+                .cloned();
+
+            // Build approval options (signature info added after commit)
+            let mut options = ApprovalOptions {
+                approver: approver_name.to_string(),
+                email: approver_email.map(|s| s.to_string()),
+                role: approver_role,
+                comment: self.message.clone(),
+                signature_verified: None,
+                signing_key: None,
+            };
+
+            // If signing, get the key ID to record
+            if self.sign && has_git {
+                options.signing_key = git.signing_key();
+            }
+
+            record_approval_ext(path, &options, requirements.as_ref()).into_diagnostic()?;
+
+            // Check if this entity is now fully approved
+            if let Some(ref reqs) = requirements {
+                let status = get_approval_status(path, reqs).into_diagnostic()?;
+                if status.requirements_met {
+                    fully_approved += 1;
+                    if self.verbose {
+                        eprintln!(
+                            "  {} - fully approved ({}/{} approvals)",
+                            truncate_id(id),
+                            status.current_approvals,
+                            status.required_approvals
+                        );
+                    }
+                } else {
+                    pending_more_approvals += 1;
+                    if self.verbose {
+                        eprintln!(
+                            "  {} - approval recorded ({}/{} approvals)",
+                            truncate_id(id),
+                            status.current_approvals,
+                            status.required_approvals
+                        );
+                    }
+                }
+            } else {
+                fully_approved += 1;
+            }
+        }
+
         println!(
-            "  Approved {} entities by {}",
-            entities.len(),
-            approver_name
+            "  Recorded approval by {} for {} entities",
+            approver_name,
+            entities.len()
         );
 
-        // Stage files
-        let paths: Vec<&std::path::Path> = entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
-        git.stage_files(&paths).into_diagnostic()?;
+        // Git operations are optional - only if we have git and auto_commit is enabled
+        let should_commit = has_git && config.workflow.auto_commit && !self.no_commit;
 
-        // Commit
-        let commit_message = if entities.len() == 1 {
-            let (_, id, title, _) = &entities[0];
-            config.workflow.format_approve_message(&truncate_id(id), title)
-        } else {
-            format!("Approve {} entities", entities.len())
-        };
-        let _hash = git.commit(&commit_message).into_diagnostic()?;
-        println!("  Committed: \"{}\"", commit_message);
+        if should_commit {
+            // Stage files
+            let paths: Vec<&std::path::Path> = entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
+            git.stage_files(&paths).into_diagnostic()?;
 
-        // PR operations if provider is configured
-        if config.workflow.provider != Provider::None {
-            let provider = ProviderClient::new(config.workflow.provider, project.root())
-                .with_verbose(self.verbose);
+            // Commit (with or without GPG signature)
+            let commit_message = if entities.len() == 1 {
+                let (_, id, title, _) = &entities[0];
+                config.workflow.format_approve_message(&truncate_id(id), title)
+            } else {
+                format!("Approve {} entities", entities.len())
+            };
 
-            // Find PR for current branch
-            let current_branch = git.current_branch().unwrap_or_default();
-            if let Ok(Some(pr_info)) = provider.get_pr_for_branch(&current_branch) {
-                // Add approval review
-                if let Err(e) = provider.approve_pr(pr_info.number, self.message.as_deref()) {
-                    eprintln!("  Warning: Failed to add PR approval: {}", e);
-                } else {
-                    println!("  Added approval to PR #{}", pr_info.number);
+            let commit_hash = if self.sign {
+                git.commit_signed(&commit_message).into_diagnostic()?
+            } else {
+                git.commit(&commit_message).into_diagnostic()?
+            };
+
+            if self.sign {
+                println!("  Committed (GPG signed): \"{}\"", commit_message);
+
+                // Verify the signature and show key info
+                if self.verbose {
+                    match git.verify_commit_signature(&commit_hash) {
+                        Ok(Some(signer)) => eprintln!("  Signature verified: {}", signer),
+                        Ok(None) => eprintln!("  Warning: Commit was not signed"),
+                        Err(e) => eprintln!("  Warning: Signature verification failed: {}", e),
+                    }
                 }
+            } else {
+                println!("  Committed: \"{}\"", commit_message);
+            }
 
-                // Merge if requested
-                let should_merge = self.merge || (config.workflow.auto_merge && !self.no_merge);
-                if should_merge {
-                    if let Err(e) = provider.merge_pr(pr_info.number, true) {
-                        eprintln!("  Warning: Failed to merge PR: {}", e);
+            // PR operations if provider is configured
+            if config.workflow.provider != Provider::None {
+                let provider = ProviderClient::new(config.workflow.provider, project.root())
+                    .with_verbose(self.verbose);
+
+                // Find PR for current branch
+                let current_branch = git.current_branch().unwrap_or_default();
+                if let Ok(Some(pr_info)) = provider.get_pr_for_branch(&current_branch) {
+                    // Add approval review
+                    if let Err(e) = provider.approve_pr(pr_info.number, self.message.as_deref()) {
+                        eprintln!("  Warning: Failed to add PR approval: {}", e);
                     } else {
-                        println!("  Merged PR #{}", pr_info.number);
+                        println!("  Added approval to PR #{}", pr_info.number);
+                    }
+
+                    // Only merge if all entities are fully approved
+                    let should_merge = self.merge || (config.workflow.auto_merge && !self.no_merge);
+                    if should_merge {
+                        if pending_more_approvals > 0 {
+                            println!(
+                                "  Skipping merge: {} entities still need more approvals",
+                                pending_more_approvals
+                            );
+                        } else if let Err(e) = provider.merge_pr(pr_info.number, true) {
+                            eprintln!("  Warning: Failed to merge PR: {}", e);
+                        } else {
+                            println!("  Merged PR #{}", pr_info.number);
+                        }
                     }
                 }
             }
         }
 
-        println!("\n{} entities approved.", entities.len());
+        println!();
+        if fully_approved > 0 {
+            println!("{} entities fully approved.", fully_approved);
+        }
+        if pending_more_approvals > 0 {
+            println!(
+                "{} entities need more approvals before transitioning to 'approved' status.",
+                pending_more_approvals
+            );
+        }
 
         Ok(())
     }

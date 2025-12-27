@@ -10,6 +10,9 @@ use crate::core::cache::EntityCache;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::suspect::{
+    clear_link_suspect, get_suspect_links, mark_link_suspect, SuspectReason,
+};
 
 #[derive(clap::Subcommand, Debug)]
 pub enum LinkCommands {
@@ -24,6 +27,81 @@ pub enum LinkCommands {
 
     /// Find broken links (references to non-existent entities)
     Check(CheckLinksArgs),
+
+    /// Manage suspect links (links that need review due to changes)
+    Suspect(SuspectCommands),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SuspectCommands {
+    #[command(subcommand)]
+    pub command: SuspectSubcommand,
+}
+
+#[derive(clap::Subcommand, Debug)]
+pub enum SuspectSubcommand {
+    /// List all suspect links in the project
+    List(SuspectListArgs),
+
+    /// Review suspect links for a specific entity
+    Review(SuspectReviewArgs),
+
+    /// Clear suspect status for a link (after review)
+    Clear(SuspectClearArgs),
+
+    /// Manually mark a link as suspect
+    Mark(SuspectMarkArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SuspectListArgs {
+    /// Filter by source entity type
+    #[arg(long, short = 't')]
+    pub entity_type: Option<String>,
+
+    /// Show count only
+    #[arg(long)]
+    pub count: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SuspectReviewArgs {
+    /// Entity ID to review
+    pub id: String,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SuspectClearArgs {
+    /// Source entity ID
+    pub source: String,
+
+    /// Target entity ID (optional - clear all if not specified)
+    pub target: Option<String>,
+
+    /// Link type to clear
+    #[arg(long = "link-type", short = 't')]
+    pub link_type: Option<String>,
+
+    /// Mark as verified at this revision
+    #[arg(long)]
+    pub verified_revision: Option<u32>,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct SuspectMarkArgs {
+    /// Source entity ID
+    pub source: String,
+
+    /// Target entity ID
+    pub target: String,
+
+    /// Link type
+    #[arg(long = "link-type", short = 't')]
+    pub link_type: Option<String>,
+
+    /// Reason for marking as suspect
+    #[arg(long, short = 'r', default_value = "manually_marked")]
+    pub reason: String,
 }
 
 #[derive(clap::Args, Debug)]
@@ -188,7 +266,209 @@ pub fn run(cmd: LinkCommands) -> Result<()> {
         LinkCommands::Remove(args) => run_remove(args),
         LinkCommands::Show(args) => run_show(args),
         LinkCommands::Check(args) => run_check(args),
+        LinkCommands::Suspect(args) => run_suspect(args),
     }
+}
+
+fn run_suspect(args: SuspectCommands) -> Result<()> {
+    match args.command {
+        SuspectSubcommand::List(args) => run_suspect_list(args),
+        SuspectSubcommand::Review(args) => run_suspect_review(args),
+        SuspectSubcommand::Clear(args) => run_suspect_clear(args),
+        SuspectSubcommand::Mark(args) => run_suspect_mark(args),
+    }
+}
+
+fn run_suspect_list(args: SuspectListArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+
+    println!(
+        "{} Scanning for suspect links...\n",
+        style("→").blue()
+    );
+
+    let mut total_suspect = 0;
+    let all_dirs = get_search_dirs_for_query(&project, "");
+
+    for dir in all_dirs {
+        if !dir.exists() {
+            continue;
+        }
+
+        for entry in walkdir::WalkDir::new(&dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| {
+                let path_str = e.path().to_string_lossy();
+                path_str.ends_with(".tdt.yaml") || path_str.ends_with(".yaml")
+            })
+        {
+            // Apply type filter if specified
+            if let Some(ref type_filter) = args.entity_type {
+                let filename = entry.file_name().to_string_lossy();
+                let prefix = type_filter.to_uppercase();
+                if !filename.starts_with(&prefix) {
+                    continue;
+                }
+            }
+
+            if let Ok(suspect_links) = get_suspect_links(entry.path()) {
+                if !suspect_links.is_empty() {
+                    // Get source entity ID
+                    let source_id = fs::read_to_string(entry.path())
+                        .ok()
+                        .and_then(|content| {
+                            serde_yml::from_str::<serde_yml::Value>(&content)
+                                .ok()
+                                .and_then(|v| v.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                        })
+                        .unwrap_or_else(|| "unknown".to_string());
+
+                    if !args.count {
+                        for (link_type, target_id, reason) in &suspect_links {
+                            println!(
+                                "  {} {} --[{}]--> {} ({})",
+                                style("!").yellow(),
+                                truncate_id(&source_id),
+                                style(link_type).cyan(),
+                                truncate_id(target_id),
+                                style(reason.to_string()).dim()
+                            );
+                        }
+                    }
+                    total_suspect += suspect_links.len();
+                }
+            }
+        }
+    }
+
+    println!();
+    if total_suspect == 0 {
+        println!("{} No suspect links found.", style("✓").green());
+    } else {
+        println!(
+            "{} {} suspect link(s) found. Run 'tdt link suspect review <ID>' to review.",
+            style("!").yellow(),
+            total_suspect
+        );
+    }
+
+    Ok(())
+}
+
+fn run_suspect_review(args: SuspectReviewArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let entity = find_entity(&project, &args.id)?;
+
+    println!("{}", style("─".repeat(60)).dim());
+    println!(
+        "Suspect links for {} - {}",
+        style(&entity.id.to_string()).cyan(),
+        style(&entity.title).yellow()
+    );
+    println!("{}", style("─".repeat(60)).dim());
+
+    let suspect_links = get_suspect_links(&entity.path).into_diagnostic()?;
+
+    if suspect_links.is_empty() {
+        println!("\n{} No suspect links found.", style("✓").green());
+    } else {
+        println!();
+        for (link_type, target_id, reason) in &suspect_links {
+            println!(
+                "  {} {} → {} ({})",
+                style("!").yellow(),
+                style(link_type).cyan(),
+                truncate_id(target_id),
+                style(reason.to_string()).dim()
+            );
+        }
+        println!();
+        println!(
+            "Run 'tdt link suspect clear {} --to <TARGET>' to clear after review.",
+            args.id
+        );
+    }
+
+    Ok(())
+}
+
+fn run_suspect_clear(args: SuspectClearArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let source = find_entity(&project, &args.source)?;
+
+    if let Some(ref target_id) = args.target {
+        // Clear specific link
+        let link_type = args.link_type.ok_or_else(|| {
+            miette::miette!("Link type required when clearing specific target. Use -t <link_type>")
+        })?;
+
+        clear_link_suspect(&source.path, &link_type, target_id, args.verified_revision)
+            .into_diagnostic()?;
+
+        println!(
+            "{} Cleared suspect status: {} --[{}]--> {}",
+            style("✓").green(),
+            format_short_id(&source.id),
+            style(&link_type).cyan(),
+            truncate_id(target_id)
+        );
+    } else {
+        // Clear all suspect links for this entity
+        let suspect_links = get_suspect_links(&source.path).into_diagnostic()?;
+        let mut cleared = 0;
+
+        for (link_type, target_id, _) in suspect_links {
+            clear_link_suspect(&source.path, &link_type, &target_id, args.verified_revision)
+                .into_diagnostic()?;
+            cleared += 1;
+        }
+
+        println!(
+            "{} Cleared {} suspect link(s) for {}",
+            style("✓").green(),
+            cleared,
+            format_short_id(&source.id)
+        );
+    }
+
+    Ok(())
+}
+
+fn run_suspect_mark(args: SuspectMarkArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let source = find_entity(&project, &args.source)?;
+    let target = find_entity(&project, &args.target)?;
+
+    // Determine link type
+    let link_type = match args.link_type {
+        Some(lt) => lt,
+        None => {
+            // Try to auto-infer
+            infer_link_type(source.id.prefix(), target.id.prefix())
+                .ok_or_else(|| miette::miette!("Cannot infer link type. Use -t <link_type>"))?
+        }
+    };
+
+    let reason = match args.reason.as_str() {
+        "revision_changed" => SuspectReason::RevisionChanged,
+        "status_regressed" => SuspectReason::StatusRegressed,
+        "content_modified" => SuspectReason::ContentModified,
+        _ => SuspectReason::ManuallyMarked,
+    };
+
+    mark_link_suspect(&source.path, &link_type, &target.id.to_string(), reason).into_diagnostic()?;
+
+    println!(
+        "{} Marked as suspect: {} --[{}]--> {}",
+        style("✓").green(),
+        format_short_id(&source.id),
+        style(&link_type).cyan(),
+        format_short_id(&target.id)
+    );
+
+    Ok(())
 }
 
 fn run_add(args: AddLinkArgs) -> Result<()> {

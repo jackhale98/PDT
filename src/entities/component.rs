@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::entities::safety::{Asil, Dal, SwClass};
 
 /// Make or buy decision
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,6 +178,18 @@ pub struct Component {
     #[serde(default)]
     pub category: ComponentCategory,
 
+    /// IEC 62304 Software Safety Class (optional, for software items)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sw_class: Option<SwClass>,
+
+    /// ISO 26262 ASIL (optional, for automotive items)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asil: Option<Asil>,
+
+    /// DO-178C DAL (optional, for aerospace items)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dal: Option<Dal>,
+
     /// Material specification
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub material: Option<String>,
@@ -276,6 +289,9 @@ impl Component {
             description: None,
             make_buy,
             category,
+            sw_class: None,
+            asil: None,
+            dal: None,
             material: None,
             mass_kg: None,
             unit_cost: None,

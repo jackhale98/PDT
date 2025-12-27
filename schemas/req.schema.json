@@ -16,6 +16,12 @@
       "enum": ["input", "output"],
       "description": "Design input or output"
     },
+    "level": {
+      "type": "string",
+      "enum": ["stakeholder", "system", "subsystem", "component", "detail"],
+      "default": "system",
+      "description": "V-model requirement hierarchy level"
+    },
     "title": {
       "type": "string",
       "minLength": 1,

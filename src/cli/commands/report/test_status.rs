@@ -17,8 +17,8 @@ use super::{load_all_results, load_all_tests, write_output};
 #[derive(clap::Args, Debug)]
 pub struct TestStatusArgs {
     /// Output to file instead of stdout
-    #[arg(long, short = 'o')]
-    pub output: Option<PathBuf>,
+    #[arg(long, short = 'f')]
+    pub file: Option<PathBuf>,
 }
 
 pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
@@ -271,6 +271,6 @@ pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
         output.push_str(&failures.build().with(Style::markdown()).to_string());
     }
 
-    write_output(&output, args.output)?;
+    write_output(&output, args.file)?;
     Ok(())
 }

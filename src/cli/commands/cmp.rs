@@ -363,7 +363,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
     // Determine if we need full entity loading (for complex filters or full output)
-    let output_format = match global.format {
+    let output_format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -649,7 +649,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -667,7 +667,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         | OutputFormat::Csv
         | OutputFormat::Md
         | OutputFormat::Id
-        | OutputFormat::ShortId => {
+        | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build visible columns list
             let mut visible: Vec<&str> = args
                 .columns
@@ -1015,7 +1018,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let cmp: Component = serde_yml::from_str(&content).into_diagnostic()?;
 
-    match global.format {
+    match global.output {
         OutputFormat::Yaml => {
             print!("{}", content);
         }
@@ -1024,7 +1027,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", json);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+            if global.output == OutputFormat::ShortId {
                 let short_ids = ShortIdIndex::load(&project);
                 let short_id = short_ids
                     .get_short_id(&cmp.id.to_string())

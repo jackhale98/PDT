@@ -553,7 +553,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -567,7 +567,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&stackups).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             let mut columns: Vec<&str> = args
                 .columns
                 .iter()
@@ -720,7 +720,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     );
 
     // Output based on format flag
-    match global.format {
+    match global.output {
         OutputFormat::Id => {
             println!("{}", id);
         }
@@ -806,7 +806,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let stackup: Stackup = serde_yml::from_str(&content).into_diagnostic()?;
 
-    match global.format {
+    match global.output {
         OutputFormat::Yaml => {
             print!("{}", content);
         }
@@ -815,7 +815,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", json);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+            if global.output == OutputFormat::ShortId {
                 let short_ids = ShortIdIndex::load(&project);
                 let short_id = short_ids
                     .get_short_id(&stackup.id.to_string())

@@ -486,7 +486,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Determine output format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -807,7 +807,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     });
 
     if tests.is_empty() {
-        match global.format {
+        match global.output {
             OutputFormat::Json => println!("[]"),
             OutputFormat::Yaml => println!("[]"),
             _ => {
@@ -890,7 +890,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&tests).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             // Build column list from args
             let mut columns: Vec<&str> = args
                 .columns
@@ -951,7 +951,7 @@ fn output_cached_tests(
     }
 
     match format {
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             // Build column list from args
             let mut columns: Vec<&str> = args
                 .columns
@@ -1257,7 +1257,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     );
 
     // Output based on format flag
-    match global.format {
+    match global.output {
         OutputFormat::Id => {
             println!("{}", id);
         }
@@ -1322,7 +1322,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let test = find_test(&project, &args.id)?;
 
     // Output based on format (pretty is default)
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let json = serde_json::to_string_pretty(&test).into_diagnostic()?;
             println!("{}", json);
@@ -1332,7 +1332,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             print!("{}", yaml);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+            if global.output == OutputFormat::ShortId {
                 let short_ids = ShortIdIndex::load(&project);
                 let short_id = short_ids
                     .get_short_id(&test.id.to_string())
@@ -1821,7 +1821,7 @@ fn run_run(args: RunArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let output = serde_json::json!({
                 "id": result_id.to_string(),
@@ -1846,7 +1846,7 @@ fn run_run(args: RunArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", serde_yml::to_string(&output).unwrap_or_default());
         }
         OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+            if global.output == OutputFormat::ShortId {
                 let result_short = result_short_id.unwrap_or_else(|| format_short_id(&result_id));
                 println!("{}", result_short);
             } else {

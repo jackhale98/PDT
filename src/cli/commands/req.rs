@@ -429,7 +429,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
     // Determine if we need full entity loading (for complex filters or full output)
-    let output_format = match global.format {
+    let output_format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -770,7 +770,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     if reqs.is_empty() {
-        match global.format {
+        match global.output {
             OutputFormat::Json => println!("[]"),
             OutputFormat::Yaml => println!("[]"),
             _ => {
@@ -838,7 +838,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv, // Default to TSV for list
         f => f,
     };
@@ -856,7 +856,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         | OutputFormat::Csv
         | OutputFormat::Md
         | OutputFormat::Id
-        | OutputFormat::ShortId => {
+        | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build visible columns list
             let mut visible: Vec<&str> = args
                 .columns
@@ -1193,7 +1196,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let req = find_requirement(&project, &id)?;
 
     // Output based on format (pretty is default, yaml/json explicit)
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let json = serde_json::to_string_pretty(&req).into_diagnostic()?;
             println!("{}", json);

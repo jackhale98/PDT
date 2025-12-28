@@ -21,8 +21,8 @@ pub struct BomArgs {
     pub assembly_id: String,
 
     /// Output to file instead of stdout
-    #[arg(long, short = 'o')]
-    pub output: Option<PathBuf>,
+    #[arg(long, short = 'f')]
+    pub file: Option<PathBuf>,
 
     /// Include cost rollup
     #[arg(long)]
@@ -361,6 +361,6 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
         ));
     }
 
-    write_output(&output, args.output)?;
+    write_output(&output, args.file)?;
     Ok(())
 }

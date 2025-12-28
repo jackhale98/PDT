@@ -38,10 +38,6 @@ pub struct LogArgs {
     /// Limit number of events
     #[arg(long, short = 'n')]
     pub limit: Option<usize>,
-
-    /// Output format (table, json)
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
 }
 
 /// Workflow event for log output
@@ -72,7 +68,9 @@ struct EntityData {
     _extra: HashMap<String, serde_yml::Value>,
 }
 
-pub fn run(args: LogArgs) -> Result<()> {
+use crate::cli::{GlobalOpts, OutputFormat};
+
+pub fn run(args: LogArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
 
     // Parse date filters
@@ -214,9 +212,9 @@ pub fn run(args: LogArgs) -> Result<()> {
         entries.truncate(limit);
     }
 
-    // Output
-    match args.output.as_str() {
-        "json" => {
+    // Output based on global --output flag
+    match global.output {
+        OutputFormat::Json => {
             let json = serde_json::to_string_pretty(&entries)
                 .map_err(|e| miette::miette!("JSON error: {}", e))?;
             println!("{}", json);

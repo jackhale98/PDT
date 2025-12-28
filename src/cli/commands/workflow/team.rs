@@ -37,10 +37,6 @@ pub struct TeamListArgs {
     /// Filter by role
     #[arg(long, short = 'r')]
     pub role: Option<Role>,
-
-    /// Output style (table, json)
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
 }
 
 /// Initialize team roster
@@ -163,7 +159,9 @@ impl TeamCommands {
 }
 
 impl TeamListArgs {
-    pub fn run(&self, _global: &GlobalOpts) -> Result<()> {
+    pub fn run(&self, global: &GlobalOpts) -> Result<()> {
+        use crate::cli::OutputFormat;
+
         let project = Project::discover().into_diagnostic()?;
 
         let Some(roster) = TeamRoster::load(&project) else {
@@ -181,8 +179,8 @@ impl TeamListArgs {
             return Ok(());
         }
 
-        match self.output.as_str() {
-            "json" => {
+        match global.output {
+            OutputFormat::Json => {
                 let json = serde_json::to_string_pretty(&members).into_diagnostic()?;
                 println!("{}", json);
             }

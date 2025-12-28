@@ -469,7 +469,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -638,7 +638,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Tsv | OutputFormat::Auto => {
+        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             // Build header
             let mut headers = vec![];
             let mut widths = vec![];
@@ -924,7 +924,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let dev: Dev = serde_yml::from_str(&content).into_diagnostic()?;
 
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -954,7 +954,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 dev.created.format("%Y-%m-%d")
             );
         }
-        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Md => {
+        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             let short_id = short_ids
                 .get_short_id(&dev.id.to_string())
                 .unwrap_or_default();

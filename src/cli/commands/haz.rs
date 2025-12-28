@@ -178,10 +178,6 @@ pub struct ListArgs {
     #[arg(long)]
     pub no_risks: bool,
 
-    /// Output format
-    #[arg(long, short = 'f', value_enum, default_value = "auto")]
-    pub format: OutputFormat,
-
     /// Maximum number of results
     #[arg(long, short = 'n')]
     pub limit: Option<usize>,
@@ -228,20 +224,12 @@ pub struct NewArgs {
     /// Use interactive wizard
     #[arg(long, short = 'i')]
     pub interactive: bool,
-
-    /// Output format for result
-    #[arg(long, short = 'f', value_enum, default_value = "auto")]
-    pub format: OutputFormat,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct ShowArgs {
     /// Hazard ID or short ID (e.g., HAZ@1)
     pub id: String,
-
-    /// Output format
-    #[arg(long, short = 'f', value_enum, default_value = "auto")]
-    pub format: OutputFormat,
 }
 
 #[derive(clap::Args, Debug)]
@@ -358,8 +346,8 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         .collect();
 
     // Output format
-    let format = match global.format {
-        OutputFormat::Auto => args.format,
+    let format = match global.output {
+        OutputFormat::Auto => OutputFormat::Table,
         f => f,
     };
 
@@ -433,7 +421,7 @@ fn hazard_to_row(hazard: &Hazard, short_ids: &ShortIdIndex) -> TableRow {
         .cell("status", CellValue::Status(hazard.status))
 }
 
-fn run_new(args: NewArgs, _global: &GlobalOpts) -> Result<()> {
+fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().into_diagnostic()?;
     let config = Config::load();
 
@@ -472,7 +460,7 @@ fn run_new(args: NewArgs, _global: &GlobalOpts) -> Result<()> {
         let file_path = hazards_dir.join(&filename);
         fs::write(&file_path, &yaml).into_diagnostic()?;
 
-        match args.format {
+        match global.output {
             OutputFormat::Json => {
                 let output = serde_json::json!({
                     "id": id.to_string(),
@@ -550,7 +538,7 @@ fn run_new(args: NewArgs, _global: &GlobalOpts) -> Result<()> {
     }
 
     // Output result
-    match args.format {
+    match global.output {
         OutputFormat::Json => {
             let output = serde_json::json!({
                 "id": id.to_string(),
@@ -583,10 +571,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&file_path).into_diagnostic()?;
     let hazard: Hazard = serde_yml::from_str(&content).into_diagnostic()?;
 
-    let format = match global.format {
-        OutputFormat::Auto => args.format,
-        f => f,
-    };
+    let format = global.output;
 
     match format {
         OutputFormat::Json => {
@@ -596,7 +581,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         OutputFormat::Yaml => {
             println!("{}", content);
         }
-        _ => {
+        OutputFormat::Auto | _ => {
             let short_id = short_ids
                 .get_short_id(&hazard.id.to_string())
                 .unwrap_or_else(|| hazard.id.to_string());

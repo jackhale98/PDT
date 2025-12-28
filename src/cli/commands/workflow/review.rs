@@ -45,10 +45,6 @@ pub struct ReviewListArgs {
     #[arg(long)]
     pub all_open: bool,
 
-    /// Output style (table, short-id, json)
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
-
     /// Print commands as they run
     #[arg(long)]
     pub verbose: bool,
@@ -60,10 +56,6 @@ pub struct PendingApprovalsArgs {
     /// Filter by entity type (req, risk, cmp, etc.)
     #[arg(long, short = 't')]
     pub entity_type: Option<String>,
-
-    /// Output style (table, json)
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
 }
 
 impl ReviewCommands {
@@ -77,38 +69,38 @@ impl ReviewCommands {
 }
 
 impl ReviewListArgs {
-    pub fn run(&self, _global: &GlobalOpts) -> Result<()> {
+    pub fn run(&self, global: &GlobalOpts) -> Result<()> {
         let project = Project::discover().into_diagnostic()?;
         let config = Config::load();
 
         // Handle --target, --all-open, or --needs-role flags
         if self.target.is_some() || self.all_open || self.needs_role {
-            return self.run_pr_discovery(&project, &config);
+            return self.run_pr_discovery(&project, &config, global);
         }
 
         // Try to get pending reviews from provider first
         if config.workflow.provider != Provider::None && !self.all {
             if let Ok(pr_reviews) = self.get_provider_reviews(&project, &config) {
                 if !pr_reviews.is_empty() {
-                    self.print_pr_reviews(&pr_reviews)?;
+                    self.print_pr_reviews(&pr_reviews, global)?;
                     return Ok(());
                 }
             }
         }
 
         // Fall back to scanning local entities
-        self.scan_local_reviews(&project, &config)?;
+        self.scan_local_reviews(&project, &config, global)?;
 
         Ok(())
     }
 
     /// Discover PRs using --target, --all-open, or --needs-role filtering
-    fn run_pr_discovery(&self, project: &Project, config: &Config) -> Result<()> {
+    fn run_pr_discovery(&self, project: &Project, config: &Config, global: &GlobalOpts) -> Result<()> {
         use console::style;
 
         if config.workflow.provider == Provider::None {
             // No provider configured, fall back to local scan
-            return self.scan_local_reviews(project, config);
+            return self.scan_local_reviews(project, config, global);
         }
 
         let provider = ProviderClient::new(config.workflow.provider, project.root())
@@ -207,13 +199,13 @@ impl ReviewListArgs {
         }
 
         // Output
-        match self.output.as_str() {
-            "short-id" => {
+        match global.output {
+            crate::cli::OutputFormat::ShortId => {
                 for item in &items {
                     println!("{}", item.entity_id);
                 }
             }
-            "json" => {
+            crate::cli::OutputFormat::Json => {
                 let json = serde_json::to_string_pretty(&items).into_diagnostic()?;
                 println!("{}", json);
             }
@@ -463,14 +455,14 @@ impl ReviewListArgs {
         }
     }
 
-    fn print_pr_reviews(&self, items: &[PrReviewItem]) -> Result<()> {
-        match self.output.as_str() {
-            "short-id" => {
+    fn print_pr_reviews(&self, items: &[PrReviewItem], global: &GlobalOpts) -> Result<()> {
+        match global.output {
+            crate::cli::OutputFormat::ShortId => {
                 for item in items {
                     println!("{}", item.short_id);
                 }
             }
-            "json" => {
+            crate::cli::OutputFormat::Json => {
                 let json = serde_json::to_string_pretty(items).into_diagnostic()?;
                 println!("{}", json);
             }
@@ -505,7 +497,7 @@ impl ReviewListArgs {
         Ok(())
     }
 
-    fn scan_local_reviews(&self, project: &Project, config: &Config) -> Result<()> {
+    fn scan_local_reviews(&self, project: &Project, config: &Config, global: &GlobalOpts) -> Result<()> {
         use walkdir::WalkDir;
 
         let target_prefix: Option<EntityPrefix> = self
@@ -578,24 +570,24 @@ impl ReviewListArgs {
             }
         }
 
-        self.print_local_reviews(&items)?;
+        self.print_local_reviews(&items, global)?;
 
         Ok(())
     }
 
-    fn print_local_reviews(&self, items: &[LocalReviewItem]) -> Result<()> {
+    fn print_local_reviews(&self, items: &[LocalReviewItem], global: &GlobalOpts) -> Result<()> {
         if items.is_empty() {
             println!("No items pending review.");
             return Ok(());
         }
 
-        match self.output.as_str() {
-            "short-id" => {
+        match global.output {
+            crate::cli::OutputFormat::ShortId => {
                 for item in items {
                     println!("{}", item.short_id);
                 }
             }
-            "json" => {
+            crate::cli::OutputFormat::Json => {
                 let json = serde_json::to_string_pretty(items).into_diagnostic()?;
                 println!("{}", json);
             }
@@ -774,7 +766,7 @@ struct EntityFromPr {
 }
 
 impl PendingApprovalsArgs {
-    pub fn run(&self, _global: &GlobalOpts) -> Result<()> {
+    pub fn run(&self, global: &GlobalOpts) -> Result<()> {
         use console::style;
         use walkdir::WalkDir;
 
@@ -874,8 +866,8 @@ impl PendingApprovalsArgs {
         });
 
         // Output
-        match self.output.as_str() {
-            "json" => {
+        match global.output {
+            crate::cli::OutputFormat::Json => {
                 let json = serde_json::to_string_pretty(&items).into_diagnostic()?;
                 println!("{}", json);
             }

@@ -214,7 +214,7 @@ manufacturing/
 
 ## Output Formats
 
-Use `-f/--format` to control output format:
+Use `-o/--output` to control output format:
 
 ```bash
 tdt req list -f json        # JSON output (for scripting)
@@ -689,16 +689,16 @@ Bulk commands read entity IDs from stdin, enabling Unix-style pipelines:
 
 ```bash
 # Pipe from list commands
-tdt req list --format id | tdt bulk set-status approved
-tdt req list --unverified --format id | tdt bulk add-tag needs-review
-tdt risk list --level high --format id | tdt bulk add-tag urgent
+tdt req list --output id | tdt bulk set-status approved
+tdt req list --unverified --output id | tdt bulk add-tag needs-review
+tdt risk list --level high --output id | tdt bulk add-tag urgent
 
 # Combine with standard Unix tools
-tdt req list --format id | grep "input" | tdt bulk set-status review
-tdt cmp list --format id | head -5 | tdt bulk add-tag "prototype"
+tdt req list --output id | grep "input" | tdt bulk set-status review
+tdt cmp list --output id | head -5 | tdt bulk add-tag "prototype"
 
 # Chain multiple operations
-tdt req list --status draft --format id | tdt bulk set-status review
+tdt req list --status draft --output id | tdt bulk set-status review
 ```
 
 This works with all entity types and all bulk commands (`set-status`, `add-tag`, `remove-tag`, `set-author`).

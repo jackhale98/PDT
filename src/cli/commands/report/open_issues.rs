@@ -19,8 +19,8 @@ use super::{load_all_capas, load_all_ncrs, load_all_results, load_all_tests, wri
 #[derive(clap::Args, Debug)]
 pub struct OpenIssuesArgs {
     /// Output to file instead of stdout
-    #[arg(long, short = 'o')]
-    pub output: Option<PathBuf>,
+    #[arg(long, short = 'f')]
+    pub file: Option<PathBuf>,
 }
 
 pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
@@ -268,6 +268,6 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
         output.push_str(&test_table.build().with(Style::markdown()).to_string());
     }
 
-    write_output(&output, args.output)?;
+    write_output(&output, args.file)?;
     Ok(())
 }

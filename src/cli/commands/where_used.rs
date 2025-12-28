@@ -93,7 +93,7 @@ pub fn run(args: WhereUsedArgs, global: &GlobalOpts) -> Result<()> {
     if found_refs.is_empty() {
         println!("{}", style("No references found.").yellow());
     } else {
-        let format = match global.format {
+        let format = match global.output {
             OutputFormat::Auto => OutputFormat::Tsv,
             f => f,
         };

@@ -46,10 +46,6 @@ pub struct MatrixArgs {
     #[arg(long)]
     pub target_type: Option<String>,
 
-    /// Output format: table, csv, dot (graphviz)
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
-
     /// Show full IDs instead of short aliases (e.g., REQ@1, TEST@2)
     #[arg(long)]
     pub ids: bool,
@@ -71,10 +67,6 @@ pub struct FromArgs {
     /// Show full IDs instead of short aliases
     #[arg(long)]
     pub ids: bool,
-
-    /// Output format: tree (default), dot (graphviz)
-    #[arg(long, short = 'o', default_value = "tree")]
-    pub output: String,
 }
 
 #[derive(clap::Args, Debug)]
@@ -89,10 +81,6 @@ pub struct ToArgs {
     /// Show full IDs instead of short aliases
     #[arg(long)]
     pub ids: bool,
-
-    /// Output format: tree (default), dot (graphviz)
-    #[arg(long, short = 'o', default_value = "tree")]
-    pub output: String,
 }
 
 #[derive(clap::Args, Debug)]
@@ -113,8 +101,8 @@ pub struct OrphansArgs {
 pub fn run(cmd: TraceCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
         TraceCommands::Matrix(args) => run_matrix(args, global),
-        TraceCommands::From(args) => run_from(args),
-        TraceCommands::To(args) => run_to(args),
+        TraceCommands::From(args) => run_from(args, global),
+        TraceCommands::To(args) => run_to(args, global),
         TraceCommands::Orphans(args) => run_orphans(args, global),
     }
 }
@@ -154,10 +142,10 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     let id_to_prefix: HashMap<String, EntityPrefix> =
         entities.iter().map(|e| (e.id.clone(), e.prefix)).collect();
 
-    // Determine format - prefer args.output, fallback to global
-    let use_dot = args.output == "dot";
-    let use_csv = args.output == "csv" || matches!(global.format, OutputFormat::Csv);
-    let use_json = matches!(global.format, OutputFormat::Json);
+    // Determine format from global --output flag
+    let use_dot = matches!(global.output, OutputFormat::Dot);
+    let use_csv = matches!(global.output, OutputFormat::Csv);
+    let use_json = matches!(global.output, OutputFormat::Json);
 
     if use_json {
         // JSON format - structured link data
@@ -444,9 +432,9 @@ fn run_rvm(
     Ok(())
 }
 
-fn run_from(args: FromArgs) -> Result<()> {
+fn run_from(args: FromArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let use_dot = args.output == "dot";
+    let use_dot = matches!(global.output, OutputFormat::Dot);
 
     // Load all entities first
     let entities = load_all_entities(&project)?;
@@ -607,9 +595,9 @@ fn run_from(args: FromArgs) -> Result<()> {
     Ok(())
 }
 
-fn run_to(args: ToArgs) -> Result<()> {
+fn run_to(args: ToArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let use_dot = args.output == "dot";
+    let use_dot = matches!(global.output, OutputFormat::Dot);
 
     // Load all entities first
     let entities = load_all_entities(&project)?;
@@ -840,7 +828,7 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
     };
 
     // Output based on format
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             #[derive(serde::Serialize)]
             struct OrphanInfo {
@@ -863,7 +851,7 @@ fn run_orphans(args: OrphansArgs, global: &GlobalOpts) -> Result<()> {
         }
         OutputFormat::Id | OutputFormat::ShortId => {
             for (entity, _) in &orphans {
-                if global.format == OutputFormat::ShortId {
+                if global.output == OutputFormat::ShortId {
                     println!("{}", format_short_id_str(&entity.id));
                 } else {
                     println!("{}", entity.id);

@@ -319,10 +319,6 @@ pub struct FlowArgs {
     /// Show work instructions
     #[arg(long, short = 'w')]
     pub work_instructions: bool,
-
-    /// Output format: table, dot (graphviz)
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
 }
 
 /// Run a process subcommand
@@ -351,7 +347,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -532,7 +528,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         | OutputFormat::Csv
         | OutputFormat::Md
         | OutputFormat::Id
-        | OutputFormat::ShortId => {
+        | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Convert visible columns to keys, optionally including ID
             let mut visible_columns: Vec<&str> = args.columns.iter().map(|c| c.key()).collect();
             if args.show_id && !visible_columns.contains(&"id") {
@@ -751,7 +750,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let proc: Process = serde_yml::from_str(&content).into_diagnostic()?;
 
-    match global.format {
+    match global.output {
         OutputFormat::Yaml => {
             print!("{}", content);
         }
@@ -759,8 +758,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let json = serde_json::to_string_pretty(&proc).into_diagnostic()?;
             println!("{}", json);
         }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+        OutputFormat::Id | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
+            if global.output == OutputFormat::ShortId {
                 let short_ids = ShortIdIndex::load(&project);
                 let short_id = short_ids
                     .get_short_id(&proc.id.to_string())
@@ -1033,7 +1035,7 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // JSON/YAML output
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let flow: Vec<serde_json::Value> = processes.iter().map(|p| {
                 let proc_id = p.id.to_string();
@@ -1074,7 +1076,7 @@ fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // DOT/Graphviz output
-    if args.output == "dot" {
+    if matches!(global.output, OutputFormat::Dot) {
         println!("digraph ProcessFlow {{");
         println!("  rankdir=TB;");
         println!("  node [shape=box, style=rounded];");

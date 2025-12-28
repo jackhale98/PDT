@@ -2051,16 +2051,16 @@ Coverage: <span style="color: var(--info)">67%</span> (4/6)</pre>
           <p class="workflow-desc">Every list command supports multiple output formats for scripting and automation.</p>
           <div class="workflow-code">
             <pre><span class="comment"># Get IDs for piping to other commands</span>
-<span class="symbol">$</span> <span class="cmd">tdt req list --format id</span>
+<span class="symbol">$</span> <span class="cmd">tdt req list --output id</span>
 <span class="output">REQ-01KCA9X3JQFT8BHK2VCN5M9A
 REQ-01KCA9X3JQFT8BHK2VCN5M9B
 ...</span>
 
 <span class="comment"># Export to JSON for other tools</span>
-<span class="symbol">$</span> <span class="cmd">tdt risk list --format json | jq '.[] | select(.rpn > 100)'</span>
+<span class="symbol">$</span> <span class="cmd">tdt risk list --output json | jq '.[] | select(.rpn > 100)'</span>
 
 <span class="comment"># Export to CSV for spreadsheets</span>
-<span class="symbol">$</span> <span class="cmd">tdt cmp list --format csv > parts.csv</span></pre>
+<span class="symbol">$</span> <span class="cmd">tdt cmp list --output csv > parts.csv</span></pre>
           </div>
         </div>
 

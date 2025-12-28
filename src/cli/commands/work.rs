@@ -227,7 +227,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let short_ids = ShortIdIndex::load(&project);
 
     // Determine output format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -412,7 +412,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         | OutputFormat::Csv
         | OutputFormat::Md
         | OutputFormat::Id
-        | OutputFormat::ShortId => {
+        | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build visible columns list
             let mut visible: Vec<&str> = args
                 .columns
@@ -692,7 +695,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let work: WorkInstruction = serde_yml::from_str(&content).into_diagnostic()?;
 
-    match global.format {
+    match global.output {
         OutputFormat::Yaml => {
             print!("{}", content);
         }
@@ -700,8 +703,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let json = serde_json::to_string_pretty(&work).into_diagnostic()?;
             println!("{}", json);
         }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+        OutputFormat::Id | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
+            if global.output == OutputFormat::ShortId {
                 let sid_index = ShortIdIndex::load(&project);
                 let short_id = sid_index
                     .get_short_id(&work.id.to_string())

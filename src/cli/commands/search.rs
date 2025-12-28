@@ -131,7 +131,7 @@ pub fn run(args: SearchArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -167,7 +167,7 @@ pub fn run(args: SearchArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Tsv | OutputFormat::Auto => {
+        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             println!(
                 "{} results for '{}':",
                 style(results.len()).cyan(),

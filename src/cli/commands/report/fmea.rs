@@ -17,8 +17,8 @@ use super::{load_all_risks, write_output};
 #[derive(clap::Args, Debug)]
 pub struct FmeaArgs {
     /// Output to file instead of stdout
-    #[arg(long, short = 'o')]
-    pub output: Option<PathBuf>,
+    #[arg(long, short = 'f')]
+    pub file: Option<PathBuf>,
 
     /// Minimum RPN to include (default: 0)
     #[arg(long, default_value = "0")]
@@ -348,6 +348,6 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
     }
 
     // Output
-    write_output(&output, args.output)?;
+    write_output(&output, args.file)?;
     Ok(())
 }

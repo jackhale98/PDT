@@ -39,7 +39,7 @@ pub fn run(_args: StatusArgs, global: &GlobalOpts) -> Result<()> {
     let bom_metrics = collect_bom_metrics(&project);
     let tol_metrics = collect_tolerance_metrics(&project);
 
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let status = serde_json::json!({
                 "requirements": req_metrics,

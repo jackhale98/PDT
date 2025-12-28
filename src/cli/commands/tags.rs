@@ -86,7 +86,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // Output based on format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -110,7 +110,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{},{}", crate::cli::helpers::escape_csv(tag), count);
             }
         }
-        OutputFormat::Tsv | OutputFormat::Auto => {
+        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             println!("{} unique tags in project:", style(tags.len()).cyan());
             println!();
 
@@ -188,7 +188,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -224,7 +224,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Tsv | OutputFormat::Auto => {
+        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             println!(
                 "{} entities with tag '{}':",
                 style(results.len()).cyan(),

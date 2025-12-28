@@ -25,10 +25,6 @@ pub struct DsmArgs {
     #[arg(long, short = 't', default_value = "all")]
     pub rel_type: String,
 
-    /// Output format: table, csv, dot (graphviz), json
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
-
     /// Apply clustering optimization to group related components
     #[arg(long, short = 'c')]
     pub cluster: bool,
@@ -322,7 +318,7 @@ pub struct CouplingMetrics {
     pub is_hub: bool, // High connectivity in both directions
 }
 
-pub fn run(args: DsmArgs, _global: &GlobalOpts) -> Result<()> {
+pub fn run(args: DsmArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let cache = EntityCache::open(&project)?;
 
@@ -382,10 +378,11 @@ pub fn run(args: DsmArgs, _global: &GlobalOpts) -> Result<()> {
         show_cycles: args.cycles,
     };
 
-    match args.output.as_str() {
-        "csv" => output_csv(&dsm, &display_opts),
-        "dot" => output_dot(&dsm, &display_opts),
-        "json" => output_json(&dsm, &display_opts),
+    use crate::cli::OutputFormat;
+    match global.output {
+        OutputFormat::Csv => output_csv(&dsm, &display_opts),
+        OutputFormat::Dot => output_dot(&dsm, &display_opts),
+        OutputFormat::Json => output_json(&dsm, &display_opts),
         _ => output_table(&dsm, &display_opts),
     }
 

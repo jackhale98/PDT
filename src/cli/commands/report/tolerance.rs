@@ -23,8 +23,8 @@ use super::{
 #[derive(clap::Args, Debug)]
 pub struct ToleranceArgs {
     /// Output to file instead of stdout
-    #[arg(long, short = 'o')]
-    pub output: Option<PathBuf>,
+    #[arg(long, short = 'f')]
+    pub file: Option<PathBuf>,
 
     /// Filter to specific assembly (shows components in assembly + external contributors)
     #[arg(long, short = 'a')]
@@ -823,6 +823,6 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
         chrono::Local::now().format("%Y-%m-%d %H:%M")
     ));
 
-    write_output(&output, args.output)?;
+    write_output(&output, args.file)?;
     Ok(())
 }

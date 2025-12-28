@@ -595,7 +595,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     });
 
     if risks.is_empty() {
-        match global.format {
+        match global.output {
             OutputFormat::Json => println!("[]"),
             OutputFormat::Yaml => println!("[]"),
             _ => {
@@ -676,7 +676,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output based on format
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -694,7 +694,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         | OutputFormat::Csv
         | OutputFormat::Md
         | OutputFormat::Id
-        | OutputFormat::ShortId => {
+        | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build visible columns list
             let mut visible: Vec<&str> = args
                 .columns
@@ -952,7 +955,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     );
 
     // Output based on format flag
-    match global.format {
+    match global.output {
         OutputFormat::Id => {
             println!("{}", id);
         }
@@ -1003,7 +1006,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let risk = find_risk(&project, &args.id)?;
 
     // Output based on format (pretty is default, yaml/json explicit)
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let json = serde_json::to_string_pretty(&risk).into_diagnostic()?;
             println!("{}", json);
@@ -1012,8 +1015,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&risk).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+        OutputFormat::Id | OutputFormat::ShortId
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
+            if global.output == OutputFormat::ShortId {
                 let short_ids = ShortIdIndex::load(&project);
                 let short_id = short_ids
                     .get_short_id(&risk.id.to_string())
@@ -1409,7 +1415,7 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
     });
 
     // Output based on format
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let summary = serde_json::json!({
                 "total": total,
@@ -1664,7 +1670,7 @@ fn run_matrix(args: MatrixArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     // JSON/YAML output
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let mut json_matrix: Vec<serde_json::Value> = Vec::new();
             for sev in (1..=size).rev() {

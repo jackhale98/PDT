@@ -152,9 +152,9 @@ pub struct Cli {
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct GlobalOpts {
-    /// Output format
-    #[arg(long, short = 'f', global = true, default_value = "auto")]
-    pub format: OutputFormat,
+    /// Output format (json, yaml, csv, tsv, md, id, short-id, path, dot, tree, table)
+    #[arg(long, short = 'o', global = true, default_value = "auto")]
+    pub output: OutputFormat,
 
     /// Suppress non-essential output
     #[arg(long, short = 'q', global = true)]
@@ -405,4 +405,10 @@ pub enum OutputFormat {
     ShortId,
     /// File path only (for new commands - enables easy editing after creation)
     Path,
+    /// Graphviz DOT format (for dependency graphs)
+    Dot,
+    /// ASCII tree format (for hierarchical output)
+    Tree,
+    /// Human-readable table format (default for list commands)
+    Table,
 }

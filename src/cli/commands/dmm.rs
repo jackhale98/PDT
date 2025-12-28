@@ -66,10 +66,6 @@ pub struct DmmArgs {
     #[arg(value_enum)]
     pub col_type: EntityType,
 
-    /// Output format: table, csv, dot (graphviz), json
-    #[arg(long, short = 'o', default_value = "table")]
-    pub output: String,
-
     /// Show full IDs instead of short IDs
     #[arg(long)]
     pub full_ids: bool,
@@ -167,7 +163,7 @@ impl Dmm {
     }
 }
 
-pub fn run(args: DmmArgs, _global: &GlobalOpts) -> Result<()> {
+pub fn run(args: DmmArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let cache = EntityCache::open(&project)?;
 
@@ -204,11 +200,12 @@ pub fn run(args: DmmArgs, _global: &GlobalOpts) -> Result<()> {
     // Find relationships based on entity type combination
     find_relationships(&cache, &mut dmm, args.row_type, args.col_type);
 
-    // Output
-    match args.output.as_str() {
-        "csv" => output_csv(&dmm, args.full_ids),
-        "dot" => output_dot(&dmm, args.full_ids, args.row_type, args.col_type),
-        "json" => output_json(&dmm, args.row_type, args.col_type),
+    // Output based on global --output flag
+    use crate::cli::OutputFormat;
+    match global.output {
+        OutputFormat::Csv => output_csv(&dmm, args.full_ids),
+        OutputFormat::Dot => output_dot(&dmm, args.full_ids, args.row_type, args.col_type),
+        OutputFormat::Json => output_json(&dmm, args.row_type, args.col_type),
         _ => output_table(
             &dmm,
             args.full_ids,

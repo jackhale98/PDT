@@ -331,7 +331,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -479,7 +479,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Tsv => {
+        OutputFormat::Tsv | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             // Build header
             let mut headers = vec![];
             let mut widths = vec![];
@@ -699,7 +699,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     );
 
     // Output based on format flag
-    match global.format {
+    match global.output {
         OutputFormat::Id => {
             println!("{}", id);
         }
@@ -782,7 +782,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let lot: Lot = serde_yml::from_str(&content).into_diagnostic()?;
 
-    match global.format {
+    match global.output {
         OutputFormat::Yaml => {
             print!("{}", content);
         }
@@ -791,7 +791,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", json);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+            if global.output == OutputFormat::ShortId {
                 let short_id = short_ids
                     .get_short_id(&lot.id.to_string())
                     .unwrap_or_default();
@@ -1121,7 +1121,7 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
     fs::write(&path, &yaml_content).into_diagnostic()?;
 
     // Output
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let result = serde_json::json!({
                 "lot": lot.id.to_string(),
@@ -1253,7 +1253,7 @@ fn run_complete(args: CompleteArgs, global: &GlobalOpts) -> Result<()> {
     fs::write(&path, &yaml_content).into_diagnostic()?;
 
     // Output
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let result = serde_json::json!({
                 "id": lot.id.to_string(),

@@ -309,7 +309,7 @@ fn test_req_list_json_format() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "list", "-f", "json"])
+        .args(["req", "list", "--output", "json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("["))
@@ -324,7 +324,7 @@ fn test_req_list_csv_format() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "list", "-f", "csv"])
+        .args(["req", "list", "--output", "csv"])
         .assert()
         .success()
         .stdout(predicate::str::contains("short_id,id,type,title"))
@@ -1084,7 +1084,7 @@ fn test_cmp_list_json_format() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["cmp", "list", "-f", "json"])
+        .args(["cmp", "list", "--output", "json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("["))
@@ -2460,7 +2460,7 @@ fn test_global_format_flag_json() {
     // Test global -f flag before subcommand
     tdt()
         .current_dir(tmp.path())
-        .args(["-f", "json", "req", "list"])
+        .args(["--output", "json", "req", "list"])
         .assert()
         .success()
         .stdout(predicate::str::contains("["))
@@ -2474,7 +2474,7 @@ fn test_global_format_flag_yaml() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["-f", "yaml", "req", "list"])
+        .args(["--output", "yaml", "req", "list"])
         .assert()
         .success()
         .stdout(predicate::str::contains("title:"));
@@ -2487,7 +2487,7 @@ fn test_global_format_flag_id() {
 
     let output = tdt()
         .current_dir(tmp.path())
-        .args(["-f", "id", "req", "list"])
+        .args(["--output", "id", "req", "list"])
         .assert()
         .success()
         .get_output()
@@ -4048,7 +4048,7 @@ fn test_report_bom_with_assembly() {
             "--title",
             "BOM Test Assembly",
             "--no-edit",
-            "-f",
+            "--output",
             "id",
         ])
         .output()
@@ -4086,7 +4086,7 @@ fn test_report_bom_with_components_in_assembly() {
             "--title",
             "Assembly With Parts",
             "--no-edit",
-            "-f",
+            "--output",
             "id",
         ])
         .output()
@@ -4595,7 +4595,7 @@ fn test_error_invalid_format_option() {
     // Invalid format option should fail
     tdt()
         .current_dir(tmp.path())
-        .args(["req", "list", "-f", "invalid_format"])
+        .args(["req", "list", "--output", "invalid_format"])
         .assert()
         .failure();
 }
@@ -6167,7 +6167,7 @@ fn test_haz_json_output() {
 
     tdt()
         .current_dir(tmp.path())
-        .args(["haz", "list", "--format", "json"])
+        .args(["haz", "list", "--output", "json"])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"title\": \"Test Hazard\""))

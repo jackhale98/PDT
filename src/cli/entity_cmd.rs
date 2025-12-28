@@ -59,7 +59,7 @@ where
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let entity: T = serde_yml::from_str(&content).into_diagnostic()?;
 
-    match global.format {
+    match global.output {
         OutputFormat::Yaml => {
             print!("{}", content);
             Ok(None)
@@ -235,7 +235,7 @@ pub fn output_new_entity(
 ) {
     use crate::cli::helpers::format_short_id;
 
-    match global.format {
+    match global.output {
         OutputFormat::Id => {
             println!("{}", id);
         }

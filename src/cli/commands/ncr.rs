@@ -414,7 +414,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    let format = match global.format {
+    let format = match global.output {
         OutputFormat::Auto => OutputFormat::Tsv,
         f => f,
     };
@@ -635,7 +635,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&ncrs).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             // Build column list from args
             let columns: Vec<&str> = args
                 .columns
@@ -764,7 +764,7 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     );
 
     // Output based on format flag
-    match global.format {
+    match global.output {
         OutputFormat::Id => {
             println!("{}", id);
         }
@@ -854,7 +854,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
     let content = fs::read_to_string(&path).into_diagnostic()?;
     let ncr: Ncr = serde_yml::from_str(&content).into_diagnostic()?;
 
-    match global.format {
+    match global.output {
         OutputFormat::Yaml => {
             print!("{}", content);
         }
@@ -863,7 +863,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             println!("{}", json);
         }
         OutputFormat::Id | OutputFormat::ShortId => {
-            if global.format == OutputFormat::ShortId {
+            if global.output == OutputFormat::ShortId {
                 let short_ids = ShortIdIndex::load(&project);
                 let short_id = short_ids
                     .get_short_id(&ncr.id.to_string())
@@ -1035,7 +1035,7 @@ fn output_cached_ncrs(
     }
 
     match format {
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md => {
+        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
             // Build column list from args
             let columns: Vec<&str> = args
                 .columns
@@ -1228,7 +1228,7 @@ fn run_close(args: CloseArgs, global: &GlobalOpts) -> Result<()> {
     fs::write(&path, &yaml_content).into_diagnostic()?;
 
     // Output based on format
-    match global.format {
+    match global.output {
         OutputFormat::Json => {
             let result = serde_json::json!({
                 "id": ncr.id.to_string(),

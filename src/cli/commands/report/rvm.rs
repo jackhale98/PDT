@@ -17,8 +17,8 @@ use super::{load_all_requirements, load_all_results, load_all_tests, write_outpu
 #[derive(clap::Args, Debug)]
 pub struct RvmArgs {
     /// Output to file instead of stdout
-    #[arg(long, short = 'o')]
-    pub output: Option<PathBuf>,
+    #[arg(long, short = 'f')]
+    pub file: Option<PathBuf>,
 
     /// Show only unverified requirements
     #[arg(long)]
@@ -366,6 +366,6 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     }
 
     // Output
-    write_output(&output, args.output)?;
+    write_output(&output, args.file)?;
     Ok(())
 }

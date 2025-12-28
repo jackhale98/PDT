@@ -45,6 +45,10 @@ pub struct ReleaseArgs {
     /// Print commands as they run
     #[arg(long, short = 'v')]
     pub verbose: bool,
+
+    /// GPG-sign the release commit and tag (for 21 CFR Part 11 compliance)
+    #[arg(long, short = 'S')]
+    pub sign: bool,
 }
 
 impl ReleaseArgs {
@@ -292,17 +296,33 @@ impl ReleaseArgs {
             entities.iter().map(|(p, _, _, _)| p.as_path()).collect();
         git.stage_files(&paths).into_diagnostic()?;
 
-        // Commit
+        // Check GPG is configured if --sign is requested
+        if self.sign && !git.signing_configured() {
+            bail!(
+                "GPG signing requested but not configured.\n\
+                 Configure with: git config --global user.signingkey <KEY_ID>\n\n\
+                 For setup instructions, see: https://docs.github.com/en/authentication/managing-commit-signature-verification"
+            );
+        }
+
+        // Commit (with or without GPG signature)
         let commit_message = if entities.len() == 1 {
             let (_, id, title, _) = &entities[0];
             format!("Release {}: {}", truncate_id(id), title)
         } else {
             format!("Release {} entities", entities.len())
         };
-        let _hash = git.commit(&commit_message).into_diagnostic()?;
-        println!("  Committed: \"{}\"", commit_message);
+
+        if self.sign {
+            git.commit_signed(&commit_message).into_diagnostic()?;
+            println!("  Committed (GPG signed): \"{}\"", commit_message);
+        } else {
+            git.commit(&commit_message).into_diagnostic()?;
+            println!("  Committed: \"{}\"", commit_message);
+        }
 
         // Create git tags for released entities (for audit trail)
+        // Use signed tags when --sign is used for full compliance
         let date = chrono::Utc::now().format("%Y-%m-%d");
         for (_, id, title, _) in entities {
             let short_id = truncate_id(id);
@@ -316,12 +336,22 @@ impl ReleaseArgs {
                     releaser_name,
                     self.message.as_deref().unwrap_or(title)
                 );
-                if let Err(e) = git.create_tag(&tag_name, Some(&tag_message)) {
-                    if self.verbose {
-                        eprintln!("  Warning: Failed to create tag {}: {}", tag_name, e);
+                let result = git.create_tag_with_options(&tag_name, &tag_message, self.sign);
+                match result {
+                    Ok(()) => {
+                        if self.verbose {
+                            if self.sign {
+                                eprintln!("  Created signed tag: {}", tag_name);
+                            } else {
+                                eprintln!("  Created tag: {}", tag_name);
+                            }
+                        }
                     }
-                } else if self.verbose {
-                    eprintln!("  Created tag: {}", tag_name);
+                    Err(e) => {
+                        if self.verbose {
+                            eprintln!("  Warning: Failed to create tag {}: {}", tag_name, e);
+                        }
+                    }
                 }
             }
         }

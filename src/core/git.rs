@@ -79,6 +79,18 @@ impl Git {
         })
     }
 
+    /// Execute a git command and return error if it fails
+    pub fn run_checked(&self, args: &[&str]) -> Result<GitOutput, GitError> {
+        let output = self.run(args)?;
+        if output.success {
+            Ok(output)
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
     /// Check if we're in a git repository
     pub fn is_repo(&self) -> bool {
         self.run(&["rev-parse", "--git-dir"])
@@ -436,6 +448,58 @@ impl Git {
             .ok()
             .filter(|o| o.success && !o.stdout.is_empty())
             .map(|o| o.stdout)
+    }
+
+    /// Check if commit.gpgsign is enabled (auto-sign all commits)
+    pub fn commit_gpgsign_enabled(&self) -> bool {
+        self.run(&["config", "commit.gpgsign"])
+            .map(|o| o.success && o.stdout.trim().eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    }
+
+    /// Check if tag.gpgSign is enabled (auto-sign all tags)
+    pub fn tag_gpgsign_enabled(&self) -> bool {
+        self.run(&["config", "tag.gpgSign"])
+            .map(|o| o.success && o.stdout.trim().eq_ignore_ascii_case("true"))
+            .unwrap_or(false)
+    }
+
+    /// Create a GPG-signed tag
+    pub fn create_signed_tag(&self, name: &str, message: &str) -> Result<(), GitError> {
+        let output = self.run(&["tag", "-s", name, "-m", message])?;
+
+        if output.success {
+            Ok(())
+        } else {
+            // Provide helpful error if GPG signing fails
+            if output.stderr.contains("gpg") || output.stderr.contains("signing") {
+                return Err(GitError::CommandFailed {
+                    message: format!(
+                        "Failed to sign tag. Configure GPG signing with:\n\
+                         git config --global user.signingkey <YOUR_KEY_ID>\n\
+                         Original error: {}",
+                        output.stderr
+                    ),
+                });
+            }
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Create an annotated tag (optionally signed)
+    pub fn create_tag_with_options(
+        &self,
+        name: &str,
+        message: &str,
+        sign: bool,
+    ) -> Result<(), GitError> {
+        if sign {
+            self.create_signed_tag(name, message)
+        } else {
+            self.create_tag(name, Some(message))
+        }
     }
 
     /// Create a lightweight tag

@@ -368,7 +368,32 @@ tdt approve RISK@1 --sign -m "Quality review complete"
 
 ### Setting Up GPG Signing
 
-Before using GPG-signed approvals, each team member needs to configure GPG signing:
+Before using GPG-signed approvals, each team member needs to configure GPG signing.
+
+#### Option 1: Use TDT Setup Command (Recommended)
+
+TDT provides a helper command to configure GPG signing:
+
+```bash
+# Check current GPG signing status
+tdt team setup-signing --status
+
+# Configure GPG signing globally (if you already have a signing key)
+tdt team setup-signing
+
+# Configure with a specific key ID
+tdt team setup-signing --key-id YOUR_KEY_ID
+
+# Configure for this repository only
+tdt team setup-signing --local
+```
+
+This command will:
+- Set `user.signingkey` to your GPG key ID
+- Enable `commit.gpgsign` (auto-sign all commits)
+- Enable `tag.gpgSign` (auto-sign all tags)
+
+#### Option 2: Manual Configuration
 
 1. **Generate a GPG key** (if you don't have one):
    ```bash
@@ -380,12 +405,22 @@ Before using GPG-signed approvals, each team member needs to configure GPG signi
    # List your keys to find the key ID
    gpg --list-secret-keys --keyid-format=long
 
-   # Configure Git
+   # Configure Git (auto-sign all commits and tags)
    git config --global user.signingkey YOUR_KEY_ID
    git config --global commit.gpgsign true
+   git config --global tag.gpgSign true
    ```
 
 3. **Add your public key to GitHub/GitLab** for verification badges
+
+#### Why Enable Auto-Signing?
+
+When `require_signature: true` is configured for an entity type, TDT will warn if `commit.gpgsign` is not enabled. Enabling auto-signing ensures:
+
+- **All commits are signed**, not just approval commits
+- **All tags are signed**, creating an immutable audit trail
+- **No mixed signed/unsigned commits** in your repository
+- **Simpler workflow** - no need to remember `--sign` flag
 
 For detailed instructions, see:
 - [GitHub: Managing commit signature verification](https://docs.github.com/en/authentication/managing-commit-signature-verification)

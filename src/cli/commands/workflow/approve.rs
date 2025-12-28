@@ -426,6 +426,20 @@ impl ApproveArgs {
             );
         }
 
+        // Warn if require_signature is set but commit.gpgsign is not enabled
+        // This helps ensure consistent signing across all commits, not just approvals
+        if signature_required && has_git && !git.commit_gpgsign_enabled() {
+            eprintln!(
+                "Warning: GPG signing required but commit.gpgsign is not enabled.\n\
+                 For consistent audit trail, consider enabling auto-signing:\n\
+                 \n\
+                   git config --global commit.gpgsign true\n\
+                   git config --global tag.gpgSign true\n\
+                 \n\
+                 Or run: tdt team setup-signing\n"
+            );
+        }
+
         // Record approval in each entity (this is the "electronic signature")
         for (path, id, _, _) in entities {
             let prefix = get_prefix_from_id(id);
@@ -526,6 +540,7 @@ impl ApproveArgs {
             }
 
             // Create git tags for approved entities (for audit trail)
+            // Use signed tags when --sign is used for full compliance
             let date = chrono::Utc::now().format("%Y-%m-%d");
             for (_, id, title, _) in entities.iter() {
                 let short_id = truncate_id(id);
@@ -539,12 +554,22 @@ impl ApproveArgs {
                         approver_name,
                         self.message.as_deref().unwrap_or(title)
                     );
-                    if let Err(e) = git.create_tag(&tag_name, Some(&tag_message)) {
-                        if self.verbose {
-                            eprintln!("  Warning: Failed to create tag {}: {}", tag_name, e);
+                    let result = git.create_tag_with_options(&tag_name, &tag_message, self.sign);
+                    match result {
+                        Ok(()) => {
+                            if self.verbose {
+                                if self.sign {
+                                    eprintln!("  Created signed tag: {}", tag_name);
+                                } else {
+                                    eprintln!("  Created tag: {}", tag_name);
+                                }
+                            }
                         }
-                    } else if self.verbose {
-                        eprintln!("  Created tag: {}", tag_name);
+                        Err(e) => {
+                            if self.verbose {
+                                eprintln!("  Warning: Failed to create tag {}: {}", tag_name, e);
+                            }
+                        }
                     }
                 }
             }

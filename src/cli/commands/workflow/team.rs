@@ -5,7 +5,7 @@ use miette::{bail, miette, IntoDiagnostic, Result};
 
 use crate::cli::args::GlobalOpts;
 use crate::core::team::{Role, TeamMember, TeamRoster};
-use crate::core::Project;
+use crate::core::{Git, Project};
 
 /// Team roster management
 #[derive(Debug, Subcommand)]
@@ -20,6 +20,8 @@ pub enum TeamCommands {
     Add(TeamAddArgs),
     /// Remove a team member
     Remove(TeamRemoveArgs),
+    /// Configure GPG signing for commits and tags
+    SetupSigning(SetupSigningArgs),
 }
 
 /// List team members
@@ -73,6 +75,26 @@ pub struct TeamRemoveArgs {
     pub yes: bool,
 }
 
+/// Configure GPG signing for commits and tags
+#[derive(Debug, Args)]
+pub struct SetupSigningArgs {
+    /// GPG key ID to use for signing (if not provided, will detect from git config)
+    #[arg(long, short = 'k')]
+    pub key_id: Option<String>,
+
+    /// Configure for this repository only (not global)
+    #[arg(long)]
+    pub local: bool,
+
+    /// Skip confirmation prompts
+    #[arg(long, short = 'y')]
+    pub yes: bool,
+
+    /// Show current signing configuration without making changes
+    #[arg(long)]
+    pub status: bool,
+}
+
 impl TeamCommands {
     pub fn run(&self, global: &GlobalOpts) -> Result<()> {
         match self {
@@ -81,6 +103,7 @@ impl TeamCommands {
             TeamCommands::Init(args) => args.run(global),
             TeamCommands::Add(args) => args.run(global),
             TeamCommands::Remove(args) => args.run(global),
+            TeamCommands::SetupSigning(args) => args.run(global),
         }
     }
 }
@@ -299,6 +322,146 @@ impl TeamRemoveArgs {
             println!("Removed {} ({}) from team roster", name, self.username);
         } else {
             bail!("Failed to remove user.");
+        }
+
+        Ok(())
+    }
+}
+
+impl SetupSigningArgs {
+    pub fn run(&self, _global: &GlobalOpts) -> Result<()> {
+        let project = Project::discover().into_diagnostic()?;
+        let git = Git::new(project.root());
+
+        if !git.is_repo() {
+            bail!("Not a git repository.");
+        }
+
+        // Status mode - just show current configuration
+        if self.status {
+            return self.show_status(&git);
+        }
+
+        // Check if a signing key is available
+        let key_id = if let Some(ref k) = self.key_id {
+            k.clone()
+        } else if let Some(k) = git.signing_key() {
+            k
+        } else {
+            bail!(
+                "No GPG signing key configured.\n\n\
+                 To set up GPG signing:\n\
+                 1. Generate a GPG key:  gpg --full-generate-key\n\
+                 2. List your keys:      gpg --list-secret-keys --keyid-format=long\n\
+                 3. Provide the key ID:  tdt team setup-signing --key-id YOUR_KEY_ID\n\n\
+                 For detailed instructions:\n\
+                 https://docs.github.com/en/authentication/managing-commit-signature-verification"
+            );
+        };
+
+        let scope = if self.local { "--local" } else { "--global" };
+        let scope_desc = if self.local { "repository" } else { "global" };
+
+        println!("GPG Signing Configuration");
+        println!("========================\n");
+        println!("This will configure git to automatically sign all commits and tags.");
+        println!();
+        println!("  Key ID:        {}", key_id);
+        println!("  Scope:         {} ({})", scope_desc, scope);
+        println!();
+        println!("Commands to run:");
+        println!("  git config {} user.signingkey {}", scope, key_id);
+        println!("  git config {} commit.gpgsign true", scope);
+        println!("  git config {} tag.gpgSign true", scope);
+        println!();
+
+        // Confirm if not --yes
+        if !self.yes {
+            print!("Proceed? [y/N] ");
+            std::io::Write::flush(&mut std::io::stdout()).into_diagnostic()?;
+            let mut input = String::new();
+            std::io::stdin().read_line(&mut input).into_diagnostic()?;
+            if !input.trim().eq_ignore_ascii_case("y") {
+                println!("Aborted.");
+                return Ok(());
+            }
+        }
+
+        // Run the configuration commands
+        let args_base: Vec<&str> = if self.local {
+            vec!["config", "--local"]
+        } else {
+            vec!["config", "--global"]
+        };
+
+        // Set signing key
+        let mut args = args_base.clone();
+        args.extend(["user.signingkey", &key_id]);
+        git.run_checked(&args)
+            .map_err(|e| miette!("Failed to set user.signingkey: {}", e))?;
+        println!("  ✓ Set user.signingkey = {}", key_id);
+
+        // Enable commit signing
+        let mut args = args_base.clone();
+        args.extend(["commit.gpgsign", "true"]);
+        git.run_checked(&args)
+            .map_err(|e| miette!("Failed to set commit.gpgsign: {}", e))?;
+        println!("  ✓ Set commit.gpgsign = true");
+
+        // Enable tag signing
+        let mut args = args_base.clone();
+        args.extend(["tag.gpgSign", "true"]);
+        git.run_checked(&args)
+            .map_err(|e| miette!("Failed to set tag.gpgSign: {}", e))?;
+        println!("  ✓ Set tag.gpgSign = true");
+
+        println!("\nGPG signing configured successfully!");
+        println!("All commits and tags will now be automatically signed.");
+        println!();
+        println!("To verify, run: git config --{} --get-regexp '.*sign'", if self.local { "local" } else { "global" });
+
+        Ok(())
+    }
+
+    fn show_status(&self, git: &Git) -> Result<()> {
+        println!("GPG Signing Status");
+        println!("==================\n");
+
+        // Check signing key
+        let key = git.signing_key();
+        if let Some(ref k) = key {
+            println!("  user.signingkey:   {} ✓", k);
+        } else {
+            println!("  user.signingkey:   (not configured)");
+        }
+
+        // Check commit.gpgsign
+        if git.commit_gpgsign_enabled() {
+            println!("  commit.gpgsign:    true ✓");
+        } else {
+            println!("  commit.gpgsign:    false");
+        }
+
+        // Check tag.gpgSign
+        if git.tag_gpgsign_enabled() {
+            println!("  tag.gpgSign:       true ✓");
+        } else {
+            println!("  tag.gpgSign:       false");
+        }
+
+        println!();
+
+        // Determine overall status
+        if key.is_some() && git.commit_gpgsign_enabled() && git.tag_gpgsign_enabled() {
+            println!("Status: Fully configured ✓");
+            println!("All commits and tags will be signed automatically.");
+        } else if key.is_some() {
+            println!("Status: Partially configured");
+            println!("Signing key is set but auto-signing is not enabled.");
+            println!("Run 'tdt team setup-signing' to enable auto-signing.");
+        } else {
+            println!("Status: Not configured");
+            println!("Run 'tdt team setup-signing --key-id YOUR_KEY_ID' to configure.");
         }
 
         Ok(())

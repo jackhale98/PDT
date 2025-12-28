@@ -42,6 +42,9 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 |-------|------|-------------|
 | `description` | string | Detailed description |
 | `contributors` | array[Contributor] | Dimensional contributors |
+| `sigma_level` | number | Sigma level for statistical analysis (default: 6.0, meaning ±3σ) |
+| `mean_shift_k` | number | Bender k-factor for process drift modeling (default: 0.0) |
+| `include_gdt` | boolean | Include GD&T position tolerances in calculations (default: false) |
 | `analysis_results` | AnalysisResults | Auto-calculated results |
 | `disposition` | enum | `under_review`, `approved`, `rejected` |
 | `tags` | array[string] | Tags for filtering |
@@ -59,6 +62,16 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 | `minus_tol` | number | Minus tolerance (positive number) |
 | `distribution` | enum | `normal`, `uniform`, `triangular` |
 | `source` | string | Source reference (drawing, etc.) |
+| `gdt_position` | GdtContribution | Optional GD&T position tolerance contribution |
+
+### GdtContribution Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `position_tolerance` | number | Position tolerance value (diameter of cylindrical zone) - **Required** |
+| `actual_size` | number | Actual feature size for bonus tolerance calculation (MMC/LMC) |
+| `bonus` | number | Calculated bonus tolerance (departure from MMC/LMC) |
+| `effective_tolerance` | number | Effective position tolerance (position_tolerance + bonus) |
 
 ### FeatureRef Object (Cached Feature Reference)
 
@@ -78,6 +91,34 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 | `worst_case` | WorstCaseResult | Worst-case analysis |
 | `rss` | RssResult | RSS statistical analysis |
 | `monte_carlo` | MonteCarloResult | Monte Carlo simulation |
+
+### RssResult Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mean` | number | Mean (expected) value |
+| `sigma_3` | number | 3-sigma spread (±3σ) |
+| `margin` | number | Margin to specification limits at 3σ |
+| `cp` | number | Process capability (Cp) - ignores centering: (USL - LSL) / (6σ) |
+| `cpk` | number | Process capability (Cpk) - accounts for centering: min(USL-μ, μ-LSL) / (3σ) |
+| `yield_percent` | number | Estimated yield percentage |
+| `sensitivity` | array[number] | Variance contribution percentage for each contributor (sum = 100%) |
+| `shifted_mean` | number | Shifted mean when mean_shift_k > 0 (Bender method) |
+
+### MonteCarloResult Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `iterations` | integer | Number of Monte Carlo iterations |
+| `mean` | number | Sample mean |
+| `std_dev` | number | Sample standard deviation |
+| `min` | number | Minimum observed value |
+| `max` | number | Maximum observed value |
+| `yield_percent` | number | Percentage of samples within spec |
+| `percentile_2_5` | number | 2.5th percentile (95% CI lower) |
+| `percentile_97_5` | number | 97.5th percentile (95% CI upper) |
+| `pp` | number | Process performance (Pp) - uses sample std_dev: (USL - LSL) / (6s) |
+| `ppk` | number | Process performance (Ppk) - uses sample std_dev, accounts for centering |
 
 ### Links
 
@@ -172,6 +213,11 @@ contributors:
     distribution: normal
     source: "DWG-003 Rev A"
 
+# Statistical analysis parameters
+sigma_level: 6.0       # 6σ means tolerance = ±3σ (default)
+mean_shift_k: 0.0      # Bender k-factor (0=none, 1.5=automotive)
+include_gdt: false     # Include GD&T position in calculations
+
 # Auto-calculated by 'tdt tol analyze'
 analysis_results:
   worst_case:
@@ -183,8 +229,10 @@ analysis_results:
     mean: 1.0
     sigma_3: 0.21
     margin: 0.29
+    cp: 1.59
     cpk: 1.59
     yield_percent: 99.9997
+    sensitivity: [40.0, 30.0, 20.0, 10.0]  # % contribution per contributor
   monte_carlo:
     iterations: 10000
     mean: 1.0
@@ -194,6 +242,8 @@ analysis_results:
     yield_percent: 100.0
     percentile_2_5: 0.86
     percentile_97_5: 1.14
+    pp: 1.19
+    ppk: 1.19
 
 disposition: approved
 tags: [critical, thermal, assembly]
@@ -291,8 +341,20 @@ tdt tol analyze TOL@1
 # Custom Monte Carlo iterations
 tdt tol analyze TOL@1 --iterations 50000
 
-# Verbose output
+# Verbose output (shows Cp, Cpk, Pp, Ppk, sensitivity)
 tdt tol analyze TOL@1 --verbose
+
+# Custom sigma level (4σ = ±2σ process capability)
+tdt tol analyze TOL@1 --sigma 4.0
+
+# Mean shift factor (Bender method for process drift)
+tdt tol analyze TOL@1 --mean-shift 1.5
+
+# Include GD&T position tolerances in calculations
+tdt tol analyze TOL@1 --with-gdt
+
+# Show sensitivity analysis (% contribution per contributor)
+tdt tol analyze TOL@1 --sensitivity
 ```
 
 ### Add features as contributors
@@ -370,20 +432,34 @@ result:
 
 ### RSS (Root Sum Square) Analysis
 
-Statistical analysis assuming normal distributions with 3-sigma process:
+Statistical analysis assuming normal distributions with configurable sigma level:
 
 ```
 mean = sum of (sign * nominal)
 
 For each contributor:
-  sigma = (plus_tol + minus_tol) / 6  # Assume 3-sigma process
+  sigma = (plus_tol + minus_tol) / sigma_level  # Default: 6.0 (±3σ process)
   variance += sigma^2
 
 sigma_total = sqrt(variance)
 sigma_3 = 3 * sigma_total
 
-Cpk = min(USL - mean, mean - LSL) / (3 * sigma_total)
+# Process Capability Indices
+Cp  = (USL - LSL) / (6 * sigma_total)           # Ignores centering
+Cpk = min(USL - mean, mean - LSL) / (3 * sigma_total)  # Accounts for centering
+
+# Sensitivity Analysis (% variance contribution)
+sensitivity[i] = (sigma_i^2 / sum(sigma^2)) * 100%
 ```
+
+**Process Capability Indices**:
+
+| Index | Formula | Description |
+|-------|---------|-------------|
+| **Cp** | (USL - LSL) / (6σ) | Potential capability (ignores centering) |
+| **Cpk** | min(USL-μ, μ-LSL) / (3σ) | Actual capability (accounts for centering) |
+
+When Cp ≈ Cpk, the process is well-centered. When Cpk < Cp, there's centering loss.
 
 **Cpk Guidelines**:
 
@@ -396,7 +472,43 @@ Cpk = min(USL - mean, mean - LSL) / (3 * sigma_total)
 | 1.67 | 5σ | 99.9997% | Excellent |
 | 2.0 | 6σ | 99.9999% | Six Sigma |
 
+**Sensitivity Analysis**: Shows which contributors dominate the total variance. Use this to prioritize tolerance tightening efforts on the highest-contributing dimensions.
+
 **Use when**: Statistical process control is in place, many contributors
+
+### Mean Shift Factor (Bender Method)
+
+The Bender method models process drift by shifting the mean toward the nearest specification limit:
+
+```
+if mean_shift_k > 0:
+  if (USL - mean) < (mean - LSL):
+    shifted_mean = mean + k * sigma_total  # Shift toward USL
+  else:
+    shifted_mean = mean - k * sigma_total  # Shift toward LSL
+
+  Cpk uses shifted_mean for more conservative estimate
+```
+
+Common k-factor values:
+- **0.0**: No shift (default)
+- **1.5**: Automotive/Bender method (accounts for typical process drift)
+
+**Use when**: Long-term process variation is a concern, conservative estimates needed
+
+### GD&T Position Integration
+
+When `include_gdt: true`, GD&T position tolerances are added to dimensional tolerances:
+
+```
+total_tolerance_band = (plus_tol + minus_tol) + effective_position_tolerance
+
+effective_position_tolerance = position_tolerance + bonus (if MMC/LMC)
+```
+
+This provides more realistic tolerance analysis when position tolerances significantly contribute to the tolerance chain.
+
+**Use when**: Position tolerances are significant contributors to the stackup
 
 ### Monte Carlo Simulation
 
@@ -413,7 +525,13 @@ Calculate statistics:
   mean, std_dev, min, max
   yield = (samples in spec) / (total samples) * 100%
   percentile_2_5, percentile_97_5 (95% confidence interval)
+
+# Process Performance Indices (using sample statistics)
+Pp  = (USL - LSL) / (6 * std_dev)           # Ignores centering
+Ppk = min(USL - mean, mean - LSL) / (3 * std_dev)  # Accounts for centering
 ```
+
+**Process Performance vs Capability**: Pp/Ppk use actual sample standard deviation from Monte Carlo, while Cp/Cpk use theoretical σ from tolerance assumptions. When distributions are non-normal or processes have drift, Pp/Ppk may differ from Cp/Cpk.
 
 **Distributions**:
 

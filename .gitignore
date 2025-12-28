@@ -1,1 +1,11 @@
 /target
+
+# TDT - Tessera Design Toolkit
+# Local cache database (user-specific, auto-rebuilt from entity files)
+.tdt/cache.db
+.tdt/cache.db-journal
+.tdt/cache.db-wal
+.tdt/cache.db-shm
+
+# Legacy short ID file (migrated to cache.db)
+.tdt/shortids.json

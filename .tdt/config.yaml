@@ -1,0 +1,11 @@
+# TDT Project Configuration
+# See https://tessera.dev/docs/config for all options
+
+# Default author for new entities (can be overridden by global config)
+# author: ""
+
+# Editor to use for `tdt edit` commands (default: $EDITOR)
+# editor: ""
+
+# Default output format (auto, yaml, tsv, json, csv, md, id)
+# default_format: auto

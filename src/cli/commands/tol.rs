@@ -306,6 +306,26 @@ pub struct AnalyzeArgs {
     /// Debug mode - trace calculation steps
     #[arg(long)]
     pub debug: bool,
+
+    /// Show sensitivity analysis (variance contribution % per contributor)
+    #[arg(long, short = 'S')]
+    pub sensitivity: bool,
+
+    /// Override sigma level for this analysis (default: use stackup's value)
+    /// Common values: 6.0 (±3σ, 99.73%), 4.0 (±2σ, 95.4%), 8.0 (±4σ, 99.99%)
+    #[arg(long)]
+    pub sigma: Option<f64>,
+
+    /// Override mean shift k-factor (Bender method) for this analysis
+    /// Common values: 0.0 (none), 1.5 (automotive/Bender method)
+    #[arg(long)]
+    pub mean_shift: Option<f64>,
+
+    /// Include GD&T position tolerances in statistical analysis
+    /// When set, contributors with gdt_position will include position tolerance in variance
+    /// Future: Will support 3D torsor-based analysis with --analysis-mode 3d
+    #[arg(long)]
+    pub with_gdt: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -1043,6 +1063,30 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         ));
     }
 
+    // Apply sigma level override if provided
+    if let Some(sigma) = args.sigma {
+        if sigma <= 0.0 {
+            return Err(miette::miette!("Sigma level must be positive, got {}", sigma));
+        }
+        stackup.sigma_level = sigma;
+    }
+
+    // Apply mean shift override if provided
+    if let Some(mean_shift) = args.mean_shift {
+        if mean_shift < 0.0 {
+            return Err(miette::miette!(
+                "Mean shift k-factor must be non-negative, got {}",
+                mean_shift
+            ));
+        }
+        stackup.mean_shift_k = mean_shift;
+    }
+
+    // Apply GD&T inclusion override if provided
+    if args.with_gdt {
+        stackup.include_gdt = true;
+    }
+
     // Debug mode - trace the RSS calculation step by step
     if args.debug {
         use crate::entities::stackup::Direction;
@@ -1169,10 +1213,55 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         println!();
         println!("   {} Analysis:", style("RSS (Statistical)").bold());
         println!("     Mean: {}", smart_round(rss.mean, ref_precision));
+        // Show shifted mean if Bender method was applied
+        if let Some(shifted) = rss.shifted_mean {
+            println!(
+                "     Shifted Mean: {} (k={:.1})",
+                smart_round(shifted, ref_precision),
+                stackup.mean_shift_k
+            );
+        }
         println!("     ±3σ: {}", smart_round(rss.sigma_3, ref_precision));
         println!("     Margin: {}", smart_round(rss.margin, ref_precision));
-        println!("     Cpk: {:.2}", rss.cpk);
+        // Show both Cp (potential) and Cpk (actual) for complete picture
+        // Cp ignores centering, Cpk accounts for it - difference indicates centering loss
+        println!(
+            "     Capability: Cp={:.2}, Cpk={:.2}{}",
+            rss.cp,
+            rss.cpk,
+            if (rss.cp - rss.cpk).abs() > 0.1 {
+                format!(" (centering loss: {:.0}%)", (1.0 - rss.cpk / rss.cp) * 100.0)
+            } else {
+                String::new()
+            }
+        );
         println!("     Yield: {:.2}%", rss.yield_percent);
+
+        // Show sensitivity analysis if requested
+        if args.sensitivity && !rss.sensitivity.is_empty() {
+            println!();
+            println!(
+                "   {} (Variance Contribution):",
+                style("Sensitivity Analysis").bold()
+            );
+            for (i, contrib) in stackup.contributors.iter().enumerate() {
+                if i < rss.sensitivity.len() {
+                    let pct = rss.sensitivity[i];
+                    // Color based on contribution level
+                    let pct_styled = if pct >= 50.0 {
+                        style(format!("{:5.1}%", pct)).red().bold()
+                    } else if pct >= 25.0 {
+                        style(format!("{:5.1}%", pct)).yellow()
+                    } else {
+                        style(format!("{:5.1}%", pct)).dim()
+                    };
+                    // Visual bar (max 30 chars)
+                    let bar_len = ((pct / 100.0) * 30.0).round() as usize;
+                    let bar = "█".repeat(bar_len);
+                    println!("     {} {} {}", pct_styled, bar, contrib.name);
+                }
+            }
+        }
     }
 
     if let Some(ref mc) = stackup.analysis_results.monte_carlo {
@@ -1194,6 +1283,20 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
             smart_round(mc.percentile_2_5, ref_precision),
             smart_round(mc.percentile_97_5, ref_precision)
         );
+        // Show Pp/Ppk (process performance from actual sample statistics)
+        // These differ from Cp/Cpk which use assumed process capability
+        if let (Some(pp), Some(ppk)) = (mc.pp, mc.ppk) {
+            println!(
+                "     Performance: Pp={:.2}, Ppk={:.2}{}",
+                pp,
+                ppk,
+                if (pp - ppk).abs() > 0.1 {
+                    format!(" (centering loss: {:.0}%)", (1.0 - ppk / pp) * 100.0)
+                } else {
+                    String::new()
+                }
+            );
+        }
         println!("     Yield: {:.2}%", mc.yield_percent);
     }
 
@@ -1731,6 +1834,7 @@ fn run_add(args: AddArgs) -> Result<()> {
                     feature.drawing.number, feature.drawing.revision
                 ))
             },
+            gdt_position: None, // TODO: Populate from feature GD&T when --with-gdt is used
         };
 
         let dir_symbol = match direction {
@@ -1782,6 +1886,10 @@ fn run_add(args: AddArgs) -> Result<()> {
             bins: 40,
             dry_run: false,
             debug: false,
+            sensitivity: false,
+            sigma: None,
+            mean_shift: None,
+            with_gdt: false,
         })?;
     }
 

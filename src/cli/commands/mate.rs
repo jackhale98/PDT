@@ -17,7 +17,7 @@ use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
 use crate::entities::feature::Feature;
-use crate::entities::mate::{FitAnalysis, Mate, MateType};
+use crate::entities::mate::{FitAnalysis, Mate, MateType, StatisticalFit};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
@@ -266,6 +266,16 @@ const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
 pub struct RecalcArgs {
     /// Mate ID or short ID (MATE@N)
     pub id: String,
+
+    /// Include statistical (RSS) analysis with interference probability
+    /// Future: Will support 3D torsor-based analysis with --analysis-mode 3d
+    #[arg(long, short = 's')]
+    pub statistical: bool,
+
+    /// Sigma level for statistical analysis (tolerance = sigma_level × σ)
+    /// Common values: 6.0 (±3σ, 99.73%), 4.0 (±2σ, 95.4%), 8.0 (±4σ, 99.99%)
+    #[arg(long, default_value = "6.0")]
+    pub sigma: f64,
 }
 
 #[derive(clap::Args, Debug)]
@@ -966,14 +976,46 @@ fn run_recalc(args: RecalcArgs) -> Result<()> {
         }
     }
 
-    if feat_a.is_none() || feat_b.is_none() {
-        return Err(miette::miette!(
-            "Could not find both features to calculate fit"
-        ));
-    }
+    let feat_a = feat_a.ok_or_else(|| miette::miette!("Could not find feature A"))?;
+    let feat_b = feat_b.ok_or_else(|| miette::miette!("Could not find feature B"))?;
 
     // Calculate fit
-    let fit_analysis = calculate_fit_from_features(&feat_a.unwrap(), &feat_b.unwrap());
+    let mut fit_analysis = calculate_fit_from_features(&feat_a, &feat_b);
+
+    // Add statistical analysis if requested
+    if args.statistical {
+        if let Some(ref mut analysis) = fit_analysis {
+            let dim_a = feat_a.primary_dimension();
+            let dim_b = feat_b.primary_dimension();
+            if let (Some(dim_a), Some(dim_b)) = (dim_a, dim_b) {
+                // Determine which is hole/shaft
+                let (hole_dim, shaft_dim) = if dim_a.internal && !dim_b.internal {
+                    (dim_a, dim_b)
+                } else if !dim_a.internal && dim_b.internal {
+                    (dim_b, dim_a)
+                } else {
+                    return Err(miette::miette!(
+                        "Statistical analysis requires one internal and one external feature"
+                    ));
+                };
+
+                // Calculate statistical fit
+                match StatisticalFit::calculate(hole_dim, shaft_dim, args.sigma) {
+                    Ok(stat) => {
+                        analysis.statistical = Some(stat);
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "{} Could not calculate statistical fit: {}",
+                            style("⚠").yellow(),
+                            e
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     mate.fit_analysis = fit_analysis;
 
     // Write back
@@ -997,11 +1039,46 @@ fn run_recalc(args: RecalcArgs) -> Result<()> {
         let max_rounded = smart_round(analysis.worst_case_max_clearance, ref_precision);
 
         println!(
-            "   Result: {} ({} to {})",
+            "   {} Worst-case: {} ({} to {})",
+            style("⬩").dim(),
             style(format!("{}", analysis.fit_result)).cyan(),
             min_rounded,
             max_rounded
         );
+
+        // Show statistical analysis if present
+        if let Some(ref stat) = analysis.statistical {
+            let stat_ref_precision = stat
+                .mean_clearance
+                .abs()
+                .max(stat.sigma_clearance)
+                .max(0.001);
+            println!(
+                "   {} Statistical ({}σ): {} at 3σ",
+                style("⬩").dim(),
+                args.sigma,
+                style(format!("{}", stat.fit_result_3sigma)).cyan()
+            );
+            println!(
+                "     Mean clearance: {}, σ: {}",
+                smart_round(stat.mean_clearance, stat_ref_precision),
+                smart_round(stat.sigma_clearance, stat_ref_precision)
+            );
+            println!(
+                "     3σ range: {} to {}",
+                smart_round(stat.clearance_3sigma_min, stat_ref_precision),
+                smart_round(stat.clearance_3sigma_max, stat_ref_precision)
+            );
+            // Color the interference probability based on risk
+            let prob_styled = if stat.probability_interference < 0.01 {
+                style(format!("{:.4}%", stat.probability_interference)).green()
+            } else if stat.probability_interference < 1.0 {
+                style(format!("{:.3}%", stat.probability_interference)).yellow()
+            } else {
+                style(format!("{:.2}%", stat.probability_interference)).red()
+            };
+            println!("     P(interference): {}", prob_styled);
+        }
     } else {
         println!("   Could not calculate fit (features may not have dimensions)");
     }

@@ -85,6 +85,12 @@ pub struct FitAnalysis {
 
     /// Resulting fit classification
     pub fit_result: FitResult,
+
+    /// Statistical (RSS) fit analysis - optional, calculated on demand
+    /// Uses normal distribution assumptions to estimate interference probability
+    /// Future: Will support 3D torsor-based analysis for full GD&T
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub statistical: Option<StatisticalFit>,
 }
 
 impl FitAnalysis {
@@ -120,6 +126,7 @@ impl FitAnalysis {
             worst_case_min_clearance: min_clearance,
             worst_case_max_clearance: max_clearance,
             fit_result,
+            statistical: None, // Calculated on demand via with_statistical()
         }
     }
 
@@ -168,7 +175,20 @@ impl FitAnalysis {
             worst_case_min_clearance: min_clearance,
             worst_case_max_clearance: max_clearance,
             fit_result,
+            statistical: None, // Calculated on demand via with_statistical()
         })
+    }
+
+    /// Add statistical analysis to this fit analysis
+    /// sigma_level: process capability (6.0 for ±3σ, 4.0 for ±2σ, etc.)
+    pub fn with_statistical(
+        mut self,
+        hole_dim: &Dimension,
+        shaft_dim: &Dimension,
+        sigma_level: f64,
+    ) -> Result<Self> {
+        self.statistical = Some(StatisticalFit::calculate(hole_dim, shaft_dim, sigma_level)?);
+        Ok(self)
     }
 
     /// Check if this is an acceptable clearance fit
@@ -179,6 +199,150 @@ impl FitAnalysis {
     /// Check if this is an acceptable interference fit
     pub fn is_interference(&self) -> bool {
         self.fit_result == FitResult::Interference
+    }
+}
+
+/// Statistical fit analysis using RSS (Root Sum Square) method
+/// Calculates clearance distribution assuming normal distributions for hole and shaft
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StatisticalFit {
+    /// Mean clearance (hole_mean - shaft_mean)
+    pub mean_clearance: f64,
+
+    /// Standard deviation of clearance (RSS of hole and shaft σ)
+    pub sigma_clearance: f64,
+
+    /// Minimum clearance at 3σ (mean - 3σ)
+    pub clearance_3sigma_min: f64,
+
+    /// Maximum clearance at 3σ (mean + 3σ)
+    pub clearance_3sigma_max: f64,
+
+    /// Probability of interference (clearance < 0) as percentage
+    pub probability_interference: f64,
+
+    /// Fit classification at 3σ limits
+    pub fit_result_3sigma: FitResult,
+}
+
+/// Standard normal cumulative distribution function (CDF)
+/// Φ(z) = probability that a standard normal random variable is ≤ z
+/// Uses Hastings approximation (error < 7.5e-8)
+fn normal_cdf(z: f64) -> f64 {
+    if z.is_nan() {
+        return 0.5;
+    }
+    if z >= 8.0 {
+        return 1.0;
+    }
+    if z <= -8.0 {
+        return 0.0;
+    }
+
+    // Handle negative z by symmetry: Φ(-z) = 1 - Φ(z)
+    let (z_abs, negate) = if z < 0.0 { (-z, true) } else { (z, false) };
+
+    // Hastings approximation constants (A&S 26.2.17)
+    const B0: f64 = 0.2316419;
+    const B1: f64 = 0.319381530;
+    const B2: f64 = -0.356563782;
+    const B3: f64 = 1.781477937;
+    const B4: f64 = -1.821255978;
+    const B5: f64 = 1.330274429;
+
+    let t = 1.0 / (1.0 + B0 * z_abs);
+    let t2 = t * t;
+    let t3 = t2 * t;
+    let t4 = t3 * t;
+    let t5 = t4 * t;
+
+    let pdf = (-0.5 * z_abs * z_abs).exp() / (2.0 * std::f64::consts::PI).sqrt();
+    let cdf = 1.0 - pdf * (B1 * t + B2 * t2 + B3 * t3 + B4 * t4 + B5 * t5);
+
+    if negate {
+        1.0 - cdf
+    } else {
+        cdf
+    }
+}
+
+impl StatisticalFit {
+    /// Calculate statistical fit from hole and shaft dimensions
+    /// sigma_level: process capability (6.0 for ±3σ, 4.0 for ±2σ, etc.)
+    pub fn calculate(hole_dim: &Dimension, shaft_dim: &Dimension, sigma_level: f64) -> Result<Self> {
+        // Verify we have one internal and one external
+        if !hole_dim.internal {
+            return Err(miette!("First dimension must be internal (hole)"));
+        }
+        if shaft_dim.internal {
+            return Err(miette!("Second dimension must be external (shaft)"));
+        }
+
+        // Calculate process means (center of tolerance band)
+        let hole_mean_offset = (hole_dim.plus_tol - hole_dim.minus_tol) / 2.0;
+        let hole_mean = hole_dim.nominal + hole_mean_offset;
+
+        let shaft_mean_offset = (shaft_dim.plus_tol - shaft_dim.minus_tol) / 2.0;
+        let shaft_mean = shaft_dim.nominal + shaft_mean_offset;
+
+        // Mean clearance
+        let mean_clearance = hole_mean - shaft_mean;
+
+        // Calculate σ for each (σ = tolerance_band / sigma_level)
+        let hole_sigma = hole_dim.tolerance_band() / sigma_level;
+        let shaft_sigma = shaft_dim.tolerance_band() / sigma_level;
+
+        // RSS combination: σ_clearance = √(σ_hole² + σ_shaft²)
+        let sigma_clearance = (hole_sigma * hole_sigma + shaft_sigma * shaft_sigma).sqrt();
+
+        // 3σ limits
+        let clearance_3sigma_min = mean_clearance - 3.0 * sigma_clearance;
+        let clearance_3sigma_max = mean_clearance + 3.0 * sigma_clearance;
+
+        // Probability of interference: P(clearance < 0) = Φ(-mean/σ)
+        let z = if sigma_clearance > 0.0 {
+            -mean_clearance / sigma_clearance
+        } else if mean_clearance >= 0.0 {
+            f64::NEG_INFINITY // 0% interference
+        } else {
+            f64::INFINITY // 100% interference
+        };
+        let probability_interference = normal_cdf(z) * 100.0;
+
+        // Determine fit result at 3σ
+        let fit_result_3sigma = if clearance_3sigma_min > 0.0 {
+            FitResult::Clearance
+        } else if clearance_3sigma_max < 0.0 {
+            FitResult::Interference
+        } else {
+            FitResult::Transition
+        };
+
+        Ok(StatisticalFit {
+            mean_clearance,
+            sigma_clearance,
+            clearance_3sigma_min,
+            clearance_3sigma_max,
+            probability_interference,
+            fit_result_3sigma,
+        })
+    }
+
+    /// Calculate from dimensions, auto-detecting hole vs shaft
+    pub fn from_dimensions(dim_a: &Dimension, dim_b: &Dimension, sigma_level: f64) -> Result<Self> {
+        if dim_a.internal && !dim_b.internal {
+            Self::calculate(dim_a, dim_b, sigma_level)
+        } else if !dim_a.internal && dim_b.internal {
+            Self::calculate(dim_b, dim_a, sigma_level)
+        } else if dim_a.internal && dim_b.internal {
+            Err(miette!(
+                "Statistical fit requires one internal and one external feature (both are internal)"
+            ))
+        } else {
+            Err(miette!(
+                "Statistical fit requires one internal and one external feature (both are external)"
+            ))
+        }
     }
 }
 
@@ -659,5 +823,136 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("both are external"));
+    }
+
+    // ===== Phase 4: Statistical Mate Analysis Tests =====
+
+    #[test]
+    fn test_statistical_fit_clearance() {
+        use crate::entities::stackup::Distribution;
+
+        // H7/f7 type fit - guaranteed clearance
+        // Hole: 10.0 +0.015/-0.000 (H7 on ø10)
+        // Shaft: 9.990 +0.000/-0.013 (f7 on ø10)
+        // Statistically: mean_clearance > 0, very low interference probability
+
+        let hole_dim = Dimension {
+            name: "bore".to_string(),
+            nominal: 10.0,
+            plus_tol: 0.015,
+            minus_tol: 0.0,
+            units: "mm".to_string(),
+            internal: true,
+            distribution: Distribution::Normal,
+        };
+
+        let shaft_dim = Dimension {
+            name: "pin".to_string(),
+            nominal: 9.990,
+            plus_tol: 0.0,
+            minus_tol: 0.013,
+            units: "mm".to_string(),
+            internal: false,
+            distribution: Distribution::Normal,
+        };
+
+        let stat = StatisticalFit::calculate(&hole_dim, &shaft_dim, 6.0).unwrap();
+
+        // Mean clearance should be positive (hole_mean - shaft_mean)
+        // hole_mean = 10.0 + (0.015 - 0.0)/2 = 10.0075
+        // shaft_mean = 9.990 + (0.0 - 0.013)/2 = 9.9835
+        // mean_clearance ≈ 0.024
+        assert!(
+            stat.mean_clearance > 0.0,
+            "Mean clearance should be positive for clearance fit, got {}",
+            stat.mean_clearance
+        );
+
+        // Probability of interference should be very low
+        assert!(
+            stat.probability_interference < 1.0,
+            "P(interference) should be very low for clearance fit, got {}%",
+            stat.probability_interference
+        );
+    }
+
+    #[test]
+    fn test_statistical_fit_transition() {
+        use crate::entities::stackup::Distribution;
+
+        // Equal tolerances centered at same nominal -> ~50% interference probability
+        let hole_dim = Dimension {
+            name: "bore".to_string(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            units: "mm".to_string(),
+            internal: true,
+            distribution: Distribution::Normal,
+        };
+
+        let shaft_dim = Dimension {
+            name: "pin".to_string(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            units: "mm".to_string(),
+            internal: false,
+            distribution: Distribution::Normal,
+        };
+
+        let stat = StatisticalFit::calculate(&hole_dim, &shaft_dim, 6.0).unwrap();
+
+        // Mean clearance should be ~0 (same nominals)
+        assert!(
+            stat.mean_clearance.abs() < 0.01,
+            "Mean clearance should be ~0 for equal fit, got {}",
+            stat.mean_clearance
+        );
+
+        // Probability of interference should be ~50%
+        assert!(
+            (stat.probability_interference - 50.0).abs() < 5.0,
+            "P(interference) should be ~50% for transition fit, got {}%",
+            stat.probability_interference
+        );
+    }
+
+    #[test]
+    fn test_statistical_sigma_clearance() {
+        use crate::entities::stackup::Distribution;
+
+        let hole_dim = Dimension {
+            name: "bore".to_string(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // tol_band = 0.2
+            units: "mm".to_string(),
+            internal: true,
+            distribution: Distribution::Normal,
+        };
+
+        let shaft_dim = Dimension {
+            name: "pin".to_string(),
+            nominal: 9.8,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // tol_band = 0.2
+            units: "mm".to_string(),
+            internal: false,
+            distribution: Distribution::Normal,
+        };
+
+        let stat = StatisticalFit::calculate(&hole_dim, &shaft_dim, 6.0).unwrap();
+
+        // σ_clearance = √(σ_hole² + σ_shaft²)
+        // σ_hole = 0.2/6, σ_shaft = 0.2/6
+        // σ_clearance = √(2) × (0.2/6) ≈ 0.0471
+        let expected_sigma = (2.0_f64).sqrt() * (0.2 / 6.0);
+        assert!(
+            (stat.sigma_clearance - expected_sigma).abs() < 0.001,
+            "Sigma clearance should be {:.4}, got {:.4}",
+            expected_sigma,
+            stat.sigma_clearance
+        );
     }
 }

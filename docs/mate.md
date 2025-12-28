@@ -57,6 +57,18 @@ Mates represent 1:1 contact relationships between two features, such as a pin fi
 | `worst_case_min_clearance` | number | Minimum clearance (or max interference if negative) |
 | `worst_case_max_clearance` | number | Maximum clearance (or min interference if negative) |
 | `fit_result` | enum | `clearance`, `interference`, `transition` |
+| `statistical` | StatisticalFit | Optional statistical (RSS) fit analysis |
+
+### StatisticalFit Object (Optional)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mean_clearance` | number | Mean clearance (hole_mean - shaft_mean) |
+| `sigma_clearance` | number | Standard deviation of clearance (RSS of hole and shaft σ) |
+| `clearance_3sigma_min` | number | Minimum clearance at 3σ (mean - 3σ) |
+| `clearance_3sigma_max` | number | Maximum clearance at 3σ (mean + 3σ) |
+| `probability_interference` | number | Probability of interference (clearance < 0) as percentage |
+| `fit_result_3sigma` | enum | Fit classification at 3σ limits |
 
 ### Links
 
@@ -71,6 +83,8 @@ TDT automatically calculates worst-case fit from the primary dimensions of both 
 
 - **Internal feature** (`internal: true`): Treated as the hole
 - **External feature** (`internal: false`): Treated as the shaft
+
+### Worst-Case Analysis
 
 ```
 Auto-detection from internal field:
@@ -95,6 +109,32 @@ Calculation:
     else if max_clearance < 0: interference
     else: transition
 ```
+
+### Statistical (RSS) Analysis
+
+Optional statistical analysis calculates the probability of interference:
+
+```
+# Feature statistics (assuming ±3σ process, sigma_level = 6.0)
+hole_mean = hole.nominal + (hole.plus_tol - hole.minus_tol) / 2
+hole_sigma = (hole.plus_tol + hole.minus_tol) / sigma_level
+
+shaft_mean = shaft.nominal + (shaft.plus_tol - shaft.minus_tol) / 2
+shaft_sigma = (shaft.plus_tol + shaft.minus_tol) / sigma_level
+
+# Clearance distribution
+mean_clearance = hole_mean - shaft_mean
+sigma_clearance = sqrt(hole_sigma^2 + shaft_sigma^2)
+
+# Interference probability (using normal CDF)
+P(interference) = Φ(-mean_clearance / sigma_clearance) × 100%
+
+# 3σ limits
+clearance_3sigma_min = mean_clearance - 3 * sigma_clearance
+clearance_3sigma_max = mean_clearance + 3 * sigma_clearance
+```
+
+**Use when**: Need to understand interference probability for transition fits, or when worst-case analysis is too conservative.
 
 **Important**: A mate requires one internal feature (hole) and one external feature (shaft). TDT will report an error during validation if both features have the same `internal` value.
 
@@ -131,6 +171,14 @@ fit_analysis:
   worst_case_min_clearance: 0.03
   worst_case_max_clearance: 0.17
   fit_result: clearance
+  # Optional statistical analysis (added with --statistical flag)
+  statistical:
+    mean_clearance: 0.10
+    sigma_clearance: 0.023
+    clearance_3sigma_min: 0.031
+    clearance_3sigma_max: 0.169
+    probability_interference: 0.001
+    fit_result_3sigma: clearance
 
 notes: |
   Clearance fit provides easy assembly while maintaining
@@ -222,6 +270,17 @@ tdt mate recalc MATE@1
 # Output shows updated fit analysis
 # ✓ Recalculated fit for mate MATE@1
 #    Result: clearance (0.0300 to 0.1700)
+
+# Include statistical (RSS) analysis with interference probability
+tdt mate recalc MATE@1 --statistical
+
+# Output includes statistical analysis:
+# ✓ Recalculated fit for mate MATE@1
+#    Worst-case: clearance (0.0300 to 0.1700)
+#    Statistical: mean=0.100, σ=0.023, P(interference)=0.00%
+
+# Custom sigma level for statistical analysis
+tdt mate recalc MATE@1 --statistical --sigma 4.0
 ```
 
 ### Edit a mate

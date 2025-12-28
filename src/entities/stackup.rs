@@ -152,6 +152,65 @@ impl FeatureRef {
     }
 }
 
+/// GD&T contribution to tolerance stackup
+/// Currently supports 1D position tolerance contribution
+/// Future: Will support 3D Small Displacement Torsors for full GD&T analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GdtContribution {
+    /// Position tolerance value (diameter of cylindrical zone)
+    /// In 1D analysis, this adds to the contributor's tolerance band
+    pub position_tolerance: f64,
+
+    /// Actual feature size for bonus tolerance calculation (MMC/LMC)
+    /// If None, uses MMC (worst-case, no bonus)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actual_size: Option<f64>,
+
+    /// Calculated bonus tolerance (actual departure from MMC/LMC)
+    /// Auto-calculated when actual_size is provided
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bonus: Option<f64>,
+
+    /// Effective position tolerance (position_tolerance + bonus)
+    /// Auto-calculated
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effective_tolerance: Option<f64>,
+
+    // Future 3D fields (reserved for torsor-based analysis):
+    // pub torsor_constraints: Option<TorsorConstraints>,
+    // pub datum_reference_frame: Option<DatumReferenceFrame>,
+    // pub projected_tolerance_zone: Option<f64>,
+}
+
+impl GdtContribution {
+    /// Create a new GD&T contribution with just position tolerance (no bonus)
+    pub fn new(position_tolerance: f64) -> Self {
+        Self {
+            position_tolerance,
+            actual_size: None,
+            bonus: None,
+            effective_tolerance: Some(position_tolerance),
+        }
+    }
+
+    /// Create with bonus calculation from actual size and MMC
+    pub fn with_bonus(position_tolerance: f64, actual_size: f64, mmc: f64) -> Self {
+        let bonus = (actual_size - mmc).abs();
+        let effective = position_tolerance + bonus;
+        Self {
+            position_tolerance,
+            actual_size: Some(actual_size),
+            bonus: Some(bonus),
+            effective_tolerance: Some(effective),
+        }
+    }
+
+    /// Get effective tolerance (with bonus if applicable)
+    pub fn effective(&self) -> f64 {
+        self.effective_tolerance.unwrap_or(self.position_tolerance)
+    }
+}
+
 /// A contributor to the tolerance stackup
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Contributor {
@@ -182,12 +241,32 @@ pub struct Contributor {
     /// Source reference (drawing number, etc.)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+
+    /// GD&T position tolerance contribution (optional)
+    /// When present, adds to the tolerance band for statistical analysis
+    /// Future: Will support full 3D torsor-based analysis
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gdt_position: Option<GdtContribution>,
 }
 
 impl Contributor {
-    /// Get total tolerance band
+    /// Get total tolerance band (dimensional only)
     pub fn tolerance_band(&self) -> f64 {
         self.plus_tol + self.minus_tol
+    }
+
+    /// Get total tolerance band including GD&T position if present
+    /// For 1D analysis, position tolerance is treated as additional bilateral tolerance
+    /// (half added to each side, contributing to variance)
+    pub fn total_tolerance_band(&self) -> f64 {
+        let dim_band = self.plus_tol + self.minus_tol;
+        if let Some(ref gdt) = self.gdt_position {
+            // Position tolerance zone diameter adds to total variation
+            // In 1D, we treat it as ± (effective / 2)
+            dim_band + gdt.effective()
+        } else {
+            dim_band
+        }
     }
 
     /// Get signed contribution based on direction
@@ -261,11 +340,27 @@ pub struct RssResult {
     /// Margin to specification limits at 3σ
     pub margin: f64,
 
-    /// Process capability index (Cpk)
+    /// Process capability index (Cp) - ignores centering
+    /// Cp = (USL - LSL) / (6σ)
+    #[serde(default)]
+    pub cp: f64,
+
+    /// Process capability index (Cpk) - accounts for centering
+    /// Cpk = min(USL-μ, μ-LSL) / (3σ)
     pub cpk: f64,
 
     /// Estimated yield percentage
     pub yield_percent: f64,
+
+    /// Sensitivity analysis: variance contribution percentage for each contributor
+    /// Index matches contributors array; values sum to 100%
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sensitivity: Vec<f64>,
+
+    /// Shifted mean when mean_shift_k > 0 (Bender method)
+    /// Shifts toward nearest spec limit for worst-case analysis
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shifted_mean: Option<f64>,
 }
 
 /// Monte Carlo simulation results
@@ -294,6 +389,16 @@ pub struct MonteCarloResult {
 
     /// Upper percentile (97.5% for 95% CI)
     pub percentile_97_5: f64,
+
+    /// Process performance index (Pp) - uses sample std_dev
+    /// Pp = (USL - LSL) / (6s)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pp: Option<f64>,
+
+    /// Process performance index (Ppk) - uses sample std_dev, accounts for centering
+    /// Ppk = min(USL-μ, μ-LSL) / (3s)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ppk: Option<f64>,
 }
 
 /// Analysis result classification
@@ -390,6 +495,24 @@ pub struct Stackup {
     #[serde(default)]
     pub contributors: Vec<Contributor>,
 
+    /// Sigma level for statistical analysis (tolerance = sigma_level × σ)
+    /// Default 6.0 means tolerance band spans ±3σ (99.73% of distribution)
+    /// Lower values (e.g., 4.0) are more conservative (assume wider process variation)
+    #[serde(default = "default_sigma_level")]
+    pub sigma_level: f64,
+
+    /// Mean shift factor (Bender k-factor) for process drift modeling
+    /// Common values: 0.0 (none), 1.5 (automotive/Bender method)
+    /// Shifts the mean toward the nearest spec limit for worst-case analysis
+    #[serde(default)]
+    pub mean_shift_k: f64,
+
+    /// Include GD&T position tolerances in statistical analysis
+    /// When true, contributors with gdt_position will use total_tolerance_band()
+    /// Future: Will control 3D torsor-based analysis mode
+    #[serde(default)]
+    pub include_gdt: bool,
+
     /// Analysis results (auto-calculated)
     #[serde(default)]
     pub analysis_results: AnalysisResults,
@@ -423,6 +546,10 @@ pub struct Stackup {
 
 fn default_revision() -> u32 {
     1
+}
+
+fn default_sigma_level() -> f64 {
+    6.0
 }
 
 impl Entity for Stackup {
@@ -470,6 +597,9 @@ impl Default for Stackup {
                 critical: false,
             },
             contributors: Vec::new(),
+            sigma_level: default_sigma_level(),
+            mean_shift_k: 0.0,
+            include_gdt: false,
             analysis_results: AnalysisResults::default(),
             disposition: Disposition::default(),
             tags: Vec::new(),
@@ -568,6 +698,7 @@ impl Stackup {
     pub fn calculate_rss(&self) -> RssResult {
         let mut mean = 0.0;
         let mut variance = 0.0;
+        let mut individual_variances: Vec<f64> = Vec::with_capacity(self.contributors.len());
 
         for contrib in &self.contributors {
             // For unilateral tolerances, shift mean to center of tolerance band
@@ -580,32 +711,80 @@ impl Stackup {
                 Direction::Negative => -process_mean,
             };
 
-            // Assume 3-sigma process: tolerance = 6σ, so σ = tolerance/6
-            let contrib_sigma = contrib.tolerance_band() / 6.0;
-            variance += contrib_sigma * contrib_sigma;
+            // σ = tolerance_band / sigma_level (default 6.0 for ±3σ process)
+            // When include_gdt is true, include GD&T position tolerance in the band
+            let tol_band = if self.include_gdt {
+                contrib.total_tolerance_band()
+            } else {
+                contrib.tolerance_band()
+            };
+            let contrib_sigma = tol_band / self.sigma_level;
+            let contrib_variance = contrib_sigma * contrib_sigma;
+            variance += contrib_variance;
+            individual_variances.push(contrib_variance);
         }
 
         let sigma = variance.sqrt();
         let sigma_3 = 3.0 * sigma;
 
-        // Calculate Cpk
-        let upper_margin = self.target.upper_limit - mean;
-        let lower_margin = mean - self.target.lower_limit;
+        // Calculate sensitivity (variance contribution percentage)
+        // sensitivity_i = (σ_i² / Σσ_j²) × 100%
+        let sensitivity = if variance > 0.0 {
+            individual_variances
+                .iter()
+                .map(|v| (v / variance) * 100.0)
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        // Apply mean shift (Bender k-factor) if configured
+        // Shift toward nearest spec limit for worst-case analysis
+        let (cpk_mean, shifted_mean) = if self.mean_shift_k > 0.0 && sigma > 0.0 {
+            let upper_margin = self.target.upper_limit - mean;
+            let lower_margin = mean - self.target.lower_limit;
+
+            // Shift toward the nearest limit (worst-case direction)
+            let shifted = if upper_margin < lower_margin {
+                // Closer to upper limit, shift upward
+                mean + self.mean_shift_k * sigma
+            } else {
+                // Closer to lower limit, shift downward
+                mean - self.mean_shift_k * sigma
+            };
+            (shifted, Some(shifted))
+        } else {
+            (mean, None)
+        };
+
+        // Calculate Cp (ignores centering) = (USL - LSL) / (6σ)
+        let spec_range = self.target.upper_limit - self.target.lower_limit;
+        let cp = if sigma > 0.0 {
+            spec_range / (6.0 * sigma)
+        } else {
+            f64::INFINITY
+        };
+
+        // Calculate Cpk using cpk_mean (shifted if k > 0, original otherwise)
+        let upper_margin = self.target.upper_limit - cpk_mean;
+        let lower_margin = cpk_mean - self.target.lower_limit;
         let cpk = if sigma > 0.0 {
             (upper_margin.min(lower_margin)) / (3.0 * sigma)
         } else {
             f64::INFINITY
         };
 
-        // Calculate yield using normal distribution CDF
+        // Calculate yield using normal distribution CDF (based on original mean)
         // Φ(z) = probability that a standard normal random variable is ≤ z
+        let yield_upper_margin = self.target.upper_limit - mean;
+        let yield_lower_margin = mean - self.target.lower_limit;
         let z_upper = if sigma > 0.0 {
-            upper_margin / sigma
+            yield_upper_margin / sigma
         } else {
             f64::INFINITY
         };
         let z_lower = if sigma > 0.0 {
-            -lower_margin / sigma
+            -yield_lower_margin / sigma
         } else {
             f64::NEG_INFINITY
         };
@@ -621,8 +800,11 @@ impl Stackup {
             mean,
             sigma_3,
             margin,
+            cp,
             cpk,
             yield_percent,
+            sensitivity,
+            shifted_mean,
         }
     }
 
@@ -644,13 +826,20 @@ impl Stackup {
             let mut result = 0.0;
 
             for contrib in &self.contributors {
+                // Get tolerance band (with or without GD&T based on include_gdt flag)
+                let tol_band = if self.include_gdt {
+                    contrib.total_tolerance_band()
+                } else {
+                    contrib.tolerance_band()
+                };
+
                 let value = match contrib.distribution {
                     Distribution::Normal => {
                         // Box-Muller transform for normal distribution
                         // For unilateral tolerances, center the mean within the tolerance band
                         let mean_offset = (contrib.plus_tol - contrib.minus_tol) / 2.0;
                         let mean = contrib.nominal + mean_offset;
-                        let sigma = contrib.tolerance_band() / 6.0;
+                        let sigma = tol_band / self.sigma_level;
                         let u1: f64 = rng.random();
                         let u2: f64 = rng.random();
                         let z = (-2.0_f64 * u1.ln()).sqrt()
@@ -658,15 +847,18 @@ impl Stackup {
                         mean + sigma * z
                     }
                     Distribution::Uniform => {
-                        let min = contrib.nominal - contrib.minus_tol;
-                        let max = contrib.nominal + contrib.plus_tol;
-                        rng.random_range(min..=max)
+                        // For uniform, use the full tolerance band as the range
+                        let half_band = tol_band / 2.0;
+                        let center = contrib.nominal + (contrib.plus_tol - contrib.minus_tol) / 2.0;
+                        rng.random_range((center - half_band)..=(center + half_band))
                     }
                     Distribution::Triangular => {
-                        let min = contrib.nominal - contrib.minus_tol;
-                        let max = contrib.nominal + contrib.plus_tol;
-                        // For unilateral tolerances, center the mode within the tolerance band
-                        let mode = contrib.nominal + (contrib.plus_tol - contrib.minus_tol) / 2.0;
+                        // For triangular, use the full tolerance band
+                        let half_band = tol_band / 2.0;
+                        let center = contrib.nominal + (contrib.plus_tol - contrib.minus_tol) / 2.0;
+                        let min = center - half_band;
+                        let max = center + half_band;
+                        let mode = center;
                         // Triangular distribution using inverse transform
                         let u: f64 = rng.random();
                         let fc = (mode - min) / (max - min);
@@ -714,6 +906,24 @@ impl Stackup {
         let percentile_2_5 = results.get(p2_5_idx).copied().unwrap_or(min);
         let percentile_97_5 = results.get(p97_5_idx).copied().unwrap_or(max);
 
+        // Calculate Pp and Ppk using sample std_dev (process performance indices)
+        // These differ from Cp/Cpk in that they use actual sample statistics
+        // rather than assumed process capability
+        let (pp, ppk) = if std_dev > 0.0 {
+            // Pp = (USL - LSL) / (6s) where s = sample std_dev
+            let spec_range = self.target.upper_limit - self.target.lower_limit;
+            let pp_val = spec_range / (6.0 * std_dev);
+
+            // Ppk = min(USL-μ, μ-LSL) / (3s)
+            let upper_margin = self.target.upper_limit - mean;
+            let lower_margin = mean - self.target.lower_limit;
+            let ppk_val = (upper_margin.min(lower_margin)) / (3.0 * std_dev);
+
+            (Some(pp_val), Some(ppk_val))
+        } else {
+            (None, None)
+        };
+
         (
             MonteCarloResult {
                 iterations,
@@ -724,6 +934,8 @@ impl Stackup {
                 yield_percent,
                 percentile_2_5,
                 percentile_97_5,
+                pp,
+                ppk,
             },
             raw_samples,
         )
@@ -797,6 +1009,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         assert_eq!(stackup.contributor_count(), 1);
@@ -816,6 +1029,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         // Part B: 9 ±0.1 (negative)
@@ -828,6 +1042,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         // Worst case: min = (10-0.1) - (9+0.1) = 0.8
@@ -853,6 +1068,7 @@ mod tests {
             minus_tol: 0.2,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         stackup.add_contributor(Contributor {
@@ -864,6 +1080,7 @@ mod tests {
             minus_tol: 0.2,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         // Worst case: min = (10-0.2) - (9+0.2) = 0.6
@@ -886,6 +1103,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         stackup.add_contributor(Contributor {
@@ -897,6 +1115,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         let rss = stackup.calculate_rss();
@@ -920,6 +1139,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         stackup.add_contributor(Contributor {
@@ -931,6 +1151,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         let mc = stackup.calculate_monte_carlo(1000);
@@ -974,6 +1195,7 @@ mod tests {
             minus_tol: 0.05,
             distribution: Distribution::Normal,
             source: Some("DWG-001 Rev A".to_string()),
+            gdt_position: None,
         });
 
         stackup.analyze();
@@ -999,6 +1221,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Uniform,
             source: None,
+            gdt_position: None,
         };
 
         let yaml = serde_yml::to_string(&contrib).unwrap();
@@ -1029,6 +1252,7 @@ mod tests {
             minus_tol: 0.1, // Wrong value
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         };
 
         // Check that it's out of sync
@@ -1075,6 +1299,7 @@ mod tests {
             minus_tol: 0.0,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         // Pin/shaft feature (negative contributor - subtracts from gap)
@@ -1087,6 +1312,7 @@ mod tests {
             minus_tol: 0.009, // f7 shaft tolerance
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         // Run analysis
@@ -1144,6 +1370,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         stackup.add_contributor(Contributor {
@@ -1155,6 +1382,7 @@ mod tests {
             minus_tol: 0.1,
             distribution: Distribution::Normal,
             source: None,
+            gdt_position: None,
         });
 
         // Serialize to YAML
@@ -1193,6 +1421,602 @@ mod tests {
             (rss.mean - 2.0).abs() < 0.001,
             "RSS mean after YAML roundtrip should be ~2.0, got {}",
             rss.mean
+        );
+    }
+
+    // ============================================================
+    // Phase 1: Sensitivity Analysis Tests
+    // ============================================================
+
+    #[test]
+    fn test_sensitivity_analysis_equal_tolerances() {
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+
+        // Two equal contributors with identical tolerance bands
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // 0.2 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        stackup.add_contributor(Contributor {
+            name: "Part B".to_string(),
+            feature: None,
+            direction: Direction::Negative,
+            nominal: 9.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // 0.2 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+
+        // Equal tolerances should give ~50% each
+        assert_eq!(
+            rss.sensitivity.len(),
+            2,
+            "Should have sensitivity for 2 contributors"
+        );
+        assert!(
+            (rss.sensitivity[0] - 50.0).abs() < 0.1,
+            "Part A should be ~50%, got {}",
+            rss.sensitivity[0]
+        );
+        assert!(
+            (rss.sensitivity[1] - 50.0).abs() < 0.1,
+            "Part B should be ~50%, got {}",
+            rss.sensitivity[1]
+        );
+        assert!(
+            (rss.sensitivity.iter().sum::<f64>() - 100.0).abs() < 0.01,
+            "Sensitivity should sum to 100%"
+        );
+    }
+
+    #[test]
+    fn test_sensitivity_unequal_tolerances() {
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+
+        // Part A: 0.2 tolerance band
+        // Part B: 0.1 tolerance band
+        // Variance ratio: (0.2)² / (0.1)² = 4:1
+        // Expected: 80% and 20%
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // 0.2 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        stackup.add_contributor(Contributor {
+            name: "Part B".to_string(),
+            feature: None,
+            direction: Direction::Negative,
+            nominal: 9.0,
+            plus_tol: 0.05,
+            minus_tol: 0.05, // 0.1 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+
+        // Variance contribution: (0.2/6)² = 0.00111, (0.1/6)² = 0.000278
+        // Total = 0.001389, Part A = 80%, Part B = 20%
+        assert!(
+            (rss.sensitivity[0] - 80.0).abs() < 0.1,
+            "Part A should be ~80%, got {}",
+            rss.sensitivity[0]
+        );
+        assert!(
+            (rss.sensitivity[1] - 20.0).abs() < 0.1,
+            "Part B should be ~20%, got {}",
+            rss.sensitivity[1]
+        );
+    }
+
+    #[test]
+    fn test_sensitivity_empty_stackup() {
+        let stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        let rss = stackup.calculate_rss();
+
+        // Empty stackup should have empty sensitivity
+        assert!(
+            rss.sensitivity.is_empty(),
+            "Empty stackup should have empty sensitivity"
+        );
+    }
+
+    #[test]
+    fn test_sensitivity_single_contributor() {
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+
+        stackup.add_contributor(Contributor {
+            name: "Only Part".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+
+        // Single contributor should be 100%
+        assert_eq!(rss.sensitivity.len(), 1);
+        assert!(
+            (rss.sensitivity[0] - 100.0).abs() < 0.01,
+            "Single contributor should be 100%, got {}",
+            rss.sensitivity[0]
+        );
+    }
+
+    #[test]
+    fn test_sensitivity_three_contributors() {
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+
+        // Three contributors with tolerance bands: 0.3, 0.2, 0.1
+        // Variances: 0.0025, 0.00111, 0.000278 (ratio 9:4:1)
+        // Expected: ~64.3%, ~28.6%, ~7.1%
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 10.0,
+            plus_tol: 0.15,
+            minus_tol: 0.15, // 0.3 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        stackup.add_contributor(Contributor {
+            name: "Part B".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 5.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // 0.2 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        stackup.add_contributor(Contributor {
+            name: "Part C".to_string(),
+            feature: None,
+            direction: Direction::Negative,
+            nominal: 14.0,
+            plus_tol: 0.05,
+            minus_tol: 0.05, // 0.1 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+
+        // Check that contributions sum to 100%
+        let total: f64 = rss.sensitivity.iter().sum();
+        assert!(
+            (total - 100.0).abs() < 0.01,
+            "Sensitivity should sum to 100%, got {}",
+            total
+        );
+
+        // Part A should have the highest contribution
+        assert!(
+            rss.sensitivity[0] > rss.sensitivity[1],
+            "Part A should have higher sensitivity than Part B"
+        );
+        assert!(
+            rss.sensitivity[1] > rss.sensitivity[2],
+            "Part B should have higher sensitivity than Part C"
+        );
+    }
+
+    // ===== Phase 2: Configurable Sigma Level Tests =====
+
+    #[test]
+    fn test_configurable_sigma_default_6() {
+        // New stackup should have sigma_level = 6.0 (default)
+        let stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        assert!(
+            (stackup.sigma_level - 6.0).abs() < 0.001,
+            "Default sigma_level should be 6.0, got {}",
+            stackup.sigma_level
+        );
+    }
+
+    #[test]
+    fn test_sigma_affects_rss_variance() {
+        // sigma=4 gives larger variance than sigma=6
+        // Since σ = tolerance_band / sigma_level:
+        //   At sigma_level=4: σ = tol/4 (larger variance)
+        //   At sigma_level=6: σ = tol/6 (smaller variance)
+        // Variance ratio should be (6/4)² = 2.25
+        let mut stackup4 = Stackup::new("Test 4σ", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup4.sigma_level = 4.0;
+        stackup4.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // 0.2 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let mut stackup6 = Stackup::new("Test 6σ", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup6.sigma_level = 6.0;
+        stackup6.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1, // 0.2 band
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss4 = stackup4.calculate_rss();
+        let rss6 = stackup6.calculate_rss();
+
+        // sigma_3 = 3 * std_dev, so the ratio should be 6/4 = 1.5
+        // (since σ₄ = tol/4 and σ₆ = tol/6, ratio = 6/4)
+        let ratio = rss4.sigma_3 / rss6.sigma_3;
+        assert!(
+            (ratio - 1.5).abs() < 0.01,
+            "RSS 3σ ratio should be 1.5 (6/4), got {}",
+            ratio
+        );
+    }
+
+    #[test]
+    fn test_sigma_backward_compatibility() {
+        // Old YAML without sigma_level should parse with default 6.0
+        let yaml = r#"
+id: TOL-01HC2JB7SMQX7RS1Y0GFKBHPTD
+title: "Test Stackup"
+target:
+  name: "Gap"
+  nominal: 1.0
+  upper_limit: 2.0
+  lower_limit: 0.0
+contributors: []
+created: 2024-01-01T00:00:00Z
+author: "Test"
+"#;
+
+        let stackup: Stackup = serde_yml::from_str(yaml).expect("Should parse old YAML");
+        assert!(
+            (stackup.sigma_level - 6.0).abs() < 0.001,
+            "Missing sigma_level should default to 6.0, got {}",
+            stackup.sigma_level
+        );
+    }
+
+    #[test]
+    fn test_sigma_serialization_roundtrip() {
+        // Verify sigma_level is properly serialized and deserialized
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.sigma_level = 4.0;
+
+        let yaml = serde_yml::to_string(&stackup).unwrap();
+        let parsed: Stackup = serde_yml::from_str(&yaml).unwrap();
+
+        assert!(
+            (parsed.sigma_level - 4.0).abs() < 0.001,
+            "sigma_level should roundtrip, got {}",
+            parsed.sigma_level
+        );
+    }
+
+    // ===== Phase 3: Mean Shift Factor Tests =====
+
+    #[test]
+    fn test_mean_shift_default_zero() {
+        // New stackup should have mean_shift_k = 0.0 (no shift)
+        let stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        assert!(
+            stackup.mean_shift_k.abs() < 0.001,
+            "Default mean_shift_k should be 0.0, got {}",
+            stackup.mean_shift_k
+        );
+    }
+
+    #[test]
+    fn test_mean_shift_affects_cpk() {
+        // k=1.5 shift should reduce Cpk (more conservative)
+        // Setup: target centered at 1.0, USL=2.0, LSL=0.0
+        // Process mean at 1.0 with ±3σ = 0.5
+        // Without shift: Cpk = (1.0 - 0.0) / (3 * 0.167) ≈ 2.0
+        // With k=1.5 shift toward nearest limit: shifted_mean changes, Cpk decreases
+
+        let mut stackup_no_shift = Stackup::new("No Shift", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup_no_shift.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.5,
+            minus_tol: 0.5, // 1.0 band, σ = 1.0/6 ≈ 0.167
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let mut stackup_with_shift = Stackup::new("With Shift", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup_with_shift.mean_shift_k = 1.5;
+        stackup_with_shift.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.5,
+            minus_tol: 0.5,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss_no_shift = stackup_no_shift.calculate_rss();
+        let rss_with_shift = stackup_with_shift.calculate_rss();
+
+        // Shifted version should have lower Cpk (more conservative)
+        assert!(
+            rss_with_shift.cpk < rss_no_shift.cpk,
+            "Mean shift should reduce Cpk: no_shift={:.2}, with_shift={:.2}",
+            rss_no_shift.cpk,
+            rss_with_shift.cpk
+        );
+
+        // Shifted mean should be present
+        assert!(
+            rss_with_shift.shifted_mean.is_some(),
+            "Shifted mean should be populated when k > 0"
+        );
+    }
+
+    #[test]
+    fn test_mean_shift_toward_nearest_limit() {
+        // Shift should go toward the nearest spec limit (worst-case direction)
+        // Setup: target at 1.0, but process mean is at 0.7 (closer to LSL=0.0)
+        // Shift should go toward LSL (subtract k×σ)
+
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.mean_shift_k = 1.0;
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 0.7, // Closer to LSL
+            plus_tol: 0.3,
+            minus_tol: 0.3, // σ = 0.6/6 = 0.1
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+        let shifted = rss.shifted_mean.expect("Should have shifted_mean");
+
+        // Mean is 0.7, closer to LSL(0.0) than USL(2.0)
+        // Should shift toward LSL: shifted = 0.7 - 1.0 × 0.1 = 0.6
+        assert!(
+            shifted < rss.mean,
+            "Shift should go toward LSL (lower): mean={}, shifted={}",
+            rss.mean,
+            shifted
+        );
+    }
+
+    #[test]
+    fn test_mean_shift_backward_compatibility() {
+        // Old YAML without mean_shift_k should parse with default 0.0
+        let yaml = r#"
+id: TOL-01HC2JB7SMQX7RS1Y0GFKBHPTD
+title: "Test Stackup"
+target:
+  name: "Gap"
+  nominal: 1.0
+  upper_limit: 2.0
+  lower_limit: 0.0
+contributors: []
+created: 2024-01-01T00:00:00Z
+author: "Test"
+"#;
+
+        let stackup: Stackup = serde_yml::from_str(yaml).expect("Should parse old YAML");
+        assert!(
+            stackup.mean_shift_k.abs() < 0.001,
+            "Missing mean_shift_k should default to 0.0, got {}",
+            stackup.mean_shift_k
+        );
+    }
+
+    // ===== Phase 5B: Process Capability Variants (Cp/Pp/Ppk) Tests =====
+
+    #[test]
+    fn test_cp_calculation() {
+        // Cp = (USL - LSL) / (6σ)
+        // Setup: USL=2.0, LSL=0.0, tolerance band=0.6 => σ = 0.6/6 = 0.1
+        // Expected Cp = (2.0 - 0.0) / (6 × 0.1) = 2.0 / 0.6 = 3.33
+
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.3,
+            minus_tol: 0.3, // 0.6 band, σ = 0.1
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+
+        // Cp = (USL - LSL) / (6σ) = 2.0 / 0.6 = 3.33
+        assert!(
+            (rss.cp - 3.33).abs() < 0.01,
+            "Cp should be ~3.33, got {}",
+            rss.cp
+        );
+    }
+
+    #[test]
+    fn test_cp_equals_cpk_centered() {
+        // For a centered process (mean at center of spec), Cp ≈ Cpk
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+
+        // Mean = 1.0, which is exactly center of [0.0, 2.0]
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.3,
+            minus_tol: 0.3, // Symmetric tolerance
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+
+        // For centered process, Cp should equal Cpk
+        assert!(
+            (rss.cp - rss.cpk).abs() < 0.01,
+            "For centered process, Cp ({}) should equal Cpk ({})",
+            rss.cp,
+            rss.cpk
+        );
+    }
+
+    #[test]
+    fn test_cp_greater_than_cpk_off_center() {
+        // For off-center process, Cp > Cpk
+        // Setup: target center at 1.0, but process mean at 0.7 (off-center toward LSL)
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 0.7, // Off-center toward LSL
+            plus_tol: 0.3,
+            minus_tol: 0.3,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let rss = stackup.calculate_rss();
+
+        // Cp ignores centering, Cpk accounts for it
+        // Off-center process: Cp > Cpk
+        assert!(
+            rss.cp > rss.cpk,
+            "For off-center process, Cp ({}) should be > Cpk ({})",
+            rss.cp,
+            rss.cpk
+        );
+    }
+
+    #[test]
+    fn test_monte_carlo_pp_ppk() {
+        // Pp/Ppk use Monte Carlo std_dev instead of RSS calculated σ
+        // Pp = (USL - LSL) / (6s), Ppk = min(USL-μ, μ-LSL) / (3s)
+        // where s = sample std_dev from simulation
+
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.3,
+            minus_tol: 0.3,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let mc = stackup.calculate_monte_carlo(10000);
+
+        // Pp and Ppk should be present
+        assert!(
+            mc.pp.is_some(),
+            "Monte Carlo should calculate Pp"
+        );
+        assert!(
+            mc.ppk.is_some(),
+            "Monte Carlo should calculate Ppk"
+        );
+
+        let pp = mc.pp.unwrap();
+        let ppk = mc.ppk.unwrap();
+
+        // Both should be positive for a capable process
+        assert!(pp > 0.0, "Pp should be positive, got {}", pp);
+        assert!(ppk > 0.0, "Ppk should be positive, got {}", ppk);
+
+        // Pp = (USL - LSL) / (6 × std_dev)
+        let expected_pp = (2.0 - 0.0) / (6.0 * mc.std_dev);
+        assert!(
+            (pp - expected_pp).abs() < 0.01,
+            "Pp should be (USL-LSL)/(6σ) = {:.3}, got {:.3}",
+            expected_pp,
+            pp
+        );
+    }
+
+    #[test]
+    fn test_pp_ppk_centered_equals() {
+        // For centered process, Pp ≈ Ppk (like Cp/Cpk)
+        let mut stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "Part A".to_string(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0, // Centered
+            plus_tol: 0.3,
+            minus_tol: 0.3,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let mc = stackup.calculate_monte_carlo(50000);
+
+        let pp = mc.pp.expect("Pp should be present");
+        let ppk = mc.ppk.expect("Ppk should be present");
+
+        // For centered process, Pp ≈ Ppk (within Monte Carlo variance)
+        assert!(
+            (pp - ppk).abs() < 0.3,
+            "For centered process, Pp ({:.2}) should be close to Ppk ({:.2})",
+            pp,
+            ppk
         );
     }
 }

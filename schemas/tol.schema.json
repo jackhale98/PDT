@@ -96,10 +96,54 @@
           "source": {
             "type": "string",
             "description": "Source reference"
+          },
+          "gdt_position": {
+            "type": "object",
+            "description": "GD&T position tolerance contribution. Future: Will support 3D torsor-based analysis.",
+            "properties": {
+              "position_tolerance": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Position tolerance value (diameter of cylindrical zone)"
+              },
+              "actual_size": {
+                "type": "number",
+                "description": "Actual feature size for bonus tolerance calculation (MMC/LMC)"
+              },
+              "bonus": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Calculated bonus tolerance (departure from MMC/LMC)"
+              },
+              "effective_tolerance": {
+                "type": "number",
+                "minimum": 0,
+                "description": "Effective position tolerance (position_tolerance + bonus)"
+              }
+            },
+            "required": ["position_tolerance"]
           }
         }
       },
       "description": "Contributors to the stackup"
+    },
+    "sigma_level": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 12,
+      "default": 6.0,
+      "description": "Sigma level for statistical analysis (tolerance = sigma_level × σ). Default 6.0 means tolerance band spans ±3σ."
+    },
+    "mean_shift_k": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "description": "Mean shift factor (Bender k-factor) for process drift modeling. Common values: 0.0 (none), 1.5 (automotive/Bender method)."
+    },
+    "include_gdt": {
+      "type": "boolean",
+      "default": false,
+      "description": "Include GD&T position tolerances in statistical analysis. Future: Will control 3D torsor-based analysis mode."
     },
     "analysis_results": {
       "type": "object",
@@ -116,11 +160,21 @@
         "rss": {
           "type": "object",
           "properties": {
-            "mean": {"type": "number"},
-            "sigma_3": {"type": "number"},
-            "margin": {"type": "number"},
-            "cpk": {"type": "number"},
-            "yield_percent": {"type": "number"}
+            "mean": {"type": "number", "description": "Mean (expected) value"},
+            "sigma_3": {"type": "number", "description": "3-sigma spread (±3σ)"},
+            "margin": {"type": "number", "description": "Margin to specification limits at 3σ"},
+            "cp": {"type": "number", "description": "Process capability index (Cp) - ignores centering. Cp = (USL - LSL) / (6σ)"},
+            "cpk": {"type": "number", "description": "Process capability index (Cpk) - accounts for centering. Cpk = min(USL-μ, μ-LSL) / (3σ)"},
+            "yield_percent": {"type": "number", "description": "Estimated yield percentage"},
+            "sensitivity": {
+              "type": "array",
+              "items": {"type": "number"},
+              "description": "Variance contribution percentage for each contributor (sum = 100%)"
+            },
+            "shifted_mean": {
+              "type": "number",
+              "description": "Shifted mean when mean_shift_k > 0 (Bender method)"
+            }
           }
         },
         "monte_carlo": {
@@ -133,7 +187,9 @@
             "max": {"type": "number"},
             "yield_percent": {"type": "number"},
             "percentile_2_5": {"type": "number"},
-            "percentile_97_5": {"type": "number"}
+            "percentile_97_5": {"type": "number"},
+            "pp": {"type": "number", "description": "Process performance index (Pp) - uses sample std_dev. Pp = (USL - LSL) / (6s)"},
+            "ppk": {"type": "number", "description": "Process performance index (Ppk) - uses sample std_dev, accounts for centering. Ppk = min(USL-μ, μ-LSL) / (3s)"}
           }
         }
       },

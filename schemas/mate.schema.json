@@ -107,6 +107,39 @@
           "type": "string",
           "enum": ["clearance", "interference", "transition"],
           "description": "Fit classification result"
+        },
+        "statistical": {
+          "type": "object",
+          "description": "Statistical (RSS) fit analysis with interference probability. Future: Will support 3D torsor-based analysis.",
+          "properties": {
+            "mean_clearance": {
+              "type": "number",
+              "description": "Mean clearance (hole_mean - shaft_mean)"
+            },
+            "sigma_clearance": {
+              "type": "number",
+              "description": "Standard deviation of clearance (RSS of hole and shaft σ)"
+            },
+            "clearance_3sigma_min": {
+              "type": "number",
+              "description": "Minimum clearance at 3σ (mean - 3σ)"
+            },
+            "clearance_3sigma_max": {
+              "type": "number",
+              "description": "Maximum clearance at 3σ (mean + 3σ)"
+            },
+            "probability_interference": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Probability of interference (clearance < 0) as percentage"
+            },
+            "fit_result_3sigma": {
+              "type": "string",
+              "enum": ["clearance", "interference", "transition"],
+              "description": "Fit classification at 3σ limits"
+            }
+          }
         }
       },
       "description": "Auto-calculated fit analysis"

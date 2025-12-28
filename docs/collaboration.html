@@ -1088,17 +1088,45 @@ tdt history REQ@1 --workflow
           <pre><code># Initialize team roster
 tdt team init
 
+# Add a team member with signing format
+tdt team add --name "Jane Smith" --email jane@co.com \
+  --username jsmith --roles engineering --signing-format ssh
+
 # List team members
 tdt team list
 
 # See your own role
-tdt team whoami
+tdt team whoami</code></pre>
+        </div>
+      </div>
 
-# Check GPG signing status
+      <div class="command-block">
+        <div class="command-header">Signing Configuration</div>
+        <div class="command-body">
+          <pre><code># Check current signing status
 tdt team setup-signing --status
 
-# Configure GPG signing (auto-sign all commits/tags)
-tdt team setup-signing --key-id YOUR_KEY_ID</code></pre>
+# Configure signing (choose one method)
+tdt team setup-signing --method gpg --key-id YOUR_KEY_ID   # GPG (traditional)
+tdt team setup-signing --method ssh                        # SSH (uses existing keys)
+tdt team setup-signing --method gitsign                    # Sigstore (keyless OIDC)</code></pre>
+        </div>
+      </div>
+
+      <div class="command-block">
+        <div class="command-header">Team Keyring (Cross-Platform Key Sharing)</div>
+        <div class="command-body">
+          <pre><code># Export your public key to the team keyring (.tdt/keys/)
+tdt team add-key                        # Auto-detect format
+tdt team add-key --method gpg           # GPG public key
+tdt team add-key --method ssh           # SSH public key
+
+# Import GPG keys from team keyring
+tdt team import-keys                    # Import all GPG keys
+tdt team import-keys --user jsmith      # Import specific user
+
+# Generate SSH allowed_signers file
+tdt team sync-keys</code></pre>
         </div>
       </div>
     </section>
@@ -1200,13 +1228,20 @@ git show approve/REQ-01ABC/jsmith/2024-01-15
 tdt log --approver jsmith</code></pre>
 
       <div class="callout success">
-        <div class="callout-title">GPG Signing for Compliance</div>
+        <div class="callout-title">Cryptographic Signing for Compliance</div>
         <p>
-          For 21 CFR Part 11 compliance, configure git to sign all commits and tags with GPG. Use
-          <code class="inline-code">tdt team setup-signing --key-id YOUR_KEY</code> to enable auto-signing,
-          or see <a href="https://docs.github.com/en/authentication/managing-commit-signature-verification" style="color: var(--accent);">GitHub's GPG guide</a>
-          for manual setup. The <code class="inline-code">--sign</code> flag on <code class="inline-code">approve</code>
-          and <code class="inline-code">release</code> commands ensures both commits and tags are GPG-signed.
+          For 21 CFR Part 11 compliance, configure git to sign all commits and tags. TDT supports three signing methods:
+        </p>
+        <ul style="margin: 12px 0; padding-left: 24px;">
+          <li><strong>GPG</strong> - Traditional, broad tooling support: <code class="inline-code">tdt team setup-signing --method gpg</code></li>
+          <li><strong>SSH</strong> - Uses existing SSH keys (Git 2.34+): <code class="inline-code">tdt team setup-signing --method ssh</code></li>
+          <li><strong>gitsign</strong> - Keyless OIDC signing via Sigstore: <code class="inline-code">tdt team setup-signing --method gitsign</code></li>
+        </ul>
+        <p>
+          Use <code class="inline-code">tdt team add-key</code> to export your public key to the team keyring in <code class="inline-code">.tdt/keys/</code>,
+          enabling cross-platform signature verification. The <code class="inline-code">--sign</code> flag on
+          <code class="inline-code">approve</code> and <code class="inline-code">release</code> commands ensures
+          both commits and tags are cryptographically signed.
         </p>
       </div>
     </section>

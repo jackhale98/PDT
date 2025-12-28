@@ -113,12 +113,14 @@ members:
     email: "jane@example.com"
     username: "jsmith"
     roles: [engineering, quality]
+    signing_format: gpg        # Optional: gpg, ssh, or gitsign
     active: true
 
   - name: "Bob Wilson"
     email: "bob@example.com"
     username: "bwilson"
     roles: [quality, management]
+    signing_format: ssh
     active: true
 
 approval_matrix:
@@ -146,6 +148,9 @@ tdt team init
 # Add a team member
 tdt team add --name "Jane Smith" --email jane@co.com --username jsmith --roles engineering,quality
 
+# Add a team member with signing format
+tdt team add --name "Bob Wilson" --email bob@co.com --username bwilson --roles quality --signing-format ssh
+
 # Remove a team member
 tdt team remove jsmith
 
@@ -155,6 +160,46 @@ tdt team list
 # Check your own role
 tdt team whoami
 ```
+
+### Team Keyring
+
+For signature verification across the team, TDT stores public keys in `.tdt/keys/`:
+
+```
+.tdt/
+├── keys/
+│   ├── gpg/
+│   │   ├── jsmith.asc       # GPG armored public key
+│   │   └── bwilson.asc
+│   ├── ssh/
+│   │   ├── jsmith.pub       # SSH public key
+│   │   └── bwilson.pub
+│   └── allowed_signers      # Auto-generated for SSH verification
+```
+
+**Key Management Commands:**
+
+```bash
+# Export your public key to the team keyring
+tdt team add-key                          # Auto-detect format from git config
+tdt team add-key --method gpg             # Export GPG public key
+tdt team add-key --method ssh             # Export SSH public key
+
+# Import GPG keys from team keyring into your local keyring
+tdt team import-keys                      # Import all GPG keys
+tdt team import-keys --user jsmith        # Import specific user's key
+
+# Regenerate SSH allowed_signers file
+tdt team sync-keys
+```
+
+**Workflow for new team members:**
+
+1. Configure your signing: `tdt team setup-signing --method ssh`
+2. Add yourself to roster: `tdt team add --name "Your Name" --email you@co.com --username you --roles engineering --signing-format ssh`
+3. Export your public key: `tdt team add-key`
+4. Commit and push the key file
+5. Other team members run `tdt team sync-keys` (SSH) or `tdt team import-keys` (GPG)
 
 ## Submit Command
 
@@ -366,52 +411,95 @@ tdt approve REQ@1 --sign
 tdt approve RISK@1 --sign -m "Quality review complete"
 ```
 
-### Setting Up GPG Signing
+### Setting Up Commit Signing
 
-Before using GPG-signed approvals, each team member needs to configure GPG signing.
+Before using signed approvals, each team member needs to configure commit signing. TDT supports three signing methods:
+
+| Method | Best For | Key Management | Requirements |
+|--------|----------|----------------|--------------|
+| **GPG** | Traditional environments, existing PKI | Manual key management | GPG installed |
+| **SSH** | Teams already using SSH keys | Use existing SSH keys | Git 2.34+ |
+| **gitsign** | Keyless, OIDC-based signing | No key management | gitsign binary, OIDC provider |
 
 #### Option 1: Use TDT Setup Command (Recommended)
 
-TDT provides a helper command to configure GPG signing:
+TDT provides a helper command to configure signing:
 
 ```bash
-# Check current GPG signing status
+# Check current signing status
 tdt team setup-signing --status
 
-# Configure GPG signing globally (if you already have a signing key)
-tdt team setup-signing
+# Configure GPG signing (default)
+tdt team setup-signing --method gpg
+tdt team setup-signing --method gpg --key-id YOUR_KEY_ID
 
-# Configure with a specific key ID
-tdt team setup-signing --key-id YOUR_KEY_ID
+# Configure SSH signing
+tdt team setup-signing --method ssh
+tdt team setup-signing --method ssh --key-id ~/.ssh/id_ed25519.pub
+
+# Configure gitsign (keyless OIDC-based)
+tdt team setup-signing --method gitsign
 
 # Configure for this repository only
 tdt team setup-signing --local
+
+# Preview without making changes
+tdt team setup-signing --method ssh
+# (Review the commands, then confirm or add --yes to auto-confirm)
 ```
 
-This command will:
-- Set `user.signingkey` to your GPG key ID
-- Enable `commit.gpgsign` (auto-sign all commits)
-- Enable `tag.gpgSign` (auto-sign all tags)
+#### GPG Signing
 
-#### Option 2: Manual Configuration
+GPG is the traditional choice with broad tooling support:
 
-1. **Generate a GPG key** (if you don't have one):
-   ```bash
-   gpg --full-generate-key
-   ```
+```bash
+# Generate a GPG key (if you don't have one)
+gpg --full-generate-key
 
-2. **Configure Git to use your key**:
-   ```bash
-   # List your keys to find the key ID
-   gpg --list-secret-keys --keyid-format=long
+# List your keys to find the key ID
+gpg --list-secret-keys --keyid-format=long
 
-   # Configure Git (auto-sign all commits and tags)
-   git config --global user.signingkey YOUR_KEY_ID
-   git config --global commit.gpgsign true
-   git config --global tag.gpgSign true
-   ```
+# Configure with TDT
+tdt team setup-signing --method gpg --key-id YOUR_KEY_ID
+```
 
-3. **Add your public key to GitHub/GitLab** for verification badges
+**Pros**: Widely supported, works with GitHub/GitLab verified badges
+**Cons**: Key management overhead, key expiration, passphrase complexity
+
+#### SSH Signing (Git 2.34+)
+
+SSH signing reuses your existing SSH keys:
+
+```bash
+# Use your existing SSH key
+tdt team setup-signing --method ssh
+
+# Or specify a key explicitly
+tdt team setup-signing --method ssh --key-id ~/.ssh/id_ed25519.pub
+```
+
+**Pros**: No new keys needed, simpler key management, works offline
+**Cons**: Requires Git 2.34+, GitHub verification requires uploading signing key separately
+
+TDT auto-detects SSH keys in common locations (`~/.ssh/id_ed25519.pub`, `~/.ssh/id_rsa.pub`, etc.)
+
+#### gitsign (Keyless OIDC-Based)
+
+gitsign uses your identity provider (Google, GitHub, Microsoft) for signing with signatures logged to Rekor transparency log:
+
+```bash
+# Install gitsign first
+# macOS: brew install sigstore/tap/gitsign
+# Linux: Download from https://github.com/sigstore/gitsign/releases
+
+# Configure with TDT
+tdt team setup-signing --method gitsign
+```
+
+**Pros**: No key management, identity-based (OIDC), transparency log for audit
+**Cons**: Requires internet for signing, less traditional for auditors
+
+**Note**: While auditors may not be familiar with Rekor specifically, they are also unlikely to be experts in Git internals. The transparency log provides an independent audit trail that can be verified without deep Git knowledge.
 
 #### Why Enable Auto-Signing?
 
@@ -425,18 +513,24 @@ When `require_signature: true` is configured for an entity type, TDT will warn i
 For detailed instructions, see:
 - [GitHub: Managing commit signature verification](https://docs.github.com/en/authentication/managing-commit-signature-verification)
 - [GitLab: Signing commits with GPG](https://docs.gitlab.com/ee/user/project/repository/signed_commits/gpg.html)
+- [Sigstore gitsign](https://github.com/sigstore/gitsign)
 
 ### Part 11 Compliance Checklist
 
-Using TDT with GPG signing satisfies several Part 11 requirements:
+Using TDT with cryptographic signing (GPG, SSH, or gitsign) satisfies several Part 11 requirements:
 
 | Part 11 Requirement | TDT Feature |
 |---------------------|-------------|
 | Audit trail (§11.10(e)) | Git commit history with timestamps |
-| Unique user identification (§11.100) | GPG keys + team roster |
+| Unique user identification (§11.100) | Signing keys + team roster |
 | Signature meaning (§11.50) | Approval comments and role |
-| Non-repudiation (§11.200) | GPG cryptographic signatures |
+| Non-repudiation (§11.200) | Cryptographic signatures (GPG/SSH/gitsign) |
 | Record integrity (§11.10(c)) | Git hash-linked commits |
+
+All three signing methods provide cryptographic proof of identity:
+- **GPG**: Traditional PKI with key trust model
+- **SSH**: Key-based identity linked to team member
+- **gitsign**: OIDC identity (email) with Rekor transparency log
 
 **Note**: Technology alone doesn't ensure compliance. You also need:
 - System validation documentation (IQ/OQ/PQ)

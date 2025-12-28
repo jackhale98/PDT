@@ -5481,7 +5481,7 @@ fn test_team_setup_signing_status() {
         .args(["team", "setup-signing", "--status"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("GPG Signing Status"))
+        .stdout(predicate::str::contains("Signing Configuration Status"))
         .stdout(predicate::str::contains("user.signingkey"));
 }
 
@@ -5591,4 +5591,258 @@ fn test_release_sign_without_gpg_configured() {
             .stderr(predicate::str::contains("GPG signing requested but not configured"))
             .stderr(predicate::str::contains("git config"));
     }
+}
+
+#[test]
+fn test_team_setup_signing_ssh_no_key() {
+    let tmp = setup_test_project();
+
+    // Initialize git repo
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+
+    // Configure git user
+    std::process::Command::new("git")
+        .args(["config", "user.email", "test@example.com"])
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.name", "Test User"])
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+
+    // Try SSH signing without an SSH key - should provide helpful error
+    // Note: This test may pass if the user has SSH keys, so we just check
+    // that the command runs and mentions SSH
+    let result = tdt()
+        .current_dir(tmp.path())
+        .args(["team", "setup-signing", "--method", "ssh"])
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    let stdout = String::from_utf8_lossy(&result.stdout);
+
+    // Either SSH key found (mentions SSH in stdout) or not found (mentions ssh-keygen in stderr)
+    assert!(
+        stdout.contains("SSH") || stderr.contains("ssh-keygen") || stderr.contains("SSH"),
+        "Expected SSH-related output, got stdout: {}, stderr: {}",
+        stdout,
+        stderr
+    );
+}
+
+#[test]
+fn test_team_setup_signing_gitsign_not_installed() {
+    let tmp = setup_test_project();
+
+    // Initialize git repo
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+
+    // Configure git user
+    std::process::Command::new("git")
+        .args(["config", "user.email", "test@example.com"])
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+    std::process::Command::new("git")
+        .args(["config", "user.name", "Test User"])
+        .current_dir(tmp.path())
+        .output()
+        .unwrap();
+
+    // Try gitsign - if not installed, should provide helpful error
+    let result = tdt()
+        .current_dir(tmp.path())
+        .args(["team", "setup-signing", "--method", "gitsign"])
+        .output()
+        .unwrap();
+
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    let stdout = String::from_utf8_lossy(&result.stdout);
+
+    // Either gitsign is installed (mentions Sigstore in stdout) or not (mentions installation in stderr)
+    assert!(
+        stdout.contains("Sigstore") || stdout.contains("gitsign")
+            || stderr.contains("gitsign is not installed") || stderr.contains("brew install"),
+        "Expected gitsign-related output, got stdout: {}, stderr: {}",
+        stdout,
+        stderr
+    );
+}
+
+// ============================================================================
+// Key Management Tests
+// ============================================================================
+
+#[test]
+fn test_team_add_key_gpg_no_key_configured() {
+    let tmp = setup_test_project();
+
+    // Initialize git with no signing key
+    std::process::Command::new("git")
+        .current_dir(tmp.path())
+        .args(["init"])
+        .output()
+        .unwrap();
+
+    std::process::Command::new("git")
+        .current_dir(tmp.path())
+        .args(["config", "user.name", "Test User"])
+        .output()
+        .unwrap();
+
+    std::process::Command::new("git")
+        .current_dir(tmp.path())
+        .args(["config", "user.email", "test@example.com"])
+        .output()
+        .unwrap();
+
+    // GPG add-key without a configured signing key should fail
+    tdt()
+        .current_dir(tmp.path())
+        .args(["team", "add-key", "--method", "gpg", "-y"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("No GPG signing key configured"));
+}
+
+#[test]
+fn test_team_add_key_gitsign_no_key_needed() {
+    let tmp = setup_test_project();
+
+    // Initialize git
+    std::process::Command::new("git")
+        .current_dir(tmp.path())
+        .args(["init"])
+        .output()
+        .unwrap();
+
+    std::process::Command::new("git")
+        .current_dir(tmp.path())
+        .args(["config", "user.name", "Test User"])
+        .output()
+        .unwrap();
+
+    std::process::Command::new("git")
+        .current_dir(tmp.path())
+        .args(["config", "user.email", "test@example.com"])
+        .output()
+        .unwrap();
+
+    // Gitsign doesn't need a key file
+    tdt()
+        .current_dir(tmp.path())
+        .args(["team", "add-key", "--method", "gitsign", "-y"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("keyless OIDC-based signing"));
+}
+
+#[test]
+fn test_team_import_keys_no_keys() {
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["team", "import-keys", "-y"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No GPG keys found"));
+}
+
+#[test]
+fn test_team_sync_keys_no_keys() {
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["team", "sync-keys", "-y"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No SSH keys found"));
+}
+
+#[test]
+fn test_team_sync_keys_generates_allowed_signers() {
+    let tmp = setup_test_project();
+
+    // Create .tdt/keys/ssh directory and add a test key
+    let ssh_dir = tmp.path().join(".tdt").join("keys").join("ssh");
+    fs::create_dir_all(&ssh_dir).unwrap();
+    fs::write(
+        ssh_dir.join("testuser.pub"),
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey test@example.com\n",
+    )
+    .unwrap();
+
+    // Create team roster with testuser
+    let team_yaml = tmp.path().join(".tdt").join("team.yaml");
+    fs::write(
+        &team_yaml,
+        "version: 1\nmembers:\n  - name: Test User\n    email: test@example.com\n    username: testuser\n    roles: [engineering]\n",
+    )
+    .unwrap();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["team", "sync-keys", "-y"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Generated"));
+
+    // Check that allowed_signers was created
+    let allowed_signers = tmp.path().join(".tdt").join("keys").join("allowed_signers");
+    assert!(allowed_signers.exists());
+
+    let content = fs::read_to_string(&allowed_signers).unwrap();
+    assert!(content.contains("test@example.com"));
+    assert!(content.contains("ssh-ed25519"));
+}
+
+#[test]
+fn test_team_add_with_signing_format() {
+    let tmp = setup_test_project();
+
+    // Initialize team roster
+    tdt()
+        .current_dir(tmp.path())
+        .args(["team", "init"])
+        .assert()
+        .success();
+
+    // Add member with signing format
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "team",
+            "add",
+            "--name",
+            "Jane Smith",
+            "--email",
+            "jane@example.com",
+            "--username",
+            "jsmith",
+            "--roles",
+            "engineering",
+            "--signing-format",
+            "ssh",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Signing: ssh"));
+
+    // Verify it's in the team.yaml
+    let team_yaml = tmp.path().join(".tdt").join("team.yaml");
+    let content = fs::read_to_string(&team_yaml).unwrap();
+    assert!(content.contains("signing_format: ssh"));
 }

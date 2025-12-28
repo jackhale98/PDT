@@ -8,6 +8,42 @@ use std::path::Path;
 use crate::core::identity::EntityPrefix;
 use crate::core::Project;
 
+/// Signing format options for commit/tag signing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum SigningFormat {
+    /// GPG signing (traditional, widely supported)
+    #[default]
+    Gpg,
+    /// SSH signing (simpler, uses existing SSH keys, git 2.34+)
+    Ssh,
+    /// Sigstore gitsign (keyless, OIDC-based, modern)
+    Gitsign,
+}
+
+impl std::fmt::Display for SigningFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SigningFormat::Gpg => write!(f, "gpg"),
+            SigningFormat::Ssh => write!(f, "ssh"),
+            SigningFormat::Gitsign => write!(f, "gitsign"),
+        }
+    }
+}
+
+impl std::str::FromStr for SigningFormat {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "gpg" => Ok(SigningFormat::Gpg),
+            "ssh" => Ok(SigningFormat::Ssh),
+            "gitsign" => Ok(SigningFormat::Gitsign),
+            _ => Err(format!("Unknown signing format: {}. Valid options: gpg, ssh, gitsign", s)),
+        }
+    }
+}
+
 /// Team roles for authorization
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum, PartialOrd, Ord,
@@ -56,6 +92,10 @@ pub struct TeamMember {
     pub roles: Vec<Role>,
     #[serde(default = "default_active")]
     pub active: bool,
+    /// Signing format used by this member (gpg, ssh, or gitsign)
+    /// Public keys are stored in .tdt/keys/{format}/{username}.pub or .asc
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signing_format: Option<SigningFormat>,
 }
 
 fn default_active() -> bool {
@@ -266,6 +306,7 @@ members:
   #   email: "jane@example.com"
   #   username: "jsmith"        # Matches git config user.name
   #   roles: [engineering, quality]
+  #   signing_format: gpg       # Optional: gpg, ssh, or gitsign
   #   active: true
   []
 
@@ -296,6 +337,7 @@ mod tests {
             username: "jsmith".to_string(),
             roles: vec![Role::Engineering, Role::Quality],
             active: true,
+            signing_format: Some(SigningFormat::Gpg),
         });
         roster.members.push(TeamMember {
             name: "Bob Wilson".to_string(),
@@ -303,6 +345,7 @@ mod tests {
             username: "bwilson".to_string(),
             roles: vec![Role::Management],
             active: true,
+            signing_format: Some(SigningFormat::Ssh),
         });
         roster.members.push(TeamMember {
             name: "Admin User".to_string(),
@@ -310,6 +353,7 @@ mod tests {
             username: "admin".to_string(),
             roles: vec![Role::Admin],
             active: true,
+            signing_format: None,
         });
         roster
             .approval_matrix
@@ -417,6 +461,7 @@ mod tests {
             username: "testuser".to_string(),
             roles: vec![Role::Engineering],
             active: true,
+            signing_format: None,
         });
 
         assert_eq!(roster.members.len(), 1);
@@ -425,5 +470,24 @@ mod tests {
         roster.remove_member("testuser");
         assert_eq!(roster.members.len(), 0);
         assert!(roster.find_member("testuser").is_none());
+    }
+
+    #[test]
+    fn test_signing_format_serialization() {
+        let mut roster = TeamRoster::default();
+        roster.add_member(TeamMember {
+            name: "SSH User".to_string(),
+            email: "ssh@example.com".to_string(),
+            username: "sshuser".to_string(),
+            roles: vec![Role::Engineering],
+            active: true,
+            signing_format: Some(SigningFormat::Ssh),
+        });
+
+        let yaml = serde_yml::to_string(&roster).unwrap();
+        assert!(yaml.contains("signing_format: ssh"));
+
+        let loaded: TeamRoster = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(loaded.members[0].signing_format, Some(SigningFormat::Ssh));
     }
 }

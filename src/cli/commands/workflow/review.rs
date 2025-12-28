@@ -2,11 +2,13 @@
 
 use clap::{Args, Subcommand};
 use miette::{IntoDiagnostic, Result};
+use serde::Deserialize;
+use std::collections::HashMap;
 
 use crate::cli::args::GlobalOpts;
 use crate::core::entity::Status;
 use crate::core::identity::EntityPrefix;
-use crate::core::workflow::{get_entity_info, get_prefix_from_id, truncate_id};
+use crate::core::workflow::{get_entity_info, get_prefix_from_id, truncate_id, ApprovalRecord};
 use crate::core::{Config, Project, Provider, ProviderClient, TeamRoster, WorkflowEngine};
 
 /// Review pending items
@@ -16,6 +18,8 @@ pub enum ReviewCommands {
     List(ReviewListArgs),
     /// Show review queue summary
     Summary,
+    /// Show entities that need more approvals
+    PendingApprovals(PendingApprovalsArgs),
 }
 
 /// List items pending review
@@ -38,11 +42,24 @@ pub struct ReviewListArgs {
     pub verbose: bool,
 }
 
+/// Show entities needing more approvals
+#[derive(Debug, Args)]
+pub struct PendingApprovalsArgs {
+    /// Filter by entity type (req, risk, cmp, etc.)
+    #[arg(long, short = 't')]
+    pub entity_type: Option<String>,
+
+    /// Output style (table, json)
+    #[arg(long, short = 'o', default_value = "table")]
+    pub output: String,
+}
+
 impl ReviewCommands {
     pub fn run(&self, global: &GlobalOpts) -> Result<()> {
         match self {
             ReviewCommands::List(args) => args.run(global),
             ReviewCommands::Summary => run_summary(global),
+            ReviewCommands::PendingApprovals(args) => args.run(global),
         }
     }
 }
@@ -376,4 +393,187 @@ struct LocalReviewItem {
     entity_type: String,
     title: String,
     can_approve: bool,
+}
+
+/// Entity data for extracting approval info
+#[derive(Debug, Deserialize)]
+struct EntityApprovalData {
+    id: String,
+    title: String,
+    status: Status,
+    #[serde(default)]
+    approvals: Vec<ApprovalRecord>,
+    #[serde(flatten)]
+    _extra: HashMap<String, serde_yml::Value>,
+}
+
+/// Pending approval item for output
+#[derive(Debug, serde::Serialize)]
+struct PendingApprovalItem {
+    entity_id: String,
+    short_id: String,
+    entity_type: String,
+    title: String,
+    current_approvals: usize,
+    required_approvals: u32,
+    current_roles: Vec<String>,
+    missing_roles: Vec<String>,
+}
+
+impl PendingApprovalsArgs {
+    pub fn run(&self, _global: &GlobalOpts) -> Result<()> {
+        use console::style;
+        use walkdir::WalkDir;
+
+        let project = Project::discover().into_diagnostic()?;
+        let config = Config::load();
+
+        // Parse entity type filter
+        let entity_type_filter: Option<EntityPrefix> = self
+            .entity_type
+            .as_ref()
+            .and_then(|t| t.to_uppercase().parse().ok());
+
+        // Load team roster for role info
+        let _roster = TeamRoster::load(&project);
+
+        let mut items: Vec<PendingApprovalItem> = Vec::new();
+
+        for entry in WalkDir::new(project.root())
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "yaml")
+                    .unwrap_or(false)
+            })
+            .filter(|e| e.path().to_string_lossy().contains(".tdt.yaml"))
+        {
+            if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                if let Ok(entity) = serde_yml::from_str::<EntityApprovalData>(&content) {
+                    // Only show entities in review status
+                    if entity.status != Status::Review {
+                        continue;
+                    }
+
+                    let entity_prefix = get_prefix_from_id(&entity.id);
+
+                    // Filter by entity type
+                    if let Some(ref filter) = entity_type_filter {
+                        if entity_prefix.as_ref() != Some(filter) {
+                            continue;
+                        }
+                    }
+
+                    let entity_type_str = entity_prefix
+                        .map(|p| p.as_str().to_string())
+                        .unwrap_or_else(|| "???".to_string());
+
+                    // Get approval requirements for this entity type
+                    let requirements = entity_prefix
+                        .map(|p| config.workflow.get_approval_requirements(p).clone())
+                        .unwrap_or_default();
+
+                    let current_approvals = entity.approvals.len();
+                    let required_approvals = requirements.min_approvals;
+
+                    // Only show if still needs more approvals
+                    if current_approvals >= required_approvals as usize {
+                        continue;
+                    }
+
+                    // Get current roles that have approved
+                    let current_roles: Vec<String> = entity
+                        .approvals
+                        .iter()
+                        .filter_map(|a| a.role.clone())
+                        .collect();
+
+                    // Calculate missing roles
+                    let missing_roles: Vec<String> = requirements
+                        .required_roles
+                        .iter()
+                        .filter(|r| !current_roles.iter().any(|cr| cr == &r.to_string()))
+                        .map(|r| r.to_string())
+                        .collect();
+
+                    items.push(PendingApprovalItem {
+                        entity_id: entity.id.clone(),
+                        short_id: truncate_id(&entity.id),
+                        entity_type: entity_type_str,
+                        title: entity.title,
+                        current_approvals,
+                        required_approvals,
+                        current_roles,
+                        missing_roles,
+                    });
+                }
+            }
+        }
+
+        // Sort by entity type, then by how many approvals needed
+        items.sort_by(|a, b| {
+            a.entity_type
+                .cmp(&b.entity_type)
+                .then_with(|| {
+                    (b.required_approvals as usize - b.current_approvals)
+                        .cmp(&(a.required_approvals as usize - a.current_approvals))
+                })
+        });
+
+        // Output
+        match self.output.as_str() {
+            "json" => {
+                let json = serde_json::to_string_pretty(&items).into_diagnostic()?;
+                println!("{}", json);
+            }
+            _ => {
+                if items.is_empty() {
+                    println!("No entities pending additional approvals.");
+                    return Ok(());
+                }
+
+                println!(
+                    "\n{}\n",
+                    style("Entities Needing More Approvals").bold().underlined()
+                );
+                println!(
+                    "{:<15} {:<8} {:<30} {:<12} MISSING ROLES",
+                    "ENTITY", "TYPE", "TITLE", "APPROVALS"
+                );
+                println!("{}", "-".repeat(85));
+
+                for item in &items {
+                    let title = if item.title.len() > 28 {
+                        format!("{}...", &item.title[..25])
+                    } else {
+                        item.title.clone()
+                    };
+                    let approval_status = format!(
+                        "{}/{}",
+                        item.current_approvals, item.required_approvals
+                    );
+                    let missing = if item.missing_roles.is_empty() {
+                        "any".to_string()
+                    } else {
+                        item.missing_roles.join(", ")
+                    };
+
+                    println!(
+                        "{:<15} {:<8} {:<30} {:<12} {}",
+                        style(&item.short_id).cyan(),
+                        item.entity_type,
+                        title,
+                        style(&approval_status).yellow(),
+                        style(missing).dim()
+                    );
+                }
+
+                println!("\n{} entities need more approvals.", items.len());
+            }
+        }
+
+        Ok(())
+    }
 }

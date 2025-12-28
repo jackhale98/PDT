@@ -21,6 +21,7 @@ pub mod history;
 pub mod import;
 pub mod init;
 pub mod link;
+pub mod log;
 pub mod lot;
 pub mod mate;
 pub mod ncr;

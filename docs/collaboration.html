@@ -985,6 +985,9 @@ tdt submit --type req --all
 # Submit with a message
 tdt submit REQ@1 -m "Initial pump requirement"
 
+# Request review from specific users
+tdt submit REQ@1 --reviewer jsmith,bwilson
+
 # See what would happen without doing it
 tdt submit REQ@1 --dry-run</code></pre>
         </div>
@@ -1030,7 +1033,52 @@ tdt release --type req</code></pre>
 tdt review list
 
 # See all pending reviews (not just yours)
-tdt review list --all</code></pre>
+tdt review list --all
+
+# See entities needing more approvals (multi-signature)
+tdt review pending-approvals
+
+# Filter pending approvals by entity type
+tdt review pending-approvals --entity-type req</code></pre>
+        </div>
+      </div>
+
+      <div class="command-block">
+        <div class="command-header">Workflow Log</div>
+        <div class="command-body">
+          <pre><code># Show all workflow activity
+tdt log
+
+# Filter by approver
+tdt log --approver jsmith
+
+# Filter by entity type
+tdt log --entity-type req
+
+# Filter by event type
+tdt log --event-type approve
+
+# Filter by date range
+tdt log --since 2024-01-01 --until 2024-01-31
+
+# Combine filters
+tdt log --approver jsmith --entity-type risk --limit 20
+
+# Output as JSON
+tdt log --format json</code></pre>
+        </div>
+      </div>
+
+      <div class="command-block">
+        <div class="command-header">Workflow History</div>
+        <div class="command-body">
+          <pre><code># Show workflow timeline for an entity
+tdt history REQ@1 --workflow
+
+# Shows formatted workflow events:
+#   2024-01-10 10:30  SUBMITTED    by jsmith
+#   2024-01-11 14:15  APPROVED     by bwilson  "Verified specs"
+#   2024-01-12 09:00  RELEASED     by mchen</code></pre>
         </div>
       </div>
 
@@ -1046,6 +1094,113 @@ tdt team list
 # See your own role
 tdt team whoami</code></pre>
         </div>
+      </div>
+    </section>
+
+    <!-- Multi-Signature Approvals -->
+    <section id="multi-approval">
+      <div class="section-header">
+        <h2 class="section-title">Multi-Signature Approvals</h2>
+        <p class="section-desc">Require multiple approvers for critical entity types</p>
+      </div>
+
+      <p>
+        For regulated environments or critical systems, you can require multiple approvals before
+        an entity transitions to "approved" status. Configure this in your <code class="inline-code">.tdt/config.yaml</code>:
+      </p>
+
+      <pre><code>workflow:
+  enabled: true
+  provider: github
+  approvals:
+    default:
+      min_approvals: 1
+    RISK:
+      min_approvals: 2
+      required_roles: [engineering, quality]
+    REQ:
+      min_approvals: 2</code></pre>
+
+      <p style="margin-top: 16px;">
+        When multi-approval is configured, the <code class="inline-code">tdt approve</code> command records the approval
+        but only transitions the status to "approved" once all requirements are met. Use
+        <code class="inline-code">tdt review pending-approvals</code> to see which entities need more approvals:
+      </p>
+
+      <pre><code>$ tdt review pending-approvals
+ID          Title                    Current  Required  Next Role Needed
+REQ@1       Pump flow rate           1        2         quality
+RISK@2      Motor overheating        0        2         engineering,quality</code></pre>
+
+      <div class="callout info">
+        <div class="callout-title">Approval Records</div>
+        <p>
+          Each approval is recorded in the entity's YAML file with the approver's name, email, date,
+          and optional comment. This creates a complete audit trail directly in the file.
+        </p>
+      </div>
+    </section>
+
+    <!-- Audit Trail & Git Tags -->
+    <section id="audit">
+      <div class="section-header">
+        <h2 class="section-title">Audit Trail &amp; Git Tags</h2>
+        <p class="section-desc">Every workflow event is tracked for compliance and traceability</p>
+      </div>
+
+      <p>
+        TDT automatically creates git tags for workflow events, providing an immutable audit trail
+        that's easy to query and filter. This supports regulatory compliance requirements like
+        21 CFR Part 11 and ISO 13485.
+      </p>
+
+      <h3 style="margin: 24px 0 12px 0; font-size: 18px;">Tag Format</h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>Tag Pattern</th>
+            <th>Example</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Approval</td>
+            <td><code>approve/{entity}/{approver}/{date}</code></td>
+            <td><code>approve/REQ-01ABC/jsmith/2024-01-15</code></td>
+          </tr>
+          <tr>
+            <td>Release</td>
+            <td><code>release/{entity}/{releaser}/{date}</code></td>
+            <td><code>release/REQ-01ABC/mchen/2024-01-20</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 style="margin: 24px 0 12px 0; font-size: 18px;">Querying the Audit Trail</h3>
+      <pre><code># List all approval tags
+git tag -l "approve/*"
+
+# List approvals for a specific entity
+git tag -l "approve/REQ-01ABC*"
+
+# List all approvals by a specific user
+git tag -l "approve/*/jsmith/*"
+
+# Show tag details (includes message)
+git show approve/REQ-01ABC/jsmith/2024-01-15
+
+# Use tdt log for a formatted view
+tdt log --approver jsmith</code></pre>
+
+      <div class="callout success">
+        <div class="callout-title">GPG Signing for Compliance</div>
+        <p>
+          For 21 CFR Part 11 compliance, configure git to sign commits and tags with GPG. This provides
+          cryptographic proof of who approved each change. See
+          <a href="https://docs.github.com/en/authentication/managing-commit-signature-verification" style="color: var(--accent);">GitHub's GPG guide</a>
+          for setup instructions.
+        </p>
       </div>
     </section>
 
@@ -1114,6 +1269,25 @@ glab auth login</code></pre>
       <p>
         Use <code class="inline-code">--verbose</code> on any command to see each git command as it runs,
         or use <code class="inline-code">--dry-run</code> to preview without executing.
+      </p>
+
+      <h3 style="margin: 24px 0 8px 0; font-size: 18px;">How do I request specific reviewers?</h3>
+      <p>
+        Use the <code class="inline-code">--reviewer</code> flag with GitHub/GitLab usernames (not emails):
+        <code class="inline-code">tdt submit REQ@1 --reviewer jsmith,bwilson</code>
+      </p>
+
+      <h3 style="margin: 24px 0 8px 0; font-size: 18px;">How do I see approval history?</h3>
+      <p>
+        Use <code class="inline-code">tdt history REQ@1 --workflow</code> to see a formatted timeline of workflow events,
+        or <code class="inline-code">tdt log</code> to query activity across all entities.
+      </p>
+
+      <h3 style="margin: 24px 0 8px 0; font-size: 18px;">What happens with multi-signature approvals?</h3>
+      <p>
+        When configured, <code class="inline-code">tdt approve</code> records each approval but keeps the entity in
+        "review" status until all requirements are met. Use <code class="inline-code">tdt review pending-approvals</code>
+        to see which entities need more approvals.
       </p>
     </section>
   </main>

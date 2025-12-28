@@ -44,6 +44,10 @@ pub struct SubmitArgs {
     #[arg(long)]
     pub draft: bool,
 
+    /// Request review from specific users (comma-separated GitHub/GitLab usernames)
+    #[arg(long, short = 'r', value_delimiter = ',')]
+    pub reviewer: Vec<String>,
+
     /// Skip confirmation prompt
     #[arg(long, short = 'y')]
     pub yes: bool,
@@ -277,26 +281,23 @@ impl SubmitArgs {
 
         if !self.no_pr && config.workflow.provider != Provider::None {
             let provider = ProviderClient::new(config.workflow.provider, std::path::Path::new("."));
-            let pr_cmd = if self.draft {
-                provider.format_command(&[
-                    "pr",
-                    "create",
-                    "--title",
-                    &pr_title,
-                    "--base",
-                    &config.workflow.base_branch,
-                    "--draft",
-                ])
-            } else {
-                provider.format_command(&[
-                    "pr",
-                    "create",
-                    "--title",
-                    &pr_title,
-                    "--base",
-                    &config.workflow.base_branch,
-                ])
-            };
+            let reviewer_str = self.reviewer.join(",");
+            let mut args: Vec<&str> = vec![
+                "pr",
+                "create",
+                "--title",
+                &pr_title,
+                "--base",
+                &config.workflow.base_branch,
+            ];
+            if self.draft {
+                args.push("--draft");
+            }
+            if !self.reviewer.is_empty() {
+                args.push("--reviewer");
+                args.push(&reviewer_str);
+            }
+            let pr_cmd = provider.format_command(&args);
             println!("  {}", pr_cmd);
         }
 
@@ -386,14 +387,18 @@ impl SubmitArgs {
             let provider = ProviderClient::new(config.workflow.provider, project.root())
                 .with_verbose(self.verbose);
 
-            match provider.create_pr(
+            match provider.create_pr_with_reviewers(
                 &pr_title,
                 &pr_body,
                 &config.workflow.base_branch,
                 self.draft,
+                &self.reviewer,
             ) {
                 Ok(pr_info) => {
                     println!("  Created PR #{}: {}", pr_info.number, pr_info.url);
+                    if !self.reviewer.is_empty() {
+                        println!("  Requested review from: {}", self.reviewer.join(", "));
+                    }
                 }
                 Err(e) => {
                     eprintln!("  Warning: Failed to create PR: {}", e);

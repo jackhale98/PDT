@@ -23,6 +23,7 @@ use crate::cli::commands::{
     import::ImportArgs,
     init::InitArgs,
     link::LinkCommands,
+    log::LogArgs,
     lot::LotCommands,
     mate::MateCommands,
     ncr::NcrCommands,
@@ -280,6 +281,9 @@ pub enum Commands {
     /// Manage links between entities (add, remove, show)
     #[command(subcommand)]
     Link(LinkCommands),
+
+    /// View workflow activity log (approvals, releases) across all entities
+    Log(LogArgs),
 
     /// Traceability queries (from, to, coverage)
     #[command(subcommand)]

@@ -1,11 +1,15 @@
 //! `tdt history` command - View git history for an entity
 
+use chrono::{DateTime, Utc};
 use console::style;
 use miette::Result;
+use serde::Deserialize;
+use std::collections::HashMap;
 use std::process::Command;
 
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
+use crate::core::workflow::ApprovalRecord;
 
 #[derive(clap::Args, Debug)]
 pub struct HistoryArgs {
@@ -31,6 +35,10 @@ pub struct HistoryArgs {
     /// Show patch/diff for each commit
     #[arg(long, short = 'p')]
     pub patch: bool,
+
+    /// Show formatted workflow events (approvals, releases) instead of git log
+    #[arg(long, short = 'w')]
+    pub workflow: bool,
 }
 
 pub fn run(args: HistoryArgs) -> Result<()> {
@@ -44,6 +52,15 @@ pub fn run(args: HistoryArgs) -> Result<()> {
 
     // Find the entity file
     let entity_file = find_entity_file(&project, &resolved_id)?;
+
+    // Print header
+    let display_id = short_ids
+        .get_short_id(&resolved_id)
+        .unwrap_or_else(|| resolved_id.clone());
+
+    if args.workflow {
+        return show_workflow_history(&project, &entity_file, &display_id, &resolved_id);
+    }
 
     // Build git log command
     let mut git_args = vec!["log".to_string()];
@@ -73,10 +90,6 @@ pub fn run(args: HistoryArgs) -> Result<()> {
     git_args.push("--".to_string());
     git_args.push(entity_file.to_string_lossy().to_string());
 
-    // Print header
-    let display_id = short_ids
-        .get_short_id(&resolved_id)
-        .unwrap_or_else(|| resolved_id.clone());
     println!(
         "{} {}\n",
         style("History for:").bold(),
@@ -110,6 +123,151 @@ pub fn run(args: HistoryArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Entity data for workflow history extraction
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+struct EntityData {
+    id: String,
+    title: String,
+    status: String,
+    created: DateTime<Utc>,
+    author: Option<String>,
+    #[serde(default)]
+    approvals: Vec<ApprovalRecord>,
+    #[serde(default)]
+    released_by: Option<String>,
+    #[serde(default)]
+    released_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    revision: Option<u32>,
+    #[serde(flatten)]
+    _extra: HashMap<String, serde_yml::Value>,
+}
+
+/// Show formatted workflow history from entity YAML
+fn show_workflow_history(
+    project: &Project,
+    entity_file: &std::path::Path,
+    display_id: &str,
+    full_id: &str,
+) -> Result<()> {
+    // Read entity file
+    let content =
+        std::fs::read_to_string(entity_file).map_err(|e| miette::miette!("Cannot read file: {}", e))?;
+    let entity: EntityData =
+        serde_yml::from_str(&content).map_err(|e| miette::miette!("Cannot parse entity: {}", e))?;
+
+    println!(
+        "{} {}",
+        style(&display_id).cyan().bold(),
+        style(&entity.title).bold()
+    );
+    println!();
+
+    // Collect workflow events
+    let mut events: Vec<WorkflowEvent> = Vec::new();
+
+    // Created event
+    events.push(WorkflowEvent {
+        timestamp: entity.created,
+        event_type: "Created".to_string(),
+        actor: entity.author.clone().unwrap_or_else(|| "Unknown".to_string()),
+        details: None,
+    });
+
+    // Approval events
+    for approval in &entity.approvals {
+        let role_str = approval
+            .role
+            .as_ref()
+            .map(|r| format!(" ({})", r))
+            .unwrap_or_default();
+        events.push(WorkflowEvent {
+            timestamp: approval.timestamp,
+            event_type: "Approved".to_string(),
+            actor: format!("{}{}", approval.approver, role_str),
+            details: approval.comment.clone(),
+        });
+    }
+
+    // Release event
+    if let (Some(releaser), Some(released_at)) = (&entity.released_by, entity.released_at) {
+        events.push(WorkflowEvent {
+            timestamp: released_at,
+            event_type: "Released".to_string(),
+            actor: releaser.clone(),
+            details: None,
+        });
+    }
+
+    // Sort by timestamp
+    events.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+
+    // Print events in timeline format
+    for event in &events {
+        let date_str = event.timestamp.format("%Y-%m-%d %H:%M");
+        let event_styled = match event.event_type.as_str() {
+            "Created" => style(&event.event_type).blue(),
+            "Approved" => style(&event.event_type).green(),
+            "Released" => style(&event.event_type).magenta(),
+            _ => style(&event.event_type).white(),
+        };
+        print!(
+            "  {} {:12} by {}",
+            style(date_str).dim(),
+            event_styled,
+            style(&event.actor).cyan()
+        );
+        if let Some(ref details) = event.details {
+            print!(" \"{}\"", style(details).dim());
+        }
+        println!();
+    }
+
+    // Current status
+    println!();
+    println!(
+        "  {} {}",
+        style("Current status:").bold(),
+        style(&entity.status).yellow()
+    );
+    if let Some(rev) = entity.revision {
+        println!("  {} {}", style("Revision:").bold(), rev);
+    }
+
+    // Show git tags for this entity
+    let git = crate::core::Git::new(project.root());
+    let short_id = crate::core::workflow::truncate_id(full_id);
+
+    // Check for approval tags
+    if let Ok(tags) = git.list_tags(Some(&format!("approve/{}/*", short_id))) {
+        if !tags.is_empty() {
+            println!();
+            println!("  {}", style("Git tags:").bold());
+            for tag in tags {
+                println!("    {}", style(&tag).dim());
+            }
+        }
+    }
+
+    // Check for release tags
+    if let Ok(tags) = git.list_tags(Some(&format!("release/{}/*", short_id))) {
+        for tag in tags {
+            println!("    {}", style(&tag).dim());
+        }
+    }
+
+    Ok(())
+}
+
+#[derive(Debug)]
+struct WorkflowEvent {
+    timestamp: DateTime<Utc>,
+    event_type: String,
+    actor: String,
+    details: Option<String>,
 }
 
 fn find_entity_file(project: &Project, id: &str) -> Result<std::path::PathBuf> {

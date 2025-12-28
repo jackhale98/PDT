@@ -240,7 +240,22 @@ impl ProviderClient {
         base: &str,
         draft: bool,
     ) -> Result<PrInfo, ProviderError> {
+        self.create_pr_with_reviewers(title, body, base, draft, &[])
+    }
+
+    /// Create a pull/merge request with specific reviewers
+    pub fn create_pr_with_reviewers(
+        &self,
+        title: &str,
+        body: &str,
+        base: &str,
+        draft: bool,
+        reviewers: &[String],
+    ) -> Result<PrInfo, ProviderError> {
         self.validate()?;
+
+        // Build reviewer string for GitHub/GitLab
+        let reviewer_str = reviewers.join(",");
 
         let args = match self.provider {
             Provider::GitHub => {
@@ -273,10 +288,31 @@ impl ProviderClient {
             Provider::None => return Err(ProviderError::NotConfigured),
         };
 
+        // Convert to owned strings so we can add reviewer args
+        let mut owned_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+
+        // Add reviewer flag if reviewers specified
+        if !reviewers.is_empty() {
+            match self.provider {
+                Provider::GitHub => {
+                    owned_args.push("--reviewer".to_string());
+                    owned_args.push(reviewer_str);
+                }
+                Provider::GitLab => {
+                    owned_args.push("--reviewer".to_string());
+                    owned_args.push(reviewer_str);
+                }
+                Provider::None => {}
+            }
+        }
+
+        // Convert back to &str for run()
+        let args_refs: Vec<&str> = owned_args.iter().map(|s| s.as_str()).collect();
+
         if self.dry_run {
             return Ok(PrInfo {
                 number: 0,
-                url: format!("(dry-run) {}", self.format_command(&args)),
+                url: format!("(dry-run) {}", self.format_command(&args_refs)),
                 title: title.to_string(),
                 author: String::new(),
                 branch: String::new(),
@@ -284,7 +320,7 @@ impl ProviderClient {
             });
         }
 
-        let output = self.run(&args)?;
+        let output = self.run(&args_refs)?;
 
         // Parse the output to get PR info
         // GitHub outputs just the URL, GitLab outputs more info

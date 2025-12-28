@@ -302,6 +302,30 @@ impl ReleaseArgs {
         let _hash = git.commit(&commit_message).into_diagnostic()?;
         println!("  Committed: \"{}\"", commit_message);
 
+        // Create git tags for released entities (for audit trail)
+        let date = chrono::Utc::now().format("%Y-%m-%d");
+        for (_, id, title, _) in entities {
+            let short_id = truncate_id(id);
+            // Sanitize releaser name for tag (replace spaces with underscores)
+            let safe_releaser = releaser_name.replace(' ', "_").replace('@', "_at_");
+            let tag_name = format!("release/{}/{}/{}", short_id, safe_releaser, date);
+
+            if !git.tag_exists(&tag_name) {
+                let tag_message = format!(
+                    "Released by {}: {}",
+                    releaser_name,
+                    self.message.as_deref().unwrap_or(title)
+                );
+                if let Err(e) = git.create_tag(&tag_name, Some(&tag_message)) {
+                    if self.verbose {
+                        eprintln!("  Warning: Failed to create tag {}: {}", tag_name, e);
+                    }
+                } else if self.verbose {
+                    eprintln!("  Created tag: {}", tag_name);
+                }
+            }
+        }
+
         println!("\n{} entities released.", entities.len());
 
         Ok(())

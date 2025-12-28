@@ -49,6 +49,7 @@ fn main() -> Result<()> {
         Commands::Tol(cmd) => tdt::cli::commands::tol::run(cmd, &global),
         Commands::Validate(args) => tdt::cli::commands::validate::run(args),
         Commands::Link(cmd) => tdt::cli::commands::link::run(cmd),
+        Commands::Log(args) => tdt::cli::commands::log::run(args),
         Commands::Trace(cmd) => tdt::cli::commands::trace::run(cmd, &global),
         Commands::Dsm(args) => tdt::cli::commands::dsm::run(args, &global),
         Commands::Dmm(args) => tdt::cli::commands::dmm::run(args, &global),

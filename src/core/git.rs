@@ -437,6 +437,53 @@ impl Git {
             .filter(|o| o.success && !o.stdout.is_empty())
             .map(|o| o.stdout)
     }
+
+    /// Create a lightweight tag
+    pub fn create_tag(&self, name: &str, message: Option<&str>) -> Result<(), GitError> {
+        let output = if let Some(msg) = message {
+            self.run(&["tag", "-a", name, "-m", msg])?
+        } else {
+            self.run(&["tag", name])?
+        };
+
+        if output.success {
+            Ok(())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// List tags matching a pattern
+    pub fn list_tags(&self, pattern: Option<&str>) -> Result<Vec<String>, GitError> {
+        let args = if let Some(p) = pattern {
+            vec!["tag", "-l", p]
+        } else {
+            vec!["tag", "-l"]
+        };
+
+        let output = self.run(&args)?;
+        if output.success {
+            Ok(output
+                .stdout
+                .lines()
+                .map(|l| l.to_string())
+                .filter(|l| !l.is_empty())
+                .collect())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Check if a tag exists
+    pub fn tag_exists(&self, name: &str) -> bool {
+        self.run(&["rev-parse", &format!("refs/tags/{}", name)])
+            .map(|o| o.success)
+            .unwrap_or(false)
+    }
 }
 
 #[cfg(test)]

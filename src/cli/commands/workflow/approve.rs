@@ -525,6 +525,30 @@ impl ApproveArgs {
                 println!("  Committed: \"{}\"", commit_message);
             }
 
+            // Create git tags for approved entities (for audit trail)
+            let date = chrono::Utc::now().format("%Y-%m-%d");
+            for (_, id, title, _) in entities.iter() {
+                let short_id = truncate_id(id);
+                // Sanitize approver name for tag (replace spaces with underscores)
+                let safe_approver = approver_name.replace(' ', "_").replace('@', "_at_");
+                let tag_name = format!("approve/{}/{}/{}", short_id, safe_approver, date);
+
+                if !git.tag_exists(&tag_name) {
+                    let tag_message = format!(
+                        "Approved by {}: {}",
+                        approver_name,
+                        self.message.as_deref().unwrap_or(title)
+                    );
+                    if let Err(e) = git.create_tag(&tag_name, Some(&tag_message)) {
+                        if self.verbose {
+                            eprintln!("  Warning: Failed to create tag {}: {}", tag_name, e);
+                        }
+                    } else if self.verbose {
+                        eprintln!("  Created tag: {}", tag_name);
+                    }
+                }
+            }
+
             // PR operations if provider is configured
             if config.workflow.provider != Provider::None {
                 let provider = ProviderClient::new(config.workflow.provider, project.root())

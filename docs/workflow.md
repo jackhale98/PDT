@@ -181,6 +181,9 @@ tdt submit REQ@1 --draft
 
 # Skip PR creation (git only)
 tdt submit REQ@1 --no-pr
+
+# Request review from specific users
+tdt submit REQ@1 --reviewer jsmith,bwilson
 ```
 
 ### Options
@@ -193,6 +196,7 @@ tdt submit REQ@1 --no-pr
 | `--all` | | Submit all matching entities |
 | `--no-pr` | | Skip PR creation |
 | `--draft` | | Create as draft PR |
+| `--reviewer` | `-r` | Request review from specific GitHub/GitLab usernames |
 | `--yes` | `-y` | Skip confirmation prompt |
 | `--dry-run` | | Show what would be done |
 | `--verbose` | `-v` | Print commands as they run |
@@ -289,8 +293,9 @@ $ tdt approve RISK@1 -m "Quality approval"
 6. If requirements met: Changes status to Approved
 7. If requirements not met: Entity stays in Review status
 8. Commits changes (if git available and auto_commit enabled)
-9. Adds approval to PR (if provider configured)
-10. Optionally merges PR (only if all entities are fully approved)
+9. **Creates a git tag** for audit trail (e.g., `approve/REQ-01KC.../jsmith/2024-01-15`)
+10. Adds approval to PR (if provider configured)
+11. Optionally merges PR (only if all entities are fully approved)
 
 ### Approval Records (Electronic Signatures)
 
@@ -476,10 +481,11 @@ tdt req list -s approved -f short-id | tdt release -
 2. Verifies user has release authorization (Management role)
 3. Changes status to Released
 4. Commits with release message
+5. **Creates a git tag** for audit trail (e.g., `release/REQ-01KC.../manager/2024-01-16`)
 
 ## Review Command
 
-View pending reviews:
+View pending reviews and approval status:
 
 ```bash
 # List items pending your review
@@ -493,6 +499,12 @@ tdt review list --all
 
 # Summary of review queue
 tdt review summary
+
+# Show entities that need more approvals (multi-signature support)
+tdt review pending-approvals
+
+# Filter pending approvals by entity type
+tdt review pending-approvals -t risk
 ```
 
 ### Example Output
@@ -506,6 +518,153 @@ RISK@3  RISK   Motor overheating failure    bob         #45
 
 2 items pending your review. Run `tdt approve <id>` to approve.
 ```
+
+### Pending Approvals Output
+
+When using multi-signature approvals, `pending-approvals` shows what's still needed:
+
+```
+$ tdt review pending-approvals
+
+Entities Needing More Approvals
+
+ENTITY          TYPE     TITLE                          APPROVALS    MISSING ROLES
+-------------------------------------------------------------------------------------
+RISK-01AB...    RISK     Motor failure analysis         1/2          quality
+REQ-02CD...     REQ      Pump GPM requirement           0/2          any
+
+2 entities need more approvals.
+```
+
+## Workflow History
+
+View the complete workflow history for an entity:
+
+```bash
+# Show formatted workflow events (approvals, releases)
+tdt history REQ@1 --workflow
+
+# Regular git history (default)
+tdt history REQ@1
+
+# Git history with patches
+tdt history REQ@1 --patch
+```
+
+### Workflow History Output
+
+```
+$ tdt history REQ@1 --workflow
+
+REQ@1 Pump flow rate requirement
+
+  2024-01-10 10:00  Created      by alice
+  2024-01-12 14:30  Submitted    for review
+  2024-01-15 09:15  Approved     by jsmith (engineering) "LGTM"
+  2024-01-15 11:00  Approved     by bwilson (quality) "Quality OK"
+  2024-01-16 16:00  Released     by manager
+
+  Current status: released
+  Revision: 2
+
+  Git tags:
+    approve/REQ-01KC.../jsmith/2024-01-15
+    approve/REQ-01KC.../bwilson/2024-01-15
+    release/REQ-01KC.../manager/2024-01-16
+```
+
+## Workflow Log
+
+View workflow activity across the entire project:
+
+```bash
+# Show all workflow events
+tdt log
+
+# Filter by approver
+tdt log --approver alice
+
+# Filter by entity type
+tdt log --entity-type req
+
+# Filter by event type
+tdt log --event-type approval
+
+# Filter by date range
+tdt log --since 2024-01-01 --until 2024-12-31
+
+# Limit results
+tdt log -n 20
+
+# Output as JSON
+tdt log -o json
+```
+
+### Log Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--approver` | `-a` | Filter by approver name |
+| `--entity-type` | `-t` | Filter by entity type (req, risk, etc.) |
+| `--event-type` | `-e` | Filter by event type (approval, release) |
+| `--since` | | Show events since date (YYYY-MM-DD) |
+| `--until` | | Show events until date (YYYY-MM-DD) |
+| `--limit` | `-n` | Limit number of events |
+| `--output` | `-o` | Output format: table (default), json |
+
+### Log Output
+
+```
+$ tdt log --since 2024-01-01
+
+Workflow Activity Log
+
+DATE         EVENT      TYPE     ENTITY          ACTOR           COMMENT
+--------------------------------------------------------------------------------
+2024-01-16   RELEASE    REQ      REQ-01KC...     manager
+2024-01-15   APPROVE    RISK     RISK-02AB...    bwilson         Quality OK
+2024-01-15   APPROVE    REQ      REQ-01KC...     jsmith          LGTM
+2024-01-14   APPROVE    REQ      REQ-03CD...     alice           Reviewed
+
+4 workflow events.
+```
+
+## Git Tags for Audit Trail
+
+TDT automatically creates git tags for workflow events:
+
+```bash
+# List all approval tags
+git tag -l 'approve/*'
+
+# List all release tags
+git tag -l 'release/*'
+
+# Filter tags for a specific entity
+git tag -l '*REQ-01KC*'
+
+# Show tag details
+git show approve/REQ-01KC.../jsmith/2024-01-15
+```
+
+### Tag Format
+
+| Event | Tag Format |
+|-------|------------|
+| Approval | `approve/{entity-short-id}/{approver}/{date}` |
+| Release | `release/{entity-short-id}/{releaser}/{date}` |
+
+Example tags:
+```
+approve/REQ-01KCWY20/jsmith/2024-01-15
+approve/RISK-02ABCD/bwilson/2024-01-15
+release/REQ-01KCWY20/manager/2024-01-16
+```
+
+These tags enable:
+- **Audit queries**: `git log --tags='approve/*'`
+- **CI/CD integration**: Trigger builds on release tags
+- **Compliance reporting**: Query approvals by date range
 
 ## Provider Integration
 

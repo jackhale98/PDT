@@ -5938,3 +5938,342 @@ fn test_team_add_with_signing_format() {
     let content = fs::read_to_string(&team_yaml).unwrap();
     assert!(content.contains("signing_format: ssh"));
 }
+
+// ============================================================================
+// Hazard Tests
+// ============================================================================
+
+#[test]
+fn test_haz_list_empty_project() {
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No hazards found"));
+}
+
+#[test]
+fn test_haz_new_creates_file() {
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "haz",
+            "new",
+            "--title",
+            "High Voltage Exposure",
+            "--category",
+            "electrical",
+            "--description",
+            "300V DC exposed terminals",
+            "--severity",
+            "severe",
+            "--no-edit",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created hazard"));
+
+    let files: Vec<_> = fs::read_dir(tmp.path().join("risks/hazards"))
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+    assert_eq!(files.len(), 1);
+
+    let content = fs::read_to_string(files[0].path()).unwrap();
+    assert!(content.contains("High Voltage Exposure"));
+    assert!(content.contains("electrical"));
+    assert!(content.contains("severe"));
+}
+
+#[test]
+fn test_haz_list_shows_hazards() {
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "haz",
+            "new",
+            "--title",
+            "Crush Hazard",
+            "--category",
+            "mechanical",
+            "--description",
+            "Moving parts can crush fingers",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Crush Hazard"))
+        .stdout(predicate::str::contains("mechanical"));
+}
+
+#[test]
+fn test_haz_show_by_short_id() {
+    let tmp = setup_test_project();
+
+    // Create a hazard
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "haz",
+            "new",
+            "--title",
+            "Thermal Burns",
+            "--category",
+            "thermal",
+            "--description",
+            "Hot surfaces above 70C",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // List to assign short IDs
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "list"])
+        .assert()
+        .success();
+
+    // Show by short ID
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "show", "HAZ@1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Thermal Burns"))
+        .stdout(predicate::str::contains("thermal"));
+}
+
+#[test]
+fn test_haz_list_filter_by_category() {
+    let tmp = setup_test_project();
+
+    // Create electrical hazard
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "haz",
+            "new",
+            "--title",
+            "Shock Hazard",
+            "--category",
+            "electrical",
+            "--description",
+            "Electrical shock risk",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Create mechanical hazard
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "haz",
+            "new",
+            "--title",
+            "Pinch Point",
+            "--category",
+            "mechanical",
+            "--description",
+            "Finger pinch risk",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Filter by electrical
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "list", "--category", "electrical"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Shock Hazard"))
+        .stdout(predicate::str::contains("Pinch Point").not());
+
+    // Filter by mechanical
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "list", "--category", "mechanical"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Pinch Point"))
+        .stdout(predicate::str::contains("Shock Hazard").not());
+}
+
+#[test]
+fn test_haz_list_no_risks_filter() {
+    let tmp = setup_test_project();
+
+    // Create hazard without linked risks
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "haz",
+            "new",
+            "--title",
+            "Unlinked Hazard",
+            "--category",
+            "chemical",
+            "--description",
+            "Chemical exposure risk",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // List with --no-risks should show the hazard
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "list", "--no-risks"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Unlinked Hazard"));
+}
+
+#[test]
+fn test_haz_json_output() {
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "haz",
+            "new",
+            "--title",
+            "Test Hazard",
+            "--category",
+            "software",
+            "--description",
+            "Software malfunction risk",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["haz", "list", "--format", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"title\": \"Test Hazard\""))
+        .stdout(predicate::str::contains("\"category\": \"software\""));
+}
+
+// ============================================================================
+// Schema Tests
+// ============================================================================
+
+#[test]
+fn test_schema_list_includes_haz() {
+    tdt()
+        .args(["schema", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("haz"))
+        .stdout(predicate::str::contains("Hazard"));
+}
+
+#[test]
+fn test_schema_show_haz() {
+    tdt()
+        .args(["schema", "show", "haz"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Hazard"))
+        .stdout(predicate::str::contains("category"))
+        .stdout(predicate::str::contains("severity"))
+        .stdout(predicate::str::contains("electrical, mechanical, thermal"));
+}
+
+// ============================================================================
+// Trace DOT Output Tests
+// ============================================================================
+
+#[test]
+fn test_trace_from_dot_output() {
+    let tmp = setup_test_project();
+
+    // Create a requirement
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Test Requirement",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // List to get short IDs
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success();
+
+    // Test DOT output
+    tdt()
+        .current_dir(tmp.path())
+        .args(["trace", "from", "REQ@1", "--output", "dot"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("digraph trace_from"))
+        .stdout(predicate::str::contains("rankdir=TB"))
+        .stdout(predicate::str::contains("node [shape=box]"));
+}
+
+#[test]
+fn test_trace_to_dot_output() {
+    let tmp = setup_test_project();
+
+    // Create a requirement
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Test Requirement",
+            "--type",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // List to get short IDs
+    tdt()
+        .current_dir(tmp.path())
+        .args(["req", "list"])
+        .assert()
+        .success();
+
+    // Test DOT output
+    tdt()
+        .current_dir(tmp.path())
+        .args(["trace", "to", "REQ@1", "--output", "dot"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("digraph trace_to"))
+        .stdout(predicate::str::contains("rankdir=TB"))
+        .stdout(predicate::str::contains("fillcolor=lightblue"));
+}

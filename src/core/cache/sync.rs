@@ -26,6 +26,7 @@ impl EntityCache {
             DELETE FROM features;
             DELETE FROM components;
             DELETE FROM risks;
+            DELETE FROM hazards;
             DELETE FROM tests;
             DELETE FROM quotes;
             DELETE FROM suppliers;
@@ -148,6 +149,7 @@ impl EntityCache {
             "FEAT" => self.cache_feature_data(id, &value)?,
             "CMP" => self.cache_component_data(id, &value)?,
             "RISK" => self.cache_risk_data(id, &value)?,
+            "HAZ" => self.cache_hazard_data(id, &value)?,
             "TEST" => self.cache_test_data(id, &value)?,
             "QUOT" => self.cache_quote_data(id, &value)?,
             "SUP" => self.cache_supplier_data(id, &value)?,
@@ -278,6 +280,7 @@ impl EntityCache {
             "features",
             "components",
             "risks",
+            "hazards",
             "tests",
             "quotes",
             "suppliers",
@@ -342,6 +345,10 @@ impl EntityCache {
             ("requirement", "requirement"),
             ("affects", "affects"),
             ("controls", "controls"),
+            // Hazard links
+            ("originates_from", "originates_from"),
+            ("causes", "causes"),
+            ("controlled_by", "controlled_by"),
             // Test/Result links
             ("component", "component"),
             ("assembly", "assembly"),
@@ -484,6 +491,23 @@ impl EntityCache {
                     value["detection"].as_i64().map(|v| v as i32),
                     value["rpn"].as_i64().map(|v| v as i32),
                     value["risk_level"].as_str()
+                ],
+            )
+            .into_diagnostic()?;
+        Ok(())
+    }
+
+    pub(super) fn cache_hazard_data(&self, id: &str, value: &serde_yml::Value) -> Result<()> {
+        self.conn
+            .execute(
+                r#"INSERT OR REPLACE INTO hazards (id, hazard_category, severity, energy_level, exposure_scenario)
+                   VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                params![
+                    id,
+                    value["category"].as_str(),
+                    value["severity"].as_str(),
+                    value["energy_level"].as_str(),
+                    value["exposure_scenario"].as_str()
                 ],
             )
             .into_diagnostic()?;

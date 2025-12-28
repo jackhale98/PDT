@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pdt.dev/schemas/haz.schema.json",
+  "title": "Hazard",
+  "description": "A hazard - potential source of harm (ISO 14971, ISO 26262, IEC 61508)",
+  "type": "object",
+  "required": ["id", "category", "title", "description", "status", "created", "author"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^HAZ-[0-9A-Z]{26}$",
+      "description": "Unique identifier (HAZ prefix + ULID)"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["electrical", "mechanical", "thermal", "chemical", "biological", "radiation", "ergonomic", "software", "environmental"],
+      "description": "Hazard category by energy type or mechanism"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "Short descriptive title"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Detailed description of the hazard source"
+    },
+    "potential_harms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of potential harms from this hazard"
+    },
+    "energy_level": {
+      "type": ["string", "null"],
+      "description": "Energy level or magnitude (e.g., '300V DC', '500 psi', '150C')"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["negligible", "minor", "serious", "severe", "catastrophic"],
+      "default": "minor",
+      "description": "Maximum severity of potential harm"
+    },
+    "exposure_scenario": {
+      "type": ["string", "null"],
+      "description": "How someone could be exposed to this hazard"
+    },
+    "affected_populations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Populations at risk (operators, maintenance, patients, bystanders, etc.)"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for filtering and organization"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "review", "approved", "released", "obsolete"],
+      "default": "draft",
+      "description": "Current status"
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "originates_from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of components/assemblies where this hazard originates"
+        },
+        "causes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of risks caused by this hazard"
+        },
+        "controlled_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of controls that address this hazard"
+        },
+        "verified_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of tests that verify hazard controls"
+        },
+        "related_to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "IDs of related requirements or other entities"
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "author": {
+      "type": "string",
+      "description": "Author who identified this hazard"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Revision number"
+    },
+    "approvals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "approver": {
+            "type": "string",
+            "description": "Name of approver"
+          },
+          "role": {
+            "type": "string",
+            "description": "Role of approver"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Approval timestamp"
+          },
+          "signature": {
+            "type": "string",
+            "description": "Git commit hash as signature"
+          },
+          "comment": {
+            "type": "string",
+            "description": "Optional approval comment"
+          }
+        },
+        "required": ["approver", "date"]
+      },
+      "description": "Approval records for workflow"
+    }
+  },
+  "additionalProperties": false
+}

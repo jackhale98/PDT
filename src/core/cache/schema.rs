@@ -91,6 +91,18 @@ impl EntityCache {
                 FOREIGN KEY (id) REFERENCES entities(id) ON DELETE CASCADE
             );
 
+            -- Hazard-specific data
+            CREATE TABLE IF NOT EXISTS hazards (
+                id TEXT PRIMARY KEY,
+                hazard_category TEXT,
+                severity TEXT,
+                energy_level TEXT,
+                exposure_scenario TEXT,
+                FOREIGN KEY (id) REFERENCES entities(id) ON DELETE CASCADE
+            );
+            CREATE INDEX IF NOT EXISTS idx_hazards_category ON hazards(hazard_category);
+            CREATE INDEX IF NOT EXISTS idx_hazards_severity ON hazards(severity);
+
             -- Test-specific data
             CREATE TABLE IF NOT EXISTS tests (
                 id TEXT PRIMARY KEY,

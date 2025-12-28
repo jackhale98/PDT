@@ -4,6 +4,7 @@
 //!
 //! **Product Development:**
 //! - [`Requirement`] - Input/output requirements with traceability
+//! - [`Hazard`] - Potential sources of harm (safety analysis)
 //! - [`Risk`] - Design and process risks with FMEA analysis
 //! - [`Test`] - Verification and validation test protocols
 //! - [`Result`] - Test execution results and verdicts
@@ -25,6 +26,7 @@ pub mod component;
 pub mod control;
 pub mod dev;
 pub mod feature;
+pub mod hazard;
 pub mod lot;
 pub mod mate;
 pub mod ncr;
@@ -45,6 +47,7 @@ pub use component::Component;
 pub use control::Control;
 pub use dev::Dev;
 pub use feature::Feature;
+pub use hazard::Hazard;
 pub use lot::Lot;
 pub use mate::Mate;
 pub use ncr::Ncr;

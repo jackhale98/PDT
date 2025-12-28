@@ -1258,6 +1258,7 @@ fn find_entity_file(project: &Project, id: &EntityId) -> Result<PathBuf> {
             project.root().join("requirements/inputs"),
             project.root().join("requirements/outputs"),
         ],
+        EntityPrefix::Haz => vec![project.root().join("risks/hazards")],
         EntityPrefix::Risk => vec![project.root().join("design/risks")],
         EntityPrefix::Test => vec![
             project.root().join("verification/protocols"),

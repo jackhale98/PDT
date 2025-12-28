@@ -146,8 +146,11 @@ impl Project {
         let dirs = [
             "requirements/inputs",
             "requirements/outputs",
+            "risks/hazards",
             "risks/design",
             "risks/process",
+            "risks/use",
+            "risks/software",
             "bom/assemblies",
             "bom/components",
             "bom/quotes",
@@ -196,6 +199,7 @@ impl Project {
     pub fn entity_directory(prefix: EntityPrefix) -> &'static str {
         match prefix {
             EntityPrefix::Req => "requirements/inputs", // Default to inputs
+            EntityPrefix::Haz => "risks/hazards",
             EntityPrefix::Risk => "risks/design",       // Default to design
             EntityPrefix::Test => "verification/protocols",
             EntityPrefix::Rslt => "verification/results",

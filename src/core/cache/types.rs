@@ -163,6 +163,21 @@ pub struct CachedRisk {
     pub file_path: PathBuf,
 }
 
+/// Cached hazard data
+#[derive(Debug, Clone)]
+pub struct CachedHazard {
+    pub id: String,
+    pub title: String,
+    pub status: Status,
+    pub hazard_category: Option<String>,
+    pub severity: Option<String>,
+    pub energy_level: Option<String>,
+    pub exposure_scenario: Option<String>,
+    pub author: String,
+    pub created: DateTime<Utc>,
+    pub file_path: PathBuf,
+}
+
 /// Cached test protocol data
 #[derive(Debug, Clone)]
 pub struct CachedTest {

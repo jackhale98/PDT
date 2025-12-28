@@ -71,6 +71,10 @@ pub struct FromArgs {
     /// Show full IDs instead of short aliases
     #[arg(long)]
     pub ids: bool,
+
+    /// Output format: tree (default), dot (graphviz)
+    #[arg(long, short = 'o', default_value = "tree")]
+    pub output: String,
 }
 
 #[derive(clap::Args, Debug)]
@@ -85,6 +89,10 @@ pub struct ToArgs {
     /// Show full IDs instead of short aliases
     #[arg(long)]
     pub ids: bool,
+
+    /// Output format: tree (default), dot (graphviz)
+    #[arg(long, short = 'o', default_value = "tree")]
+    pub output: String,
 }
 
 #[derive(clap::Args, Debug)]
@@ -438,6 +446,7 @@ fn run_rvm(
 
 fn run_from(args: FromArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let use_dot = args.output == "dot";
 
     // Load all entities first
     let entities = load_all_entities(&project)?;
@@ -462,23 +471,6 @@ fn run_from(args: FromArgs) -> Result<()> {
         })
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
-    // Display source with alias unless --ids is set
-    let source_display = if !args.ids {
-        short_ids
-            .get_short_id(&source.id)
-            .unwrap_or_else(|| source.id.clone())
-    } else {
-        source.id.clone()
-    };
-
-    println!(
-        "{} Tracing from: {} - {}",
-        style("→").blue(),
-        style(&source_display).cyan(),
-        source.title
-    );
-    println!();
-
     // Build ID to title map for display
     let id_to_title: HashMap<String, String> = entities
         .iter()
@@ -498,10 +490,9 @@ fn run_from(args: FromArgs) -> Result<()> {
 
     // BFS to find what depends on this entity
     let mut visited = HashSet::new();
+    let mut edges: Vec<(String, String, String)> = Vec::new(); // (from, to, link_type)
     let mut queue: Vec<(String, usize)> = vec![(source.id.clone(), 0)];
     let max_depth = args.depth.unwrap_or(usize::MAX);
-
-    println!("{}", style("Entities that depend on this:").bold());
 
     while let Some((id, depth)) = queue.pop() {
         if depth > max_depth {
@@ -512,33 +503,105 @@ fn run_from(args: FromArgs) -> Result<()> {
         }
         visited.insert(id.clone());
 
-        if depth > 0 {
-            let indent = "  ".repeat(depth);
-            let id_display = if !args.ids {
-                short_ids
-                    .get_short_id(&id)
-                    .unwrap_or_else(|| format_short_id_str(&id))
-            } else {
-                id.clone()
-            };
-            let title = id_to_title
-                .get(&id)
-                .map(|t| truncate_str(t, 40))
-                .unwrap_or_default();
-            println!("{}← {} - {}", indent, style(&id_display).cyan(), title);
-        }
-
         if let Some(deps) = incoming.get(&id) {
-            for (dep_id, _link_type) in deps {
+            for (dep_id, link_type) in deps {
                 if !visited.contains(dep_id) {
+                    edges.push((dep_id.clone(), id.clone(), link_type.clone()));
                     queue.push((dep_id.clone(), depth + 1));
                 }
             }
         }
     }
 
-    if visited.len() == 1 {
-        println!("  {}", style("(none)").dim());
+    if use_dot {
+        // GraphViz DOT format
+        println!("digraph trace_from {{");
+        println!("  rankdir=TB;");
+        println!("  node [shape=box];");
+        println!();
+
+        // Output nodes
+        for id in &visited {
+            let short_id = format_short_id_str(id);
+            let title = id_to_title
+                .get(id)
+                .map(|t| truncate_str(t, 20))
+                .unwrap_or_default();
+            let label = format!("{}\\n{}", short_id, title);
+            let style_attr = if id == &source.id {
+                ", style=filled, fillcolor=lightblue"
+            } else {
+                ""
+            };
+            println!("  \"{}\" [label=\"{}\"{}];", id, label, style_attr);
+        }
+        println!();
+
+        // Output edges
+        for (from, to, link_type) in &edges {
+            println!("  \"{}\" -> \"{}\" [label=\"{}\"];", from, to, link_type);
+        }
+        println!("}}");
+    } else {
+        // Tree format (default)
+        let source_display = if !args.ids {
+            short_ids
+                .get_short_id(&source.id)
+                .unwrap_or_else(|| source.id.clone())
+        } else {
+            source.id.clone()
+        };
+
+        println!(
+            "{} Tracing from: {} - {}",
+            style("→").blue(),
+            style(&source_display).cyan(),
+            source.title
+        );
+        println!();
+        println!("{}", style("Entities that depend on this:").bold());
+
+        // Re-traverse for tree output with depth
+        let mut visited_tree = HashSet::new();
+        let mut queue_tree: Vec<(String, usize)> = vec![(source.id.clone(), 0)];
+
+        while let Some((id, depth)) = queue_tree.pop() {
+            if depth > max_depth {
+                continue;
+            }
+            if visited_tree.contains(&id) {
+                continue;
+            }
+            visited_tree.insert(id.clone());
+
+            if depth > 0 {
+                let indent = "  ".repeat(depth);
+                let id_display = if !args.ids {
+                    short_ids
+                        .get_short_id(&id)
+                        .unwrap_or_else(|| format_short_id_str(&id))
+                } else {
+                    id.clone()
+                };
+                let title = id_to_title
+                    .get(&id)
+                    .map(|t| truncate_str(t, 40))
+                    .unwrap_or_default();
+                println!("{}← {} - {}", indent, style(&id_display).cyan(), title);
+            }
+
+            if let Some(deps) = incoming.get(&id) {
+                for (dep_id, _link_type) in deps {
+                    if !visited_tree.contains(dep_id) {
+                        queue_tree.push((dep_id.clone(), depth + 1));
+                    }
+                }
+            }
+        }
+
+        if visited.len() == 1 {
+            println!("  {}", style("(none)").dim());
+        }
     }
 
     Ok(())
@@ -546,6 +609,7 @@ fn run_from(args: FromArgs) -> Result<()> {
 
 fn run_to(args: ToArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let use_dot = args.output == "dot";
 
     // Load all entities first
     let entities = load_all_entities(&project)?;
@@ -570,23 +634,6 @@ fn run_to(args: ToArgs) -> Result<()> {
         })
         .ok_or_else(|| miette::miette!("Entity '{}' not found", args.id))?;
 
-    // Display target with alias unless --ids is set
-    let target_display = if !args.ids {
-        short_ids
-            .get_short_id(&target.id)
-            .unwrap_or_else(|| target.id.clone())
-    } else {
-        target.id.clone()
-    };
-
-    println!(
-        "{} Tracing to: {} - {}",
-        style("→").blue(),
-        style(&target_display).cyan(),
-        target.title
-    );
-    println!();
-
     // Build ID to title map for display
     let id_to_title: HashMap<String, String> = entities
         .iter()
@@ -603,10 +650,9 @@ fn run_to(args: ToArgs) -> Result<()> {
 
     // BFS to find what this entity depends on
     let mut visited = HashSet::new();
+    let mut edges: Vec<(String, String, String)> = Vec::new(); // (from, to, link_type)
     let mut queue: Vec<(String, usize)> = vec![(target.id.clone(), 0)];
     let max_depth = args.depth.unwrap_or(usize::MAX);
-
-    println!("{}", style("Dependencies:").bold());
 
     while let Some((id, depth)) = queue.pop() {
         if depth > max_depth {
@@ -617,33 +663,105 @@ fn run_to(args: ToArgs) -> Result<()> {
         }
         visited.insert(id.clone());
 
-        if depth > 0 {
-            let indent = "  ".repeat(depth);
-            let id_display = if !args.ids {
-                short_ids
-                    .get_short_id(&id)
-                    .unwrap_or_else(|| format_short_id_str(&id))
-            } else {
-                id.clone()
-            };
-            let title = id_to_title
-                .get(&id)
-                .map(|t| truncate_str(t, 40))
-                .unwrap_or_default();
-            println!("{}→ {} - {}", indent, style(&id_display).cyan(), title);
-        }
-
         if let Some(deps) = outgoing.get(&id) {
-            for (_, dep_id) in deps {
+            for (link_type, dep_id) in deps {
                 if !visited.contains(dep_id) {
+                    edges.push((id.clone(), dep_id.clone(), link_type.clone()));
                     queue.push((dep_id.clone(), depth + 1));
                 }
             }
         }
     }
 
-    if visited.len() == 1 {
-        println!("  {}", style("(none)").dim());
+    if use_dot {
+        // GraphViz DOT format
+        println!("digraph trace_to {{");
+        println!("  rankdir=TB;");
+        println!("  node [shape=box];");
+        println!();
+
+        // Output nodes
+        for id in &visited {
+            let short_id = format_short_id_str(id);
+            let title = id_to_title
+                .get(id)
+                .map(|t| truncate_str(t, 20))
+                .unwrap_or_default();
+            let label = format!("{}\\n{}", short_id, title);
+            let style_attr = if id == &target.id {
+                ", style=filled, fillcolor=lightblue"
+            } else {
+                ""
+            };
+            println!("  \"{}\" [label=\"{}\"{}];", id, label, style_attr);
+        }
+        println!();
+
+        // Output edges
+        for (from, to, link_type) in &edges {
+            println!("  \"{}\" -> \"{}\" [label=\"{}\"];", from, to, link_type);
+        }
+        println!("}}");
+    } else {
+        // Tree format (default)
+        let target_display = if !args.ids {
+            short_ids
+                .get_short_id(&target.id)
+                .unwrap_or_else(|| target.id.clone())
+        } else {
+            target.id.clone()
+        };
+
+        println!(
+            "{} Tracing to: {} - {}",
+            style("→").blue(),
+            style(&target_display).cyan(),
+            target.title
+        );
+        println!();
+        println!("{}", style("Dependencies:").bold());
+
+        // Re-traverse for tree output with depth
+        let mut visited_tree = HashSet::new();
+        let mut queue_tree: Vec<(String, usize)> = vec![(target.id.clone(), 0)];
+
+        while let Some((id, depth)) = queue_tree.pop() {
+            if depth > max_depth {
+                continue;
+            }
+            if visited_tree.contains(&id) {
+                continue;
+            }
+            visited_tree.insert(id.clone());
+
+            if depth > 0 {
+                let indent = "  ".repeat(depth);
+                let id_display = if !args.ids {
+                    short_ids
+                        .get_short_id(&id)
+                        .unwrap_or_else(|| format_short_id_str(&id))
+                } else {
+                    id.clone()
+                };
+                let title = id_to_title
+                    .get(&id)
+                    .map(|t| truncate_str(t, 40))
+                    .unwrap_or_default();
+                println!("{}→ {} - {}", indent, style(&id_display).cyan(), title);
+            }
+
+            if let Some(deps) = outgoing.get(&id) {
+                for (_, dep_id) in deps {
+                    if !visited_tree.contains(dep_id) {
+                        queue_tree.push((dep_id.clone(), depth + 1));
+                    }
+                }
+            }
+        }
+
+        if visited.len() == 1 {
+            println!("  {}", style("(none)").dim());
+        }
     }
 
     Ok(())

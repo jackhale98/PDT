@@ -337,7 +337,7 @@ pub struct ArchiveArgs {
 }
 
 /// Directories where risks are stored
-const RISK_DIRS: &[&str] = &["risks/design", "risks/process"];
+const RISK_DIRS: &[&str] = &["risks/design", "risks/process", "risks/use", "risks/software"];
 
 #[derive(clap::Args, Debug)]
 pub struct SummaryArgs {
@@ -400,47 +400,26 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Full entity loading (original approach)
         let mut risks: Vec<Risk> = Vec::new();
 
-        // Check design risks
-        let design_dir = project.root().join("risks/design");
-        if design_dir.exists() {
-            for entry in walkdir::WalkDir::new(&design_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-                .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
-            {
-                match crate::yaml::parse_yaml_file::<Risk>(entry.path()) {
-                    Ok(risk) => risks.push(risk),
-                    Err(e) => {
-                        eprintln!(
-                            "{} Failed to parse {}: {}",
-                            style("!").yellow(),
-                            entry.path().display(),
-                            e
-                        );
-                    }
-                }
-            }
-        }
-
-        // Check process risks
-        let process_dir = project.root().join("risks/process");
-        if process_dir.exists() {
-            for entry in walkdir::WalkDir::new(&process_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.file_type().is_file())
-                .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
-            {
-                match crate::yaml::parse_yaml_file::<Risk>(entry.path()) {
-                    Ok(risk) => risks.push(risk),
-                    Err(e) => {
-                        eprintln!(
-                            "{} Failed to parse {}: {}",
-                            style("!").yellow(),
-                            entry.path().display(),
-                            e
-                        );
+        // Check all risk directories
+        for subdir in RISK_DIRS {
+            let dir = project.root().join(subdir);
+            if dir.exists() {
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                    .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+                {
+                    match crate::yaml::parse_yaml_file::<Risk>(entry.path()) {
+                        Ok(risk) => risks.push(risk),
+                        Err(e) => {
+                            eprintln!(
+                                "{} Failed to parse {}: {}",
+                                style("!").yellow(),
+                                entry.path().display(),
+                                e
+                            );
+                        }
                     }
                 }
             }
@@ -1352,7 +1331,7 @@ fn run_summary(args: SummaryArgs, global: &GlobalOpts) -> Result<()> {
     // Collect all risks
     let mut risks: Vec<Risk> = Vec::new();
 
-    for subdir in &["risks/design", "risks/process"] {
+    for subdir in RISK_DIRS {
         let dir = project.root().join(subdir);
         if !dir.exists() {
             continue;

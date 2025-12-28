@@ -19,6 +19,7 @@ use crate::cli::commands::{
     dmm::DmmArgs,
     dsm::DsmArgs,
     feat::FeatCommands,
+    haz::HazCommands,
     history::HistoryArgs,
     import::ImportArgs,
     init::InitArgs,
@@ -61,6 +62,7 @@ PROJECT:
 
 REQUIREMENTS & RISKS:
   req         Requirement management (new, list, show, edit)
+  haz         Hazard management (new, list, show, edit)
   risk        Risk/FMEA management (new, list, show, edit, summary)
 
 VERIFICATION & VALIDATION:
@@ -188,6 +190,10 @@ pub enum Commands {
     /// Requirement management (new, list, show, edit)
     #[command(subcommand)]
     Req(ReqCommands),
+
+    /// Hazard management (new, list, show, edit)
+    #[command(subcommand)]
+    Haz(HazCommands),
 
     /// Risk/FMEA management (new, list, show, edit, summary)
     #[command(subcommand)]

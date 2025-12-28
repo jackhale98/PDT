@@ -30,6 +30,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Init(args) => tdt::cli::commands::init::run(args),
         Commands::Req(cmd) => tdt::cli::commands::req::run(cmd, &global),
+        Commands::Haz(cmd) => tdt::cli::commands::haz::run(cmd, &global),
         Commands::Risk(cmd) => tdt::cli::commands::risk::run(cmd, &global),
         Commands::Test(cmd) => tdt::cli::commands::test::run(cmd, &global),
         Commands::Rslt(cmd) => tdt::cli::commands::rslt::run(cmd, &global),

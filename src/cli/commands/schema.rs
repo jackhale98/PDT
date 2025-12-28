@@ -11,6 +11,7 @@ use std::collections::BTreeMap;
 /// Schema files embedded at compile time
 const SCHEMAS: &[(&str, &str)] = &[
     ("req", include_str!("../../../schemas/req.schema.json")),
+    ("haz", include_str!("../../../schemas/haz.schema.json")),
     ("risk", include_str!("../../../schemas/risk.schema.json")),
     ("test", include_str!("../../../schemas/test.schema.json")),
     ("rslt", include_str!("../../../schemas/rslt.schema.json")),

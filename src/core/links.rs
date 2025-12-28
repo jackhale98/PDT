@@ -124,6 +124,20 @@ pub fn infer_link_type(source_prefix: EntityPrefix, target_prefix: EntityPrefix)
         (EntityPrefix::Capa, EntityPrefix::Sup) => Some("supplier".to_string()),
         (EntityPrefix::Capa, EntityPrefix::Risk) => Some("risks".to_string()),
 
+        // Hazard links
+        (EntityPrefix::Haz, EntityPrefix::Cmp) => Some("originates_from".to_string()),
+        (EntityPrefix::Haz, EntityPrefix::Asm) => Some("originates_from".to_string()),
+        (EntityPrefix::Haz, EntityPrefix::Risk) => Some("causes".to_string()),
+        (EntityPrefix::Haz, EntityPrefix::Ctrl) => Some("controlled_by".to_string()),
+        (EntityPrefix::Haz, EntityPrefix::Test) => Some("verified_by".to_string()),
+        (EntityPrefix::Haz, EntityPrefix::Req) => Some("related_to".to_string()),
+
+        // Entities referencing hazards
+        (EntityPrefix::Risk, EntityPrefix::Haz) => Some("caused_by".to_string()),
+        (EntityPrefix::Cmp, EntityPrefix::Haz) => Some("hazards".to_string()),
+        (EntityPrefix::Asm, EntityPrefix::Haz) => Some("hazards".to_string()),
+        (EntityPrefix::Ctrl, EntityPrefix::Haz) => Some("controls_hazard".to_string()),
+
         // Process/Control back-links to CAPA
         (EntityPrefix::Proc, EntityPrefix::Capa) => Some("modified_by_capa".to_string()),
         (EntityPrefix::Ctrl, EntityPrefix::Capa) => Some("added_by_capa".to_string()),
@@ -228,6 +242,15 @@ pub fn get_reciprocal_link_type(link_type: &str, target_prefix: EntityPrefix) ->
 
         // Component interchangeability is symmetric
         ("interchangeable_with", EntityPrefix::Cmp) => Some("interchangeable_with".to_string()),
+
+        // Hazard reciprocals
+        ("originates_from", EntityPrefix::Cmp) => Some("hazards".to_string()),
+        ("originates_from", EntityPrefix::Asm) => Some("hazards".to_string()),
+        ("hazards", EntityPrefix::Haz) => Some("originates_from".to_string()),
+        ("causes", EntityPrefix::Risk) => Some("caused_by".to_string()),
+        ("caused_by", EntityPrefix::Haz) => Some("causes".to_string()),
+        ("controlled_by", EntityPrefix::Ctrl) => Some("controls_hazard".to_string()),
+        ("controls_hazard", EntityPrefix::Haz) => Some("controlled_by".to_string()),
 
         // No reciprocal defined for other cases
         (_, _) => None,

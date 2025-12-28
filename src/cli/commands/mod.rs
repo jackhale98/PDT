@@ -17,6 +17,7 @@ pub mod diff;
 pub mod dmm;
 pub mod dsm;
 pub mod feat;
+pub mod haz;
 pub mod history;
 pub mod import;
 pub mod init;

@@ -227,17 +227,10 @@ pub fn run(args: LogArgs) -> Result<()> {
                 return Ok(());
             }
 
-            println!(
-                "\n{}\n",
-                style("Workflow Activity Log").bold().underlined()
-            );
+            println!("\n{}\n", style("Workflow Activity Log").bold().underlined());
             println!(
                 "{:<12} {:<10} {:<8} {:<15} {:<15} COMMENT",
-                "DATE",
-                "EVENT",
-                "TYPE",
-                "ENTITY",
-                "ACTOR"
+                "DATE", "EVENT", "TYPE", "ENTITY", "ACTOR"
             );
             println!("{}", "-".repeat(80));
 

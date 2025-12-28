@@ -155,8 +155,8 @@ fn show_workflow_history(
     full_id: &str,
 ) -> Result<()> {
     // Read entity file
-    let content =
-        std::fs::read_to_string(entity_file).map_err(|e| miette::miette!("Cannot read file: {}", e))?;
+    let content = std::fs::read_to_string(entity_file)
+        .map_err(|e| miette::miette!("Cannot read file: {}", e))?;
     let entity: EntityData =
         serde_yml::from_str(&content).map_err(|e| miette::miette!("Cannot parse entity: {}", e))?;
 
@@ -174,7 +174,10 @@ fn show_workflow_history(
     events.push(WorkflowEvent {
         timestamp: entity.created,
         event_type: "Created".to_string(),
-        actor: entity.author.clone().unwrap_or_else(|| "Unknown".to_string()),
+        actor: entity
+            .author
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string()),
         details: None,
     });
 

@@ -663,9 +663,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             ListColumn::Detection => {
                 risks.sort_by(|a, b| b.detection.unwrap_or(0).cmp(&a.detection.unwrap_or(0)))
             }
-            ListColumn::Rpn => {
-                risks.sort_by_key(|r| std::cmp::Reverse(r.get_rpn().unwrap_or(0)))
-            }
+            ListColumn::Rpn => risks.sort_by_key(|r| std::cmp::Reverse(r.get_rpn().unwrap_or(0))),
             ListColumn::Category => risks.sort_by(|a, b| {
                 a.category
                     .as_deref()

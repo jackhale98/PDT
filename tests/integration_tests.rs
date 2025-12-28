@@ -5588,7 +5588,9 @@ fn test_release_sign_without_gpg_configured() {
             .args(["release", &req_id, "-y", "--sign"])
             .assert()
             .failure()
-            .stderr(predicate::str::contains("GPG signing requested but not configured"))
+            .stderr(predicate::str::contains(
+                "GPG signing requested but not configured",
+            ))
             .stderr(predicate::str::contains("git config"));
     }
 }
@@ -5672,8 +5674,10 @@ fn test_team_setup_signing_gitsign_not_installed() {
 
     // Either gitsign is installed (mentions Sigstore in stdout) or not (mentions installation in stderr)
     assert!(
-        stdout.contains("Sigstore") || stdout.contains("gitsign")
-            || stderr.contains("gitsign is not installed") || stderr.contains("brew install"),
+        stdout.contains("Sigstore")
+            || stdout.contains("gitsign")
+            || stderr.contains("gitsign is not installed")
+            || stderr.contains("brew install"),
         "Expected gitsign-related output, got stdout: {}, stderr: {}",
         stdout,
         stderr

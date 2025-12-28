@@ -767,16 +767,19 @@ impl AddKeyArgs {
             })?;
 
         // Determine signing format
-        let format = self.method.or_else(|| {
-            // Try to detect from git config
-            git.run_checked(&["config", "gpg.format"])
-                .ok()
-                .map(|o| match o.stdout.as_str() {
-                    "ssh" => SigningFormat::Ssh,
-                    "x509" => SigningFormat::Gitsign,
-                    _ => SigningFormat::Gpg,
-                })
-        }).unwrap_or(SigningFormat::Gpg);
+        let format = self
+            .method
+            .or_else(|| {
+                // Try to detect from git config
+                git.run_checked(&["config", "gpg.format"])
+                    .ok()
+                    .map(|o| match o.stdout.as_str() {
+                        "ssh" => SigningFormat::Ssh,
+                        "x509" => SigningFormat::Gitsign,
+                        _ => SigningFormat::Gpg,
+                    })
+            })
+            .unwrap_or(SigningFormat::Gpg);
 
         // Gitsign doesn't need a key file stored
         if format == SigningFormat::Gitsign {
@@ -821,8 +824,11 @@ impl AddKeyArgs {
         println!("✓ Exported public key to {}", key_file.display());
         println!();
         println!("Next steps:");
-        println!("  1. Commit the key: git add {} && git commit -m \"Add {} public key\"",
-                 key_file.display(), username);
+        println!(
+            "  1. Commit the key: git add {} && git commit -m \"Add {} public key\"",
+            key_file.display(),
+            username
+        );
         if format == SigningFormat::Ssh {
             println!("  2. Run 'tdt team sync-keys' to update allowed_signers file");
         }
@@ -870,7 +876,10 @@ impl AddKeyArgs {
             .into_diagnostic()?;
 
         if !output.status.success() {
-            bail!("Failed to export GPG key: {}", String::from_utf8_lossy(&output.stderr));
+            bail!(
+                "Failed to export GPG key: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         let content = String::from_utf8_lossy(&output.stdout).to_string();
@@ -1044,7 +1053,10 @@ impl ImportKeysArgs {
 
         println!();
         if imported > 0 {
-            println!("Imported {} key(s). You can now verify signatures from these users.", imported);
+            println!(
+                "Imported {} key(s). You can now verify signatures from these users.",
+                imported
+            );
         }
         if failed > 0 {
             println!("{} key(s) failed to import.", failed);
@@ -1156,10 +1168,16 @@ impl SyncKeysArgs {
         println!("✓ Generated {}", allowed_signers_path.display());
         println!();
         println!("To enable SSH signature verification, run:");
-        println!("  git config gpg.ssh.allowedSignersFile {}", allowed_signers_path.display());
+        println!(
+            "  git config gpg.ssh.allowedSignersFile {}",
+            allowed_signers_path.display()
+        );
         println!();
         println!("Or for global configuration:");
-        println!("  git config --global gpg.ssh.allowedSignersFile {}", allowed_signers_path.display());
+        println!(
+            "  git config --global gpg.ssh.allowedSignersFile {}",
+            allowed_signers_path.display()
+        );
 
         Ok(())
     }

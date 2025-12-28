@@ -174,7 +174,10 @@ impl RejectArgs {
             .map_err(|e| miette::miette!("Failed to get PR #{}: {}", pr_number, e))?;
 
         if self.verbose {
-            eprintln!("  PR #{}: {} (branch: {})", pr_info.number, pr_info.title, pr_info.branch);
+            eprintln!(
+                "  PR #{}: {} (branch: {})",
+                pr_info.number, pr_info.title, pr_info.branch
+            );
         }
 
         // Try to extract entity ID from branch name
@@ -212,8 +215,8 @@ impl RejectArgs {
         if parts.len() == 2 {
             let prefix = parts[0].to_uppercase();
             let valid_prefixes = [
-                "REQ", "RISK", "TEST", "RSLT", "CMP", "ASM", "FEAT", "MATE", "TOL",
-                "PROC", "CTRL", "WORK", "LOT", "DEV", "NCR", "CAPA", "QUOT", "SUP",
+                "REQ", "RISK", "TEST", "RSLT", "CMP", "ASM", "FEAT", "MATE", "TOL", "PROC", "CTRL",
+                "WORK", "LOT", "DEV", "NCR", "CAPA", "QUOT", "SUP",
             ];
             if valid_prefixes.contains(&prefix.as_str()) {
                 // Return as PREFIX@shortid format for resolution

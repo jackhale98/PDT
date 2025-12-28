@@ -514,12 +514,10 @@ impl PendingApprovalsArgs {
 
         // Sort by entity type, then by how many approvals needed
         items.sort_by(|a, b| {
-            a.entity_type
-                .cmp(&b.entity_type)
-                .then_with(|| {
-                    (b.required_approvals as usize - b.current_approvals)
-                        .cmp(&(a.required_approvals as usize - a.current_approvals))
-                })
+            a.entity_type.cmp(&b.entity_type).then_with(|| {
+                (b.required_approvals as usize - b.current_approvals)
+                    .cmp(&(a.required_approvals as usize - a.current_approvals))
+            })
         });
 
         // Output
@@ -550,10 +548,8 @@ impl PendingApprovalsArgs {
                     } else {
                         item.title.clone()
                     };
-                    let approval_status = format!(
-                        "{}/{}",
-                        item.current_approvals, item.required_approvals
-                    );
+                    let approval_status =
+                        format!("{}/{}", item.current_approvals, item.required_approvals);
                     let missing = if item.missing_roles.is_empty() {
                         "any".to_string()
                     } else {

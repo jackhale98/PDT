@@ -39,7 +39,10 @@ impl std::str::FromStr for SigningFormat {
             "gpg" => Ok(SigningFormat::Gpg),
             "ssh" => Ok(SigningFormat::Ssh),
             "gitsign" => Ok(SigningFormat::Gitsign),
-            _ => Err(format!("Unknown signing format: {}. Valid options: gpg, ssh, gitsign", s)),
+            _ => Err(format!(
+                "Unknown signing format: {}. Valid options: gpg, ssh, gitsign",
+                s
+            )),
         }
     }
 }

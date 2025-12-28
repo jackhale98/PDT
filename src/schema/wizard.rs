@@ -60,7 +60,7 @@ struct FieldInfo {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
+
 enum FieldType {
     String {
         min_length: Option<u64>,
@@ -79,6 +79,7 @@ enum FieldType {
     },
     Boolean,
     Array {
+        #[allow(dead_code)] // Stored for future nested array support
         item_type: Box<FieldType>,
     },
     Skip, // For fields we handle automatically (id, created, author, etc.)

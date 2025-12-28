@@ -232,13 +232,12 @@ pub fn run(args: LogArgs) -> Result<()> {
                 style("Workflow Activity Log").bold().underlined()
             );
             println!(
-                "{:<12} {:<10} {:<8} {:<15} {:<15} {}",
+                "{:<12} {:<10} {:<8} {:<15} {:<15} COMMENT",
                 "DATE",
                 "EVENT",
                 "TYPE",
                 "ENTITY",
-                "ACTOR",
-                "COMMENT"
+                "ACTOR"
             );
             println!("{}", "-".repeat(80));
 

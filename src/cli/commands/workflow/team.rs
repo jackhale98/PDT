@@ -771,10 +771,10 @@ impl AddKeyArgs {
             // Try to detect from git config
             git.run_checked(&["config", "gpg.format"])
                 .ok()
-                .and_then(|o| match o.stdout.as_str() {
-                    "ssh" => Some(SigningFormat::Ssh),
-                    "x509" => Some(SigningFormat::Gitsign),
-                    _ => Some(SigningFormat::Gpg),
+                .map(|o| match o.stdout.as_str() {
+                    "ssh" => SigningFormat::Ssh,
+                    "x509" => SigningFormat::Gitsign,
+                    _ => SigningFormat::Gpg,
                 })
         }).unwrap_or(SigningFormat::Gpg);
 
@@ -970,7 +970,7 @@ impl ImportKeysArgs {
                 if let Some(ref user) = self.user {
                     e.path()
                         .file_stem()
-                        .map(|s| s.to_string_lossy().to_string() == *user)
+                        .map(|s| s.to_string_lossy() == user.as_str())
                         .unwrap_or(false)
                 } else {
                     true

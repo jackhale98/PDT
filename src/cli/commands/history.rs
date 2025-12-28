@@ -127,10 +127,11 @@ pub fn run(args: HistoryArgs) -> Result<()> {
 
 /// Entity data for workflow history extraction
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct EntityData {
+    #[allow(dead_code)] // Needed for deserialization but not directly accessed
     id: String,
     title: String,
+    #[allow(dead_code)] // Needed for deserialization but not directly accessed
     status: String,
     created: DateTime<Utc>,
     author: Option<String>,

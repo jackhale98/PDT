@@ -631,7 +631,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     // Sort by specified column (or RPN if --by-rpn is used)
     // Use computed values for accurate sorting
     if args.by_rpn {
-        risks.sort_by(|a, b| b.get_rpn().unwrap_or(0).cmp(&a.get_rpn().unwrap_or(0)));
+        risks.sort_by_key(|r| std::cmp::Reverse(r.get_rpn().unwrap_or(0)));
     } else {
         match args.sort {
             ListColumn::Id => risks.sort_by(|a, b| a.id.to_string().cmp(&b.id.to_string())),
@@ -664,7 +664,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 risks.sort_by(|a, b| b.detection.unwrap_or(0).cmp(&a.detection.unwrap_or(0)))
             }
             ListColumn::Rpn => {
-                risks.sort_by(|a, b| b.get_rpn().unwrap_or(0).cmp(&a.get_rpn().unwrap_or(0)))
+                risks.sort_by_key(|r| std::cmp::Reverse(r.get_rpn().unwrap_or(0)))
             }
             ListColumn::Category => risks.sort_by(|a, b| {
                 a.category

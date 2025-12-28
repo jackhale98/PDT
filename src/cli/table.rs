@@ -825,12 +825,12 @@ impl<'a> TableFormatter<'a> {
 pub fn columns_to_keys<C: std::fmt::Display>(columns: &[C]) -> Vec<&'static str> {
     columns
         .iter()
-        .filter_map(|c| {
+        .map(|c| {
             // Leak the string to get a static lifetime
             // This is acceptable because column names are fixed at compile time
             // and we only have a small number of them
             let s = c.to_string();
-            Some(Box::leak(s.into_boxed_str()) as &'static str)
+            Box::leak(s.into_boxed_str()) as &'static str
         })
         .collect()
 }

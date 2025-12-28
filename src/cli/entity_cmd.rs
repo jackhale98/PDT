@@ -225,7 +225,7 @@ pub fn status_filter_to_status(filter: StatusFilter) -> Option<crate::core::enti
 /// Output format for newly created entity
 pub fn output_new_entity(
     id: &EntityId,
-    file_path: &PathBuf,
+    file_path: &std::path::Path,
     short_id: Option<String>,
     entity_name: &str,
     title: &str,
@@ -304,7 +304,7 @@ use crate::core::links::add_inferred_link;
 
 /// Process --link flags and add inferred links to a newly created entity
 pub fn process_link_flags(
-    file_path: &PathBuf,
+    file_path: &std::path::Path,
     source_prefix: EntityPrefix,
     link_targets: &[String],
     short_ids: &ShortIdIndex,

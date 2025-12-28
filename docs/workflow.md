@@ -617,7 +617,7 @@ tdt req list -s approved -f short-id | tdt release -
 View pending reviews and approval status:
 
 ```bash
-# List items pending your review
+# List items pending your review (requested as reviewer)
 tdt review list
 
 # Filter by entity type
@@ -636,6 +636,36 @@ tdt review pending-approvals
 tdt review pending-approvals -t risk
 ```
 
+### Discovering PRs for Multi-Approval Workflows
+
+When using multi-signature approvals, team members may need to find PRs that require their role's approval even if they weren't explicitly requested as a reviewer:
+
+```bash
+# Show all open PRs targeting main branch
+tdt review list --target main
+
+# Show PRs that need approval from your role
+tdt review list --needs-role
+
+# Show all open PRs with TDT entities
+tdt review list --all-open
+
+# Combine with entity type filter
+tdt review list --target main -t risk
+```
+
+### Review List Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--entity-type` | `-t` | Filter by entity type |
+| `--all` | | Show all pending reviews (not just yours) |
+| `--target` | | Show open PRs targeting a specific branch |
+| `--needs-role` | | Show PRs needing your role's approval |
+| `--all-open` | | Show all open PRs with TDT entities |
+| `--output` | `-o` | Output format: table, short-id, json |
+| `--verbose` | | Print commands as they run |
+
 ### Example Output
 
 ```
@@ -647,6 +677,24 @@ RISK@3  RISK   Motor overheating failure    bob         #45
 
 2 items pending your review. Run `tdt approve <id>` to approve.
 ```
+
+### PR Discovery Output (--target / --needs-role)
+
+```
+$ tdt review list --target main
+
+Open PRs Targeting Branch
+
+PR     ENTITY       TYPE     TITLE                     APPROVALS  MISSING
+-------------------------------------------------------------------------------------
+#42    REQ-01AB...  REQ      Pump GPM requirement      1/2        quality
+#45    RISK-02CD... RISK     Motor overheating         0/2        engineering, quality
+#47    CMP-03EF...  CMP      Motor housing             1/1        ✓
+
+3 entities across 3 PRs (2 need more approvals).
+```
+
+With `--needs-role`, only shows PRs where your role is in the "MISSING" list.
 
 ### Pending Approvals Output
 

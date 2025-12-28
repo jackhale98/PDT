@@ -441,6 +441,66 @@ impl ProviderClient {
         }
     }
 
+    /// List all open PRs targeting a specific branch (e.g., main)
+    pub fn list_prs_targeting(&self, target_branch: &str) -> Result<Vec<PrInfo>, ProviderError> {
+        self.validate()?;
+
+        let args = match self.provider {
+            Provider::GitHub => vec![
+                "pr",
+                "list",
+                "--base",
+                target_branch,
+                "--state",
+                "open",
+                "--json",
+                "number,url,title,author,headRefName,state",
+            ],
+            Provider::GitLab => vec![
+                "mr",
+                "list",
+                "--target-branch",
+                target_branch,
+                "--state=opened",
+            ],
+            Provider::None => return Err(ProviderError::NotConfigured),
+        };
+
+        let output = self.run(&args)?;
+
+        match self.provider {
+            Provider::GitHub => self.parse_github_pr_list(&output),
+            Provider::GitLab => self.parse_gitlab_mr_list(&output),
+            Provider::None => Ok(Vec::new()),
+        }
+    }
+
+    /// List all open PRs in the repository
+    pub fn list_open_prs(&self) -> Result<Vec<PrInfo>, ProviderError> {
+        self.validate()?;
+
+        let args = match self.provider {
+            Provider::GitHub => vec![
+                "pr",
+                "list",
+                "--state",
+                "open",
+                "--json",
+                "number,url,title,author,headRefName,state",
+            ],
+            Provider::GitLab => vec!["mr", "list", "--state=opened"],
+            Provider::None => return Err(ProviderError::NotConfigured),
+        };
+
+        let output = self.run(&args)?;
+
+        match self.provider {
+            Provider::GitHub => self.parse_github_pr_list(&output),
+            Provider::GitLab => self.parse_gitlab_mr_list(&output),
+            Provider::None => Ok(Vec::new()),
+        }
+    }
+
     /// Get PR info by branch name
     pub fn get_pr_for_branch(&self, branch: &str) -> Result<Option<PrInfo>, ProviderError> {
         self.validate()?;

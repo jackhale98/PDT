@@ -1029,7 +1029,7 @@ tdt release --type req</code></pre>
       <div class="command-block">
         <div class="command-header">Review Queue</div>
         <div class="command-body">
-          <pre><code># See what's waiting for your review
+          <pre><code># See what's waiting for your review (requested as reviewer)
 tdt review list
 
 # See all pending reviews (not just yours)
@@ -1040,6 +1040,28 @@ tdt review pending-approvals
 
 # Filter pending approvals by entity type
 tdt review pending-approvals --entity-type req</code></pre>
+        </div>
+      </div>
+
+      <div class="command-block">
+        <div class="command-header">Discover PRs for Multi-Approval</div>
+        <div class="command-body">
+          <pre><code># Show all open PRs targeting a specific branch
+tdt review list --target main
+
+# Show PRs that need your role's approval
+tdt review list --needs-role
+
+# Show all open PRs with TDT entities
+tdt review list --all-open
+
+# Combine with entity type filter
+tdt review list --target main --entity-type risk
+
+# Example output shows approval status:
+# PR     ENTITY       TYPE   TITLE              APPROVALS  MISSING
+# #42    REQ-01AB...  REQ    Flow requirement   1/2        quality
+# #45    RISK-02CD... RISK   Motor failure      0/2        engineering, quality</code></pre>
         </div>
       </div>
 
@@ -1165,6 +1187,22 @@ tdt team sync-keys</code></pre>
 ID          Title                    Current  Required  Next Role Needed
 REQ@1       Pump flow rate           1        2         quality
 RISK@2      Motor overheating        0        2         engineering,quality</code></pre>
+
+      <p style="margin-top: 16px;">
+        Team members can find PRs that need their role's approval, even if they weren't explicitly
+        requested as reviewers:
+      </p>
+
+      <pre><code># Find PRs targeting main that need your role
+$ tdt review list --target main --needs-role
+
+PRs Needing Your Role's Approval
+
+PR     ENTITY       TYPE   TITLE              APPROVALS  MISSING
+#45    RISK-02CD... RISK   Motor failure      1/2        quality
+
+1 entities across 1 PRs (1 need more approvals).
+Run `tdt approve <id> --pr <number>` to approve.</code></pre>
 
       <div class="callout info">
         <div class="callout-title">Approval Records</div>

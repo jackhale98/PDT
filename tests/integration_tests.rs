@@ -4359,6 +4359,94 @@ fn test_workflow_review_summary() {
 }
 
 #[test]
+fn test_workflow_review_list_target_flag() {
+    let tmp = setup_test_project();
+
+    // Review list with --target flag should work (falls back to local scan)
+    tdt()
+        .current_dir(tmp.path())
+        .args(["review", "list", "--target", "main"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_workflow_review_list_needs_role_flag() {
+    let tmp = setup_test_project();
+
+    // Review list with --needs-role flag should work
+    tdt()
+        .current_dir(tmp.path())
+        .args(["review", "list", "--needs-role"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_workflow_review_list_all_open_flag() {
+    let tmp = setup_test_project();
+
+    // Review list with --all-open flag should work
+    tdt()
+        .current_dir(tmp.path())
+        .args(["review", "list", "--all-open"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_workflow_review_list_with_review_status_entity() {
+    let tmp = setup_test_project();
+
+    // Create a requirement
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "req",
+            "new",
+            "--title",
+            "Review Test Req",
+            "-t",
+            "input",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Manually update the status to review in the YAML file
+    let req_dir = tmp.path().join("requirements/inputs");
+    let yaml_file = std::fs::read_dir(&req_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .find(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .expect("Should find a requirement file");
+
+    let content = std::fs::read_to_string(yaml_file.path()).unwrap();
+    let updated = content.replace("status: draft", "status: review");
+    std::fs::write(yaml_file.path(), updated).unwrap();
+
+    // Review list should show the entity
+    tdt()
+        .current_dir(tmp.path())
+        .args(["review", "list", "--all"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Review Test Req"));
+}
+
+#[test]
+fn test_workflow_review_pending_approvals() {
+    let tmp = setup_test_project();
+
+    // Pending approvals subcommand should work
+    tdt()
+        .current_dir(tmp.path())
+        .args(["review", "pending-approvals"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn test_workflow_team_list_no_roster() {
     let tmp = setup_test_project();
 

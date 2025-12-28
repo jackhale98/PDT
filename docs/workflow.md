@@ -330,17 +330,43 @@ $ tdt approve RISK@1 -m "Quality approval"
 
 ### What Approve Does
 
-1. Validates entities are in Review status
-2. Verifies user has approval authorization (if team roster configured)
-3. Checks for duplicate approvals (if require_unique_approvers is enabled)
-4. Records approval as an "electronic signature" (approver name, email, role, timestamp)
-5. Checks if approval requirements are met for the entity type
-6. If requirements met: Changes status to Approved
-7. If requirements not met: Entity stays in Review status
-8. Commits changes (if git available and auto_commit enabled)
-9. **Creates a git tag** for audit trail (e.g., `approve/REQ-01KC.../jsmith/2024-01-15`)
-10. Adds approval to PR (if provider configured)
-11. Optionally merges PR (only if all entities are fully approved)
+1. **If `--pr` specified**: Fetches and checks out the PR branch automatically
+2. Validates entities are in Review status
+3. Verifies user has approval authorization (if team roster configured)
+4. Checks for duplicate approvals (if require_unique_approvers is enabled)
+5. Records approval as an "electronic signature" (approver name, email, role, timestamp)
+6. Checks if approval requirements are met for the entity type
+7. If requirements met: Changes status to Approved
+8. If requirements not met: Entity stays in Review status
+9. Commits changes (if git available and auto_commit enabled)
+10. **Creates a git tag** for audit trail (e.g., `approve/REQ-01KC.../jsmith/2024-01-15`)
+11. **Pushes changes and tags to remote**
+12. Adds approval to PR (if provider configured)
+13. Optionally merges PR (only if all entities are fully approved)
+14. **Restores original branch** (if `--pr` switched branches)
+
+### Approving via PR Number
+
+The recommended way to approve is using the `--pr` flag:
+
+```bash
+# Approve all entities in PR #42
+tdt approve --pr 42
+
+# This automatically:
+# 1. Fetches and checks out the PR branch
+# 2. Pulls latest changes
+# 3. Makes approval changes
+# 4. Commits and pushes
+# 5. Adds PR approval
+# 6. Returns to your original branch
+```
+
+If you have uncommitted changes, use `--yes` to auto-stash them:
+
+```bash
+tdt approve --pr 42 --yes  # Auto-stash uncommitted changes
+```
 
 ### Approval Records (Electronic Signatures)
 

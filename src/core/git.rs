@@ -237,6 +237,79 @@ impl Git {
         }
     }
 
+    /// Fetch and checkout a remote branch, creating a local tracking branch
+    pub fn fetch_and_checkout_branch(&self, branch: &str) -> Result<(), GitError> {
+        // If branch exists locally, just checkout
+        if self.branch_exists(branch) {
+            return self.checkout_branch(branch);
+        }
+
+        // Fetch from origin first
+        self.fetch()?;
+
+        // Check if remote branch exists
+        let remote = self
+            .default_remote()
+            .unwrap_or_else(|_| "origin".to_string());
+        if !self.remote_branch_exists(&remote, branch) {
+            return Err(GitError::BranchNotFound {
+                branch: format!("{}/{}", remote, branch),
+            });
+        }
+
+        // Create local tracking branch and checkout
+        let output = self.run(&["checkout", "-b", branch, &format!("{}/{}", remote, branch)])?;
+        if output.success {
+            Ok(())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Stash uncommitted changes
+    pub fn stash(&self, message: Option<&str>) -> Result<(), GitError> {
+        let args = if let Some(msg) = message {
+            vec!["stash", "push", "-m", msg]
+        } else {
+            vec!["stash", "push"]
+        };
+
+        let output = self.run(&args)?;
+        if output.success {
+            Ok(())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Pop the most recent stash
+    pub fn stash_pop(&self) -> Result<(), GitError> {
+        let output = self.run(&["stash", "pop"])?;
+        if output.success {
+            Ok(())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Pull with rebase to get latest changes
+    pub fn pull_rebase(&self) -> Result<(), GitError> {
+        let output = self.run(&["pull", "--rebase"])?;
+        if output.success {
+            Ok(())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
     /// Stage a file for commit
     pub fn stage_file(&self, path: &Path) -> Result<(), GitError> {
         let path_str = path.to_string_lossy();

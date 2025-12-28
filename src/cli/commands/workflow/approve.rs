@@ -86,6 +86,83 @@ impl ApproveArgs {
         let git = Git::new(project.root());
         let has_git = git.is_repo();
 
+        // Track if we changed branches and need to restore
+        let original_branch = if has_git {
+            git.current_branch().ok()
+        } else {
+            None
+        };
+        let mut switched_branch = false;
+        let mut stashed_changes = false;
+        let mut pr_branch: Option<String> = None;
+
+        // If --pr is specified, checkout the PR branch first
+        if let Some(pr_number) = self.pr {
+            if !has_git {
+                bail!("--pr requires a git repository");
+            }
+
+            if config.workflow.provider == Provider::None {
+                bail!("--pr requires a git provider (github or gitlab) to be configured");
+            }
+
+            let provider = ProviderClient::new(config.workflow.provider, project.root())
+                .with_verbose(self.verbose);
+
+            // Get PR info to find the branch
+            let pr_info = provider
+                .get_pr(pr_number)
+                .map_err(|e| miette::miette!("Failed to get PR #{}: {}", pr_number, e))?;
+
+            pr_branch = Some(pr_info.branch.clone());
+
+            if self.verbose {
+                eprintln!("PR #{} is on branch: {}", pr_number, pr_info.branch);
+            }
+
+            // Check if we're already on the PR branch
+            let current = git.current_branch().unwrap_or_default();
+            if current != pr_info.branch {
+                // Check for uncommitted changes
+                if !git.is_clean() {
+                    let uncommitted = git.uncommitted_files().unwrap_or_default();
+                    if self.yes {
+                        // Stash changes automatically
+                        println!("Stashing {} uncommitted changes...", uncommitted.len());
+                        git.stash(Some("tdt approve: auto-stash before PR checkout"))
+                            .into_diagnostic()?;
+                        stashed_changes = true;
+                    } else {
+                        bail!(
+                            "You have uncommitted changes:\n  {}\n\n\
+                             Either commit/stash them first, or use --yes to auto-stash.",
+                            uncommitted.join("\n  ")
+                        );
+                    }
+                }
+
+                // Checkout the PR branch (fetch if needed)
+                if self.dry_run {
+                    println!("Would execute:");
+                    println!("  git fetch");
+                    println!("  git checkout {}", pr_info.branch);
+                } else {
+                    println!("Checking out PR branch: {}", pr_info.branch);
+                    git.fetch_and_checkout_branch(&pr_info.branch)
+                        .map_err(|e| miette::miette!("Failed to checkout branch: {}", e))?;
+                    switched_branch = true;
+
+                    // Pull latest changes
+                    if self.verbose {
+                        eprintln!("Pulling latest changes...");
+                    }
+                    if let Err(e) = git.pull_rebase() {
+                        eprintln!("Warning: Failed to pull latest changes: {}", e);
+                    }
+                }
+            }
+        }
+
         // Load team roster (optional but recommended for role-based approvals)
         let roster = TeamRoster::load(&project);
         let engine = WorkflowEngine::new(roster.clone(), config.workflow.clone());
@@ -230,7 +307,7 @@ impl ApproveArgs {
         }
 
         // Execute the approval
-        self.execute_approve(
+        let result = self.execute_approve(
             &project,
             &config,
             &git,
@@ -239,9 +316,34 @@ impl ApproveArgs {
             &approver_name,
             approver_email.as_deref(),
             approver_role,
-        )?;
+            pr_branch.as_deref(),
+        );
 
-        Ok(())
+        // Cleanup: restore original branch and pop stash if needed
+        if switched_branch {
+            if let Some(ref orig) = original_branch {
+                if self.verbose {
+                    eprintln!("Restoring original branch: {}", orig);
+                }
+                if let Err(e) = git.checkout_branch(orig) {
+                    eprintln!("Warning: Failed to restore original branch: {}", e);
+                }
+            }
+        }
+
+        if stashed_changes {
+            if self.verbose {
+                eprintln!("Restoring stashed changes...");
+            }
+            if let Err(e) = git.stash_pop() {
+                eprintln!("Warning: Failed to restore stashed changes: {}", e);
+                eprintln!(
+                    "Your changes are still in the stash. Run 'git stash pop' to restore them."
+                );
+            }
+        }
+
+        result
     }
 
     fn show_approval_status(
@@ -547,6 +649,7 @@ impl ApproveArgs {
         approver_name: &str,
         approver_email: Option<&str>,
         approver_role: Option<crate::core::team::Role>,
+        pr_branch: Option<&str>,
     ) -> Result<()> {
         let mut fully_approved = 0;
         let mut pending_more_approvals = 0;
@@ -729,14 +832,43 @@ impl ApproveArgs {
                 }
             }
 
+            // Push changes to remote (including tags)
+            let current_branch = git.current_branch().unwrap_or_default();
+            if !current_branch.is_empty() {
+                if self.dry_run {
+                    println!("Would execute:");
+                    println!("  git push origin {}", current_branch);
+                    println!("  git push --tags");
+                } else {
+                    // Push the branch
+                    match git.push(&current_branch, false) {
+                        Ok(()) => println!("  Pushed to origin/{}", current_branch),
+                        Err(e) => {
+                            eprintln!("  Warning: Failed to push: {}", e);
+                            eprintln!(
+                                "  You may need to push manually: git push origin {}",
+                                current_branch
+                            );
+                        }
+                    }
+
+                    // Push tags
+                    if let Err(e) = git.run_checked(&["push", "--tags"]) {
+                        if self.verbose {
+                            eprintln!("  Warning: Failed to push tags: {}", e);
+                        }
+                    }
+                }
+            }
+
             // PR operations if provider is configured
             if config.workflow.provider != Provider::None {
                 let provider = ProviderClient::new(config.workflow.provider, project.root())
                     .with_verbose(self.verbose);
 
-                // Find PR for current branch
-                let current_branch = git.current_branch().unwrap_or_default();
-                if let Ok(Some(pr_info)) = provider.get_pr_for_branch(&current_branch) {
+                // Find PR for current branch (use pr_branch if provided, otherwise current branch)
+                let branch_to_check = pr_branch.unwrap_or(&current_branch);
+                if let Ok(Some(pr_info)) = provider.get_pr_for_branch(branch_to_check) {
                     // Add approval review
                     if let Err(e) = provider.approve_pr(pr_info.number, self.message.as_deref()) {
                         eprintln!("  Warning: Failed to add PR approval: {}", e);

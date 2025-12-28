@@ -892,7 +892,10 @@ tdt submit --type req --all</code></pre>
             <pre><code># See what's waiting for your review
 tdt review list
 
-# Approve an item
+# Approve via PR number (auto-checkouts the branch)
+tdt approve --pr 42
+
+# Or if already on the PR branch
 tdt approve REQ@1</code></pre>
           </div>
         </div>
@@ -996,14 +999,20 @@ tdt submit REQ@1 --dry-run</code></pre>
       <div class="command-block">
         <div class="command-header">Approve Items</div>
         <div class="command-body">
-          <pre><code># Approve specific items
+          <pre><code># Approve via PR number (recommended - handles branch checkout automatically)
+tdt approve --pr 42
+
+# Approve specific items (when already on the PR branch)
 tdt approve REQ@1
 
 # Approve with a comment
 tdt approve REQ@1 -m "Looks good, values verified"
 
 # Approve and merge the pull request
-tdt approve REQ@1 --merge</code></pre>
+tdt approve --pr 42 --merge
+
+# Auto-stash uncommitted changes before checkout
+tdt approve --pr 42 --yes</code></pre>
         </div>
       </div>
 

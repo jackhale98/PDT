@@ -281,7 +281,11 @@ impl ReviewListArgs {
                 println!(
                     "\n{} entities across {} PRs ({} need more approvals).",
                     items.len(),
-                    items.iter().map(|i| i.pr_number).collect::<std::collections::HashSet<_>>().len(),
+                    items
+                        .iter()
+                        .map(|i| i.pr_number)
+                        .collect::<std::collections::HashSet<_>>()
+                        .len(),
                     needing_approval
                 );
 
@@ -310,7 +314,11 @@ impl ReviewListArgs {
         if let Some((short_id, entity_type)) = self.extract_entity_from_branch(&pr.branch) {
             // Resolve short ID to find the entity file
             let short_ids = crate::core::shortid::ShortIdIndex::load(project);
-            let full_id = short_ids.resolve(&format!("{}@{}", entity_type, short_id.split('-').nth(1).unwrap_or(&short_id)));
+            let full_id = short_ids.resolve(&format!(
+                "{}@{}",
+                entity_type,
+                short_id.split('-').nth(1).unwrap_or(&short_id)
+            ));
 
             if let Some(ref id) = full_id {
                 if let Some(entity_info) = self.get_entity_approval_info(project, id) {
@@ -347,12 +355,16 @@ impl ReviewListArgs {
                         let file_path = project.root().join(line);
                         if file_path.exists() {
                             if let Ok(content) = std::fs::read_to_string(&file_path) {
-                                if let Ok(entity) = serde_yml::from_str::<EntityApprovalData>(&content) {
+                                if let Ok(entity) =
+                                    serde_yml::from_str::<EntityApprovalData>(&content)
+                                {
                                     let prefix = get_prefix_from_id(&entity.id);
                                     entities.push(EntityFromPr {
                                         id: entity.id.clone(),
                                         short_id: truncate_id(&entity.id),
-                                        entity_type: prefix.map(|p| p.as_str().to_string()).unwrap_or_default(),
+                                        entity_type: prefix
+                                            .map(|p| p.as_str().to_string())
+                                            .unwrap_or_default(),
                                         title: entity.title,
                                         approvals: entity.approvals,
                                         prefix,
@@ -378,7 +390,9 @@ impl ReviewListArgs {
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                if content.contains(&format!("id: {}", id)) || content.contains(&format!("id: \"{}\"", id)) {
+                if content.contains(&format!("id: {}", id))
+                    || content.contains(&format!("id: \"{}\"", id))
+                {
                     if let Ok(entity) = serde_yml::from_str::<EntityApprovalData>(&content) {
                         let prefix = get_prefix_from_id(&entity.id);
                         return Some(EntityFromPr {

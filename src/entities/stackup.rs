@@ -439,6 +439,137 @@ pub struct AnalysisResults {
     pub monte_carlo: Option<MonteCarloResult>,
 }
 
+// ===== 3D SDT Tolerance Analysis Types =====
+
+/// 3D analysis configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Analysis3DConfig {
+    /// Enable 3D analysis for this stackup
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Analysis method: "jacobian_torsor" or "monte_carlo_3d"
+    #[serde(default = "default_3d_method")]
+    pub method: String,
+
+    /// Number of iterations for Monte Carlo 3D
+    #[serde(default = "default_3d_iterations")]
+    pub monte_carlo_iterations: u32,
+}
+
+fn default_3d_method() -> String {
+    "jacobian_torsor".to_string()
+}
+
+fn default_3d_iterations() -> u32 {
+    10000
+}
+
+impl Default for Analysis3DConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            method: default_3d_method(),
+            monte_carlo_iterations: default_3d_iterations(),
+        }
+    }
+}
+
+/// Statistics for a single DOF in 3D analysis
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TorsorStats {
+    /// Worst-case minimum value
+    pub wc_min: f64,
+
+    /// Worst-case maximum value
+    pub wc_max: f64,
+
+    /// Statistical mean
+    #[serde(default)]
+    pub rss_mean: f64,
+
+    /// Statistical 3-sigma spread
+    #[serde(default)]
+    pub rss_3sigma: f64,
+
+    /// Monte Carlo mean (if available)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mc_mean: Option<f64>,
+
+    /// Monte Carlo std dev (if available)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mc_std_dev: Option<f64>,
+}
+
+/// Result torsor with statistics for all 6 DOFs
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ResultTorsor {
+    /// Translation along X
+    pub u: TorsorStats,
+
+    /// Translation along Y
+    pub v: TorsorStats,
+
+    /// Translation along Z
+    pub w: TorsorStats,
+
+    /// Rotation about X (radians)
+    pub alpha: TorsorStats,
+
+    /// Rotation about Y (radians)
+    pub beta: TorsorStats,
+
+    /// Rotation about Z (radians)
+    pub gamma: TorsorStats,
+}
+
+/// 3D sensitivity entry for a contributor
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sensitivity3DEntry {
+    /// Contributor name
+    pub name: String,
+
+    /// Feature ID if linked
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature_id: Option<String>,
+
+    /// Variance contribution per DOF [u, v, w, α, β, γ] as percentages
+    pub contribution_pct: [f64; 6],
+}
+
+/// Jacobian matrix summary for chain analysis
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct JacobianSummary {
+    /// Number of contributors in chain
+    pub chain_length: usize,
+
+    /// Total constrained DOFs across chain
+    pub total_constrained_dof: usize,
+
+    /// Free DOFs in result
+    pub result_free_dof: Vec<String>,
+}
+
+/// Combined 3D analysis results
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Analysis3DResults {
+    /// Result torsor with 6-DOF statistics
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result_torsor: Option<ResultTorsor>,
+
+    /// 3D sensitivity analysis per contributor
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sensitivity_3d: Vec<Sensitivity3DEntry>,
+
+    /// Jacobian chain summary
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jacobian_summary: Option<JacobianSummary>,
+
+    /// Analysis timestamp
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analyzed_at: Option<DateTime<Utc>>,
+}
+
 /// Disposition status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -509,9 +640,23 @@ pub struct Stackup {
 
     /// Include GD&T position tolerances in statistical analysis
     /// When true, contributors with gdt_position will use total_tolerance_band()
-    /// Future: Will control 3D torsor-based analysis mode
     #[serde(default)]
     pub include_gdt: bool,
+
+    // ===== 3D SDT Analysis Fields =====
+
+    /// Functional measurement direction [dx, dy, dz] for 3D analysis
+    /// The result torsor will be projected onto this direction for 1D comparison
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub functional_direction: Option<[f64; 3]>,
+
+    /// 3D analysis configuration
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis_3d: Option<Analysis3DConfig>,
+
+    /// 3D analysis results (auto-calculated)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analysis_results_3d: Option<Analysis3DResults>,
 
     /// Analysis results (auto-calculated)
     #[serde(default)]
@@ -600,6 +745,9 @@ impl Default for Stackup {
             sigma_level: default_sigma_level(),
             mean_shift_k: 0.0,
             include_gdt: false,
+            functional_direction: None,
+            analysis_3d: None,
+            analysis_results_3d: None,
             analysis_results: AnalysisResults::default(),
             disposition: Disposition::default(),
             tags: Vec::new(),

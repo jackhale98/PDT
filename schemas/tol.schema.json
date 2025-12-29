@@ -143,7 +143,89 @@
     "include_gdt": {
       "type": "boolean",
       "default": false,
-      "description": "Include GD&T position tolerances in statistical analysis. Future: Will control 3D torsor-based analysis mode."
+      "description": "Include GD&T position tolerances in statistical analysis."
+    },
+    "functional_direction": {
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Functional measurement direction [dx, dy, dz] for 3D analysis"
+    },
+    "analysis_3d": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable 3D SDT analysis for this stackup"
+        },
+        "method": {
+          "type": "string",
+          "enum": ["jacobian_torsor", "monte_carlo_3d"],
+          "default": "jacobian_torsor",
+          "description": "3D analysis method"
+        },
+        "monte_carlo_iterations": {
+          "type": "integer",
+          "default": 10000,
+          "description": "Number of iterations for Monte Carlo 3D"
+        }
+      },
+      "description": "3D analysis configuration"
+    },
+    "analysis_results_3d": {
+      "type": "object",
+      "properties": {
+        "result_torsor": {
+          "type": "object",
+          "properties": {
+            "u": {"$ref": "#/$defs/torsor_stats"},
+            "v": {"$ref": "#/$defs/torsor_stats"},
+            "w": {"$ref": "#/$defs/torsor_stats"},
+            "alpha": {"$ref": "#/$defs/torsor_stats"},
+            "beta": {"$ref": "#/$defs/torsor_stats"},
+            "gamma": {"$ref": "#/$defs/torsor_stats"}
+          },
+          "description": "Result torsor with 6-DOF statistics"
+        },
+        "sensitivity_3d": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "feature_id": {"type": "string"},
+              "contribution_pct": {
+                "type": "array",
+                "items": {"type": "number"},
+                "minItems": 6,
+                "maxItems": 6,
+                "description": "Variance contribution per DOF [u, v, w, α, β, γ] as percentages"
+              }
+            }
+          },
+          "description": "3D sensitivity analysis per contributor"
+        },
+        "jacobian_summary": {
+          "type": "object",
+          "properties": {
+            "chain_length": {"type": "integer"},
+            "total_constrained_dof": {"type": "integer"},
+            "result_free_dof": {
+              "type": "array",
+              "items": {"type": "string"}
+            }
+          },
+          "description": "Jacobian chain summary"
+        },
+        "analyzed_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Analysis timestamp"
+        }
+      },
+      "description": "3D analysis results"
     },
     "analysis_results": {
       "type": "object",
@@ -241,6 +323,20 @@
       "minimum": 1,
       "default": 1,
       "description": "Entity revision number"
+    }
+  },
+  "$defs": {
+    "torsor_stats": {
+      "type": "object",
+      "properties": {
+        "wc_min": {"type": "number", "description": "Worst-case minimum value"},
+        "wc_max": {"type": "number", "description": "Worst-case maximum value"},
+        "rss_mean": {"type": "number", "description": "Statistical mean"},
+        "rss_3sigma": {"type": "number", "description": "Statistical 3-sigma spread"},
+        "mc_mean": {"type": "number", "description": "Monte Carlo mean"},
+        "mc_std_dev": {"type": "number", "description": "Monte Carlo standard deviation"}
+      },
+      "description": "Statistics for a single DOF in 3D analysis"
     }
   },
   "additionalProperties": false

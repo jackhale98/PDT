@@ -323,9 +323,24 @@ pub struct AnalyzeArgs {
 
     /// Include GD&T position tolerances in statistical analysis
     /// When set, contributors with gdt_position will include position tolerance in variance
-    /// Future: Will support 3D torsor-based analysis with --analysis-mode 3d
     #[arg(long)]
     pub with_gdt: bool,
+
+    // ===== 3D SDT Analysis Flags =====
+
+    /// Enable 3D torsor-based analysis using Small Displacement Torsor (SDT) method
+    /// Requires features to have geometry_3d defined
+    #[arg(long = "3d", short = '3')]
+    pub three_d: bool,
+
+    /// Show braille visualization of tolerance chain
+    /// Renders schematic and deviation ellipses in terminal
+    #[arg(long)]
+    pub visualize: bool,
+
+    /// 3D analysis method: "jacobian" (default) or "monte-carlo"
+    #[arg(long, default_value = "jacobian")]
+    pub method_3d: String,
 }
 
 #[derive(clap::Args, Debug)]
@@ -1890,6 +1905,9 @@ fn run_add(args: AddArgs) -> Result<()> {
             sigma: None,
             mean_shift: None,
             with_gdt: false,
+            three_d: false,
+            visualize: false,
+            method_3d: "jacobian".to_string(),
         })?;
     }
 

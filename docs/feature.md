@@ -33,6 +33,10 @@ Features represent dimensional characteristics on components that have tolerance
 | `description` | string | Detailed description |
 | `dimensions` | array[Dimension] | Dimensional characteristics |
 | `gdt` | array[GdtControl] | GD&T controls |
+| `geometry_class` | enum | Geometry class for 3D analysis (see below) |
+| `datum_label` | string | Datum label (A, B, or C) if this feature is a datum |
+| `geometry_3d` | Geometry3D | 3D geometry definition for kinematic chain analysis |
+| `torsor_bounds` | TorsorBounds | Auto-calculated torsor bounds from tolerances |
 | `drawing` | DrawingRef | Drawing reference |
 | `tags` | array[string] | Tags for filtering |
 | `entity_revision` | integer | Entity revision number (default: 1) |
@@ -77,6 +81,100 @@ This is critical for mate calculations - when validating mates, TDT uses the `in
 | `number` | string | Drawing number |
 | `revision` | string | Drawing revision |
 | `zone` | string | Drawing zone (e.g., "B3") |
+
+### Geometry3D Object (3D Tolerance Analysis)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `origin` | array[number] | Origin point [x, y, z] in component coordinate system |
+| `axis` | array[number] | Axis direction [dx, dy, dz] - unit vector for feature orientation |
+| `length` | number | Optional length for axial features (cylinders, cones) |
+
+### TorsorBounds Object (Auto-calculated)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `u` | array[number] | Translation along local X [min, max] |
+| `v` | array[number] | Translation along local Y [min, max] |
+| `w` | array[number] | Translation along local Z [min, max] |
+| `alpha` | array[number] | Rotation about local X [min, max] in radians |
+| `beta` | array[number] | Rotation about local Y [min, max] in radians |
+| `gamma` | array[number] | Rotation about local Z [min, max] in radians |
+
+### GeometryClass Enum
+
+| Value | Description | Constrained DOF |
+|-------|-------------|-----------------|
+| `plane` | Planar surface | w, α, β |
+| `cylinder` | Cylindrical feature | u, v, α, β |
+| `sphere` | Spherical feature | u, v, w |
+| `cone` | Conical feature | u, v, α, β |
+| `point` | Point feature | u, v, w |
+| `line` | Linear feature | u, v |
+| `complex` | Complex geometry | None (all free) |
+
+## GD&T Integration with 3D Analysis
+
+TDT's 3D tolerance analysis is designed to work seamlessly with ASME Y14.5 GD&T controls. The system automatically converts GD&T callouts to torsor bounds for chain analysis:
+
+### How GD&T Controls Map to Torsors
+
+| GD&T Symbol | Geometry Class | Torsor DOF Affected |
+|-------------|----------------|---------------------|
+| **Position** (⊕) | Cylinder | u, v (radial position) |
+| **Position** (⊕) | Plane | u, v, w (planar position) |
+| **Perpendicularity** (⟂) | Cylinder | α, β (angular deviation) |
+| **Parallelism** (//) | Plane | α, β (angular deviation) |
+| **Flatness** (⏥) | Plane | w (out-of-plane) |
+| **Concentricity** (◎) | Cylinder | u, v (radial offset) |
+| **Runout** (↗) | Cylinder | u, v, α, β (radial + angular) |
+
+### Datum Reference Frames
+
+The `datum_label` field (A, B, C) establishes the datum reference frame per ASME Y14.5:
+
+- **Primary datum (A)**: Constrains 3 DOF (typically a plane: w, α, β)
+- **Secondary datum (B)**: Constrains 2 additional DOF (typically a cylinder: u, v OR a plane: one translation + rotation)
+- **Tertiary datum (C)**: Constrains 1 remaining DOF
+
+**Example**: A typical 3-2-1 datum scheme:
+
+```yaml
+# Primary datum - bottom surface (constrains w, α, β)
+geometry_class: plane
+datum_label: A
+
+# Secondary datum - locating hole (constrains u, v)
+geometry_class: cylinder
+datum_label: B
+
+# Tertiary datum - slot (constrains γ)
+geometry_class: plane
+datum_label: C
+```
+
+### Material Modifiers in 3D Analysis
+
+When GD&T controls specify material modifiers (MMC Ⓜ, LMC Ⓛ), bonus tolerance is automatically calculated:
+
+```yaml
+gdt:
+  - symbol: position
+    value: 0.25
+    datum_refs: ["A", "B", "C"]
+    material_condition: mmc  # Enables bonus tolerance
+
+dimensions:
+  - name: diameter
+    nominal: 10.0
+    plus_tol: 0.1
+    minus_tol: 0.05
+    internal: true  # Hole - MMC is smallest (9.95)
+```
+
+**Bonus calculation**: When the actual size departs from MMC, the position tolerance zone grows:
+- MMC = 9.95mm, Actual = 10.02mm → Bonus = 0.07mm
+- Effective position tolerance = 0.25 + 0.07 = 0.32mm
 
 ### Links
 
@@ -150,12 +248,27 @@ gdt:
     datum_refs: ["A"]
     material_condition: rfs
 
+# 3D Geometry for SDT Analysis
+geometry_class: cylinder
+datum_label: B                   # This feature serves as datum B
+geometry_3d:
+  origin: [50.0, 25.0, 0.0]      # Position in component coordinates (mm)
+  axis: [0.0, 0.0, 1.0]          # Z-axis oriented (perpendicular to surface)
+  length: 15.0                   # Hole depth
+
+# Auto-calculated torsor bounds (from tolerances + geometry_class)
+torsor_bounds:
+  u: [-0.125, 0.125]             # Position tol / 2
+  v: [-0.125, 0.125]             # Position tol / 2
+  alpha: [-0.0067, 0.0067]       # Perpendicularity / length
+  beta: [-0.0067, 0.0067]        # Perpendicularity / length
+
 drawing:
   number: "DWG-001"
   revision: "A"
   zone: "B3"
 
-tags: [mounting, precision]
+tags: [mounting, precision, datum]
 status: approved
 
 links:

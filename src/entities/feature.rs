@@ -180,6 +180,128 @@ pub struct GdtControl {
     pub material_condition: MaterialCondition,
 }
 
+// ===== 3D SDT Tolerance Analysis Types =====
+
+/// Geometry class for 3D tolerance analysis (SDT invariance class)
+///
+/// Determines which DOF are constrained by the feature type:
+/// - Plane: constrains w, α, β (3 DOF)
+/// - Cylinder: constrains u, v, α, β (4 DOF)
+/// - Sphere: constrains u, v, w (3 DOF)
+/// - Cone: constrains u, v, w, α, β (5 DOF)
+/// - Point: constrains u, v, w (3 DOF)
+/// - Line: constrains u, v (2 DOF)
+/// - Complex: user-defined constraint pattern
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum GeometryClass {
+    #[default]
+    Plane,
+    Cylinder,
+    Sphere,
+    Cone,
+    Point,
+    Line,
+    Complex,
+}
+
+impl std::fmt::Display for GeometryClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GeometryClass::Plane => write!(f, "plane"),
+            GeometryClass::Cylinder => write!(f, "cylinder"),
+            GeometryClass::Sphere => write!(f, "sphere"),
+            GeometryClass::Cone => write!(f, "cone"),
+            GeometryClass::Point => write!(f, "point"),
+            GeometryClass::Line => write!(f, "line"),
+            GeometryClass::Complex => write!(f, "complex"),
+        }
+    }
+}
+
+impl std::str::FromStr for GeometryClass {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "plane" => Ok(GeometryClass::Plane),
+            "cylinder" => Ok(GeometryClass::Cylinder),
+            "sphere" => Ok(GeometryClass::Sphere),
+            "cone" => Ok(GeometryClass::Cone),
+            "point" => Ok(GeometryClass::Point),
+            "line" => Ok(GeometryClass::Line),
+            "complex" => Ok(GeometryClass::Complex),
+            _ => Err(format!(
+                "Invalid geometry class: '{}'. Use plane, cylinder, sphere, cone, point, line, or complex",
+                s
+            )),
+        }
+    }
+}
+
+/// 3D geometry definition for a feature
+///
+/// Defines the feature's position and orientation in 3D space
+/// for kinematic chain analysis.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Geometry3D {
+    /// Origin point [x, y, z] in component coordinate system
+    pub origin: [f64; 3],
+
+    /// Axis direction [dx, dy, dz] - unit vector for feature orientation
+    /// For planes: surface normal
+    /// For cylinders/cones: axis direction
+    pub axis: [f64; 3],
+
+    /// Optional length for axial features (cylinders, cones)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length: Option<f64>,
+}
+
+impl Default for Geometry3D {
+    fn default() -> Self {
+        Self {
+            origin: [0.0, 0.0, 0.0],
+            axis: [0.0, 0.0, 1.0], // Default Z-up
+            length: None,
+        }
+    }
+}
+
+/// Torsor bounds for 6-DOF tolerance representation
+///
+/// Each component represents [min, max] deviation bounds:
+/// - u, v, w: translational deviations in local x, y, z
+/// - alpha, beta, gamma: rotational deviations about local x, y, z
+///
+/// None indicates the DOF is free (unconstrained by this feature)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct TorsorBounds {
+    /// Translation along local X [min, max]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub u: Option<[f64; 2]>,
+
+    /// Translation along local Y [min, max]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub v: Option<[f64; 2]>,
+
+    /// Translation along local Z [min, max]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub w: Option<[f64; 2]>,
+
+    /// Rotation about local X [min, max] in radians
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alpha: Option<[f64; 2]>,
+
+    /// Rotation about local Y [min, max] in radians
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub beta: Option<[f64; 2]>,
+
+    /// Rotation about local Z [min, max] in radians
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gamma: Option<[f64; 2]>,
+}
+
 /// Drawing reference
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct DrawingRef {
@@ -242,6 +364,24 @@ pub struct Feature {
     /// GD&T controls
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gdt: Vec<GdtControl>,
+
+    // ===== 3D SDT Analysis Fields =====
+
+    /// Geometry class for 3D tolerance analysis
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geometry_class: Option<GeometryClass>,
+
+    /// Datum label (A, B, C) if this feature is used as a datum
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub datum_label: Option<String>,
+
+    /// 3D geometry (origin, axis, length) for kinematic chain analysis
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub geometry_3d: Option<Geometry3D>,
+
+    /// Torsor bounds computed from tolerances and geometry class
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub torsor_bounds: Option<TorsorBounds>,
 
     /// Drawing reference
     #[serde(default)]
@@ -314,6 +454,10 @@ impl Default for Feature {
             description: None,
             dimensions: Vec::new(),
             gdt: Vec::new(),
+            geometry_class: None,
+            datum_label: None,
+            geometry_3d: None,
+            torsor_bounds: None,
             drawing: DrawingRef::default(),
             tags: Vec::new(),
             status: Status::default(),

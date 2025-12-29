@@ -111,6 +111,89 @@
       },
       "description": "GD&T controls"
     },
+    "geometry_class": {
+      "type": "string",
+      "enum": ["plane", "cylinder", "sphere", "cone", "point", "line", "complex"],
+      "description": "Geometry class for 3D tolerance analysis (SDT invariance class)"
+    },
+    "datum_label": {
+      "type": "string",
+      "pattern": "^[A-Z]$",
+      "description": "Datum label (A, B, C) if this feature is used as a datum"
+    },
+    "geometry_3d": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Origin point [x, y, z] in component coordinate system"
+        },
+        "axis": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Axis direction [dx, dy, dz] - unit vector for feature orientation"
+        },
+        "length": {
+          "type": "number",
+          "description": "Optional length for axial features (cylinders, cones)"
+        }
+      },
+      "required": ["origin", "axis"],
+      "description": "3D geometry definition for kinematic chain analysis"
+    },
+    "torsor_bounds": {
+      "type": "object",
+      "properties": {
+        "u": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Translation along local X [min, max]"
+        },
+        "v": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Translation along local Y [min, max]"
+        },
+        "w": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Translation along local Z [min, max]"
+        },
+        "alpha": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Rotation about local X [min, max] in radians"
+        },
+        "beta": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Rotation about local Y [min, max] in radians"
+        },
+        "gamma": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Rotation about local Z [min, max] in radians"
+        }
+      },
+      "description": "Torsor bounds computed from tolerances and geometry class"
+    },
     "drawing": {
       "type": "object",
       "properties": {

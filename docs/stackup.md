@@ -45,7 +45,10 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 | `sigma_level` | number | Sigma level for statistical analysis (default: 6.0, meaning ±3σ) |
 | `mean_shift_k` | number | Bender k-factor for process drift modeling (default: 0.0) |
 | `include_gdt` | boolean | Include GD&T position tolerances in calculations (default: false) |
-| `analysis_results` | AnalysisResults | Auto-calculated results |
+| `functional_direction` | array[number] | Functional direction [dx, dy, dz] for 3D analysis |
+| `analysis_3d` | Analysis3DConfig | 3D analysis configuration |
+| `analysis_results` | AnalysisResults | Auto-calculated results (1D) |
+| `analysis_results_3d` | Analysis3DResults | Auto-calculated 3D results |
 | `disposition` | enum | `under_review`, `approved`, `rejected` |
 | `tags` | array[string] | Tags for filtering |
 | `entity_revision` | integer | Entity revision number (default: 1) |
@@ -119,6 +122,45 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 | `percentile_97_5` | number | 97.5th percentile (95% CI upper) |
 | `pp` | number | Process performance (Pp) - uses sample std_dev: (USL - LSL) / (6s) |
 | `ppk` | number | Process performance (Ppk) - uses sample std_dev, accounts for centering |
+
+### Analysis3DConfig Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Enable 3D torsor-based analysis |
+| `method` | string | `jacobian_torsor` or `monte_carlo_3d` |
+| `monte_carlo_iterations` | integer | Iterations for Monte Carlo 3D (default: 10000) |
+
+### TorsorStats Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `wc_min` | number | Worst-case minimum value |
+| `wc_max` | number | Worst-case maximum value |
+| `rss_mean` | number | Statistical mean |
+| `rss_3sigma` | number | Statistical 3-sigma spread |
+| `mc_mean` | number | Monte Carlo mean |
+| `mc_std_dev` | number | Monte Carlo standard deviation |
+
+### ResultTorsor Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `u` | TorsorStats | Translation along X |
+| `v` | TorsorStats | Translation along Y |
+| `w` | TorsorStats | Translation along Z |
+| `alpha` | TorsorStats | Rotation about X |
+| `beta` | TorsorStats | Rotation about Y |
+| `gamma` | TorsorStats | Rotation about Z |
+
+### Analysis3DResults Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `result_torsor` | ResultTorsor | 6-DOF result torsor with statistics |
+| `sensitivity_3d` | array | Per-contributor sensitivity by DOF |
+| `jacobian_summary` | object | Chain length and DOF summary |
+| `analyzed_at` | datetime | Analysis timestamp |
 
 ### Links
 
@@ -355,6 +397,15 @@ tdt tol analyze TOL@1 --with-gdt
 
 # Show sensitivity analysis (% contribution per contributor)
 tdt tol analyze TOL@1 --sensitivity
+
+# 3D torsor-based analysis (requires features with geometry_3d)
+tdt tol analyze TOL@1 --3d
+
+# 3D analysis with braille visualization
+tdt tol analyze TOL@1 --3d --visualize
+
+# 3D Monte Carlo analysis
+tdt tol analyze TOL@1 --3d --method-3d monte-carlo
 ```
 
 ### Add features as contributors
@@ -509,6 +560,50 @@ effective_position_tolerance = position_tolerance + bonus (if MMC/LMC)
 This provides more realistic tolerance analysis when position tolerances significantly contribute to the tolerance chain.
 
 **Use when**: Position tolerances are significant contributors to the stackup
+
+### 3D SDT Analysis (Small Displacement Torsor)
+
+3D tolerance analysis uses Small Displacement Torsor (SDT) theory to propagate geometric deviations through kinematic chains. Each feature contributes a 6-DOF torsor (3 translations + 3 rotations).
+
+**Torsor Components**:
+
+| Component | Symbol | Description |
+|-----------|--------|-------------|
+| `u` | u | Translation along local X |
+| `v` | v | Translation along local Y |
+| `w` | w | Translation along local Z |
+| `alpha` | α | Rotation about local X |
+| `beta` | β | Rotation about local Y |
+| `gamma` | γ | Rotation about local Z |
+
+**Invariance Classes** (DOF constraints by geometry type):
+
+| Geometry | Constrained DOF | Free DOF |
+|----------|-----------------|----------|
+| **Plane** | w, α, β | u, v, γ |
+| **Cylinder** | u, v, α, β | w, γ |
+| **Sphere** | u, v, w | α, β, γ |
+| **Cone** | u, v, α, β | w, γ |
+| **Point** | u, v, w | α, β, γ |
+| **Line** | u, v | w, α, β, γ |
+
+**Jacobian Propagation**:
+
+The Jacobian matrix transforms torsors through the kinematic chain:
+
+```
+J = | I₃   [r]× |
+    | 0₃    I₃  |
+
+where [r]× is the skew-symmetric matrix of position vector r
+```
+
+**Use when**: Multi-DOF geometric analysis, complex kinematic chains, 3D position/orientation tolerances
+
+**Requirements**:
+- Features must have `geometry_3d` defined (origin, axis)
+- Features must have `geometry_class` specified
+- Stackup must have `functional_direction` for result projection
 
 ### Monte Carlo Simulation
 

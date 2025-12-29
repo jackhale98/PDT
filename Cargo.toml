@@ -1,6 +1,6 @@
 [package]
 name = "tessera-design-toolkit"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 description = "Tessera Design Toolkit - A CLI for managing engineering artifacts as plain-text YAML files with full traceability"
 license = "MIT"
@@ -56,6 +56,10 @@ directories = "5"
 # Utilities
 rust-embed = "8"
 rand = "0.9"
+
+# 3D Tolerance Analysis
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
+drawille = "0.3"
 
 # Cache
 rusqlite = { version = "0.32", features = ["bundled"] }

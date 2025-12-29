@@ -6277,3 +6277,387 @@ fn test_trace_to_dot_output() {
         .stdout(predicate::str::contains("rankdir=TB"))
         .stdout(predicate::str::contains("fillcolor=lightblue"));
 }
+
+// ============================================================================
+// 3D Tolerance Analysis Tests
+// ============================================================================
+
+#[test]
+fn test_backward_compatibility_feat_without_3d_fields() {
+    // Test that feature files without 3D geometry fields still parse correctly
+    let tmp = setup_test_project();
+
+    // Create a component first
+    create_test_component(&tmp, "PN-COMPAT", "Compatibility Test Component");
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    // Create a feature (no 3D fields)
+    create_test_feature(&tmp, "CMP@1", "internal", "Legacy Feature");
+
+    // List should work
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Legacy Feature"));
+
+    // Show should work
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "show", "FEAT@1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Legacy Feature"));
+}
+
+#[test]
+fn test_backward_compatibility_tol_without_3d_fields() {
+    // Test that stackup files without 3D analysis fields still parse correctly
+    let tmp = setup_test_project();
+
+    // Create a stackup (no 3D fields)
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "new", "--title", "Legacy Stackup", "--no-edit"])
+        .assert()
+        .success();
+
+    // List should work
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Legacy Stackup"));
+
+    // Show should work
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "show", "TOL@1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Legacy Stackup"));
+}
+
+#[test]
+fn test_tol_analyze_accepts_3d_flag() {
+    // Test that the --3d flag is accepted by tol analyze (even if not yet wired up)
+    let tmp = setup_test_project();
+
+    // Create a stackup with a contributor
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "tol",
+            "new",
+            "--title",
+            "3D Test Stackup",
+            "--target-name",
+            "Gap",
+            "--target-nominal",
+            "5.0",
+            "--target-upper",
+            "6.0",
+            "--target-lower",
+            "4.0",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "list"])
+        .output()
+        .unwrap();
+
+    // Add a manual contributor (via YAML editing)
+    let tol_dir = tmp.path().join("tolerances/stackups");
+    let entries: Vec<_> = fs::read_dir(&tol_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+
+    assert_eq!(entries.len(), 1, "Should have exactly one stackup file");
+    let stackup_path = entries[0].path();
+    let content = fs::read_to_string(&stackup_path).unwrap();
+
+    // Add a contributor to the stackup - replace the commented contributors section
+    // Find the "contributors:" line and replace from there to "analysis_results:"
+    let updated_content = if let Some(start) = content.find("contributors:") {
+        if let Some(end) = content.find("analysis_results:") {
+            let mut new_content = String::from(&content[..start]);
+            new_content.push_str("contributors:\n  - name: Test Dimension\n    nominal: 5.0\n    plus_tol: 0.1\n    minus_tol: 0.1\n\n");
+            new_content.push_str(&content[end..]);
+            new_content
+        } else {
+            content.clone()
+        }
+    } else {
+        content.clone()
+    };
+    fs::write(&stackup_path, &updated_content).unwrap();
+
+    // The --3d flag should be accepted (command syntax check)
+    // Note: Full 3D analysis requires features with geometry_3d defined
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "analyze", "TOL@1", "--3d"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_tol_analyze_accepts_visualize_flag() {
+    // Test that the --visualize flag is accepted
+    let tmp = setup_test_project();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "tol",
+            "new",
+            "--title",
+            "Viz Test",
+            "--target-nominal",
+            "10.0",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "list"])
+        .output()
+        .unwrap();
+
+    // Add a contributor
+    let tol_dir = tmp.path().join("tolerances/stackups");
+    let entries: Vec<_> = fs::read_dir(&tol_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+    let stackup_path = entries[0].path();
+    let content = fs::read_to_string(&stackup_path).unwrap();
+
+    // Add a contributor - replace the commented contributors section
+    let updated_content = if let Some(start) = content.find("contributors:") {
+        if let Some(end) = content.find("analysis_results:") {
+            let mut new_content = String::from(&content[..start]);
+            new_content.push_str("contributors:\n  - name: Dim A\n    nominal: 10.0\n    plus_tol: 0.05\n    minus_tol: 0.05\n\n");
+            new_content.push_str(&content[end..]);
+            new_content
+        } else {
+            content.clone()
+        }
+    } else {
+        content.clone()
+    };
+    fs::write(&stackup_path, &updated_content).unwrap();
+
+    // The --visualize flag should be accepted
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "analyze", "TOL@1", "--visualize"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_feat_with_3d_geometry_yaml() {
+    // Test that features with 3D geometry fields can be created and parsed
+    let tmp = setup_test_project();
+
+    // Create a component
+    create_test_component(&tmp, "PN-3D", "3D Test Component");
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    // Create a basic feature
+    create_test_feature(&tmp, "CMP@1", "internal", "3D Mounting Hole");
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Add 3D geometry via YAML editing
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+
+    assert_eq!(entries.len(), 1, "Should have exactly one feature file");
+    let feat_path = entries[0].path();
+    let content = fs::read_to_string(&feat_path).unwrap();
+
+    // Append 3D geometry fields
+    let updated_content = format!(
+        r#"{}
+geometry_class: cylinder
+datum_label: A
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]
+  axis: [0.0, 0.0, 1.0]
+  length: 25.0
+"#,
+        content.trim()
+    );
+    fs::write(&feat_path, updated_content).unwrap();
+
+    // Verify the feature still parses correctly
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "show", "FEAT@1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("3D Mounting Hole"));
+
+    // Validate should pass
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_tol_with_3d_config_yaml() {
+    // Test that stackups with 3D analysis configuration can be created and parsed
+    let tmp = setup_test_project();
+
+    // Create a stackup
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "tol",
+            "new",
+            "--title",
+            "3D Analysis Stackup",
+            "--target-nominal",
+            "15.0",
+            "--target-upper",
+            "16.0",
+            "--target-lower",
+            "14.0",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "list"])
+        .output()
+        .unwrap();
+
+    // Add 3D configuration via YAML editing
+    let tol_dir = tmp.path().join("tolerances/stackups");
+    let entries: Vec<_> = fs::read_dir(&tol_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+
+    let stackup_path = entries[0].path();
+    let content = fs::read_to_string(&stackup_path).unwrap();
+
+    // Fix contributors section and add 3D configuration
+    let updated_content = if let Some(start) = content.find("contributors:") {
+        if let Some(end) = content.find("analysis_results:") {
+            let mut new_content = String::from(&content[..start]);
+            // Add contributor and 3D config
+            new_content.push_str("contributors:\n  - name: Test Dim\n    nominal: 15.0\n    plus_tol: 0.1\n    minus_tol: 0.1\n\n");
+            new_content.push_str("functional_direction: [1.0, 0.0, 0.0]\n\n");
+            new_content.push_str("analysis_3d:\n  enabled: true\n  method: jacobian_torsor\n  monte_carlo_iterations: 10000\n\n");
+            new_content.push_str(&content[end..]);
+            new_content
+        } else {
+            content.clone()
+        }
+    } else {
+        content.clone()
+    };
+    fs::write(&stackup_path, &updated_content).unwrap();
+
+    // Verify the stackup still parses correctly
+    tdt()
+        .current_dir(tmp.path())
+        .args(["tol", "show", "TOL@1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("3D Analysis Stackup"));
+
+    // Validate should pass
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate"])
+        .assert()
+        .success();
+}
+
+#[test]
+fn test_cmp_with_coordinate_system_yaml() {
+    // Test that components with coordinate system and datum frame can be parsed
+    let tmp = setup_test_project();
+
+    // Create a component
+    create_test_component(&tmp, "PN-CS", "Coordinate System Test");
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    // Add coordinate system via YAML editing
+    let cmp_dir = tmp.path().join("bom/components");
+    let entries: Vec<_> = fs::read_dir(&cmp_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+        .collect();
+
+    let cmp_path = entries[0].path();
+    let content = fs::read_to_string(&cmp_path).unwrap();
+
+    // Add coordinate system
+    let updated_content = format!(
+        r#"{}
+coordinate_system:
+  origin: [0.0, 0.0, 0.0]
+  x_axis: [1.0, 0.0, 0.0]
+  z_axis: [0.0, 0.0, 1.0]
+"#,
+        content.trim()
+    );
+    fs::write(&cmp_path, updated_content).unwrap();
+
+    // Verify the component still parses correctly
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "show", "CMP@1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Coordinate System Test"));
+
+    // Validate should pass
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate"])
+        .assert()
+        .success();
+}

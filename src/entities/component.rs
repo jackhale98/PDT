@@ -122,6 +122,53 @@ pub struct Document {
     pub revision: Option<String>,
 }
 
+// ===== 3D SDT Tolerance Analysis Types =====
+
+/// Component coordinate system for 3D tolerance analysis
+///
+/// Defines the local coordinate system for this component in the assembly.
+/// The Y-axis is computed as Z × X.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CoordinateSystem {
+    /// Origin point [x, y, z] in assembly coordinates
+    pub origin: [f64; 3],
+
+    /// X-axis direction [dx, dy, dz] - must be unit vector
+    pub x_axis: [f64; 3],
+
+    /// Z-axis direction [dx, dy, dz] - must be unit vector, perpendicular to X
+    pub z_axis: [f64; 3],
+}
+
+impl Default for CoordinateSystem {
+    fn default() -> Self {
+        Self {
+            origin: [0.0, 0.0, 0.0],
+            x_axis: [1.0, 0.0, 0.0],
+            z_axis: [0.0, 0.0, 1.0],
+        }
+    }
+}
+
+/// Datum reference frame (DRF) for GD&T
+///
+/// References the feature entities that define the component's datum frame.
+/// Auto-populated by scanning features with datum_label set.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DatumFrame {
+    /// Primary datum feature (A)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub a: Option<EntityId>,
+
+    /// Secondary datum feature (B)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub b: Option<EntityId>,
+
+    /// Tertiary datum feature (C)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub c: Option<EntityId>,
+}
+
 /// Links to other entities
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ComponentLinks {
@@ -215,6 +262,16 @@ pub struct Component {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub documents: Vec<Document>,
 
+    // ===== 3D SDT Analysis Fields =====
+
+    /// Component coordinate system for 3D tolerance analysis
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coordinate_system: Option<CoordinateSystem>,
+
+    /// Datum reference frame - auto-populated from features with datum_label
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub datum_frame: Option<DatumFrame>,
+
     /// Tags for filtering
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
@@ -298,6 +355,8 @@ impl Component {
             selected_quote: None,
             suppliers: Vec::new(),
             documents: Vec::new(),
+            coordinate_system: None,
+            datum_frame: None,
             tags: Vec::new(),
             status: Status::default(),
             links: ComponentLinks::default(),

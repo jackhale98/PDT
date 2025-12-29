@@ -9,6 +9,7 @@ pub mod links;
 pub mod loader;
 pub mod project;
 pub mod provider;
+pub mod sdt;
 pub mod shortid;
 pub mod suspect;
 pub mod team;

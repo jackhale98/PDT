@@ -15,7 +15,7 @@ A CLI tool for managing engineering artifacts as plain-text YAML files. TDT prov
 - **Beautiful error messages** - Line numbers, context, and actionable suggestions
 - **FMEA Risk Management** - Built-in support for Failure Mode and Effects Analysis
 - **BOM Management** - Components and assemblies with supplier tracking
-- **Tolerance Analysis** - Features, mates, and stackups with worst-case, RSS, and Monte Carlo analysis
+- **Tolerance Analysis** - Features, mates, and stackups with worst-case, RSS, Monte Carlo, and 3D SDT analysis
 
 ## Installation
 
@@ -480,6 +480,8 @@ tdt tol list --critical                       # Show only critical stackups
 tdt tol show TOL@1                            # Show details with analysis
 tdt tol analyze TOL@1                         # Run worst-case, RSS, Monte Carlo
 tdt tol analyze TOL@1 --iterations 50000      # Custom Monte Carlo iterations
+tdt tol analyze TOL@1 --3d                    # 3D SDT torsor-based analysis
+tdt tol analyze TOL@1 --3d --visualize        # 3D with braille visualization
 tdt tol edit TOL@1                            # Open in editor
 tdt tol delete TOL@1                          # Permanently delete
 tdt tol archive TOL@1                         # Move to archive
@@ -1011,7 +1013,7 @@ Tests can use different verification methods (Inspection, Analysis, Demonstratio
 
 ## Tolerance Analysis
 
-TDT supports three analysis methods for tolerance stackups:
+TDT supports four analysis methods for tolerance stackups:
 
 ### Worst-Case Analysis
 
@@ -1045,12 +1047,31 @@ Runs thousands of random samples:
 - Reports 95% confidence interval (2.5th to 97.5th percentile)
 - Default: 10,000 iterations
 
+### 3D SDT Analysis (Small Displacement Torsor)
+
+Full 3D tolerance analysis using torsor theory:
+- **6-DOF Torsors**: 3 translations (u, v, w) + 3 rotations (α, β, γ) per feature
+- **Jacobian Propagation**: Transform deviations through kinematic chains with 6×6 matrices
+- **Geometry Classes**: Plane, Cylinder, Sphere, Cone - each with invariance constraints
+- **ASME Y14.5 Integration**: Works with standard GD&T controls (position, perpendicularity, etc.)
+- **Datum Reference Frames**: Supports A, B, C datum hierarchy
+- **Braille Visualization**: Terminal-based chain schematics and deviation ellipses
+
 ```bash
-# Run analysis with default iterations
+# Run 1D analysis with default iterations
 tdt tol analyze TOL@1
 
 # Run with more iterations for higher confidence
 tdt tol analyze TOL@1 --iterations 100000
+
+# Run 3D SDT analysis (requires features with geometry_3d)
+tdt tol analyze TOL@1 --3d
+
+# 3D analysis with braille visualization
+tdt tol analyze TOL@1 --3d --visualize
+
+# 3D Monte Carlo simulation
+tdt tol analyze TOL@1 --3d --method-3d monte-carlo
 ```
 
 ### Test Verdicts

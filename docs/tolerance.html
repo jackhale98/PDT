@@ -847,13 +847,110 @@ Std: 0.0207</span></pre>
         </div>
       </section>
 
+      <!-- 3D SDT Analysis -->
+      <section>
+        <h2 class="section-title">3D SDT Analysis</h2>
+        <p class="section-desc">
+          TDT supports full 3D tolerance analysis using Small Displacement Torsor (SDT) theory.
+          Propagate 6-DOF geometric deviations through kinematic chains with Jacobian matrices.
+          Integrates with ASME Y14.5 GD&T controls for familiar datum-based analysis.
+        </p>
+
+        <div class="cards-grid">
+          <div class="card">
+            <div class="card-icon">🎯</div>
+            <h3>6-DOF Torsors</h3>
+            <p>3 translations (u, v, w) + 3 rotations (α, β, γ) per feature</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">⚙️</div>
+            <h3>Jacobian Propagation</h3>
+            <p>Transform deviations through kinematic chains with 6×6 matrices</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">📐</div>
+            <h3>Geometry Classes</h3>
+            <p>Plane, Cylinder, Sphere, Cone - each with DOF constraints</p>
+          </div>
+          <div class="card">
+            <div class="card-icon">📊</div>
+            <h3>Braille Visualization</h3>
+            <p>Terminal-based chain schematics and deviation ellipses</p>
+          </div>
+        </div>
+
+        <div class="terminal">
+          <div class="terminal-header">
+            <div class="terminal-dot red"></div>
+            <div class="terminal-dot yellow"></div>
+            <div class="terminal-dot green"></div>
+            <span class="terminal-title">3D Tolerance Analysis</span>
+          </div>
+          <pre><span class="comment"># Run 3D torsor-based analysis</span>
+<span class="cmd">$</span> tdt tol analyze TOL@1 --3d
+
+<span class="output">⚙ Running 3D SDT analysis for stackup TOL@1...</span>
+<span class="success">✓ 3D Analysis complete</span>
+
+   <span class="key">Result Torsor (6-DOF)</span>:
+     Translation:  u=±0.15  v=±0.12  w=±0.08 mm
+     Rotation:     α=±0.002 β=±0.001 γ=±0.003 rad
+
+   <span class="key">Sensitivity by DOF</span>:
+     Housing Bore:    u=<span class="value">45%</span>  v=<span class="value">38%</span>
+     Shaft OD:        u=<span class="value">32%</span>  v=<span class="value">28%</span>
+     Bearing Race:    u=<span class="value">23%</span>  v=<span class="value">34%</span>
+
+<span class="comment"># 3D analysis with visualization</span>
+<span class="cmd">$</span> tdt tol analyze TOL@1 --3d --visualize
+
+<span class="output">Chain Schematic:</span>
+  ┌────┐       ┌────┐       ┌────┐
+  │CMP1│──||───│CMP2│──||───│CMP3│ → Functional
+  └────┘       └────┘       └────┘    Direction</pre>
+        </div>
+
+        <table class="analysis-table">
+          <thead>
+            <tr>
+              <th>Geometry Class</th>
+              <th>Description</th>
+              <th>Constrained DOF</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Plane</strong></td>
+              <td>Flat surface (datum A typical)</td>
+              <td>w, α, β</td>
+            </tr>
+            <tr>
+              <td><strong>Cylinder</strong></td>
+              <td>Holes, shafts, pins</td>
+              <td>u, v, α, β</td>
+            </tr>
+            <tr>
+              <td><strong>Sphere</strong></td>
+              <td>Ball features</td>
+              <td>u, v, w</td>
+            </tr>
+            <tr>
+              <td><strong>Cone</strong></td>
+              <td>Tapered features</td>
+              <td>u, v, α, β</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
       <!-- GD&T Integration -->
       <section>
-        <h2 class="section-title">GD&T Position Integration</h2>
+        <h2 class="section-title">GD&T Integration (ASME Y14.5)</h2>
         <p class="section-desc">
-          Features can document GD&T (Geometric Dimensioning and Tolerancing) callouts.
-          Position tolerances can now be included in stackup calculations using the
-          <code>--with-gdt</code> flag, with support for MMC/LMC bonus tolerance.
+          TDT's 3D analysis integrates seamlessly with ASME Y14.5 GD&T controls.
+          Define features with standard callouts - position, perpendicularity, parallelism -
+          and TDT automatically converts them to torsor bounds for chain analysis.
+          Supports MMC/LMC bonus tolerance calculation.
         </p>
 
         <div class="cards-grid">
@@ -928,6 +1025,15 @@ tdt tol analyze TOL@1 --mean-shift 1.5
 
 <span class="comment"># Export for external analysis</span>
 tdt tol analyze TOL@1 --csv > tolerance_data.csv
+
+<span class="comment"># 3D SDT analysis (requires features with geometry_3d)</span>
+tdt tol analyze TOL@1 --3d
+
+<span class="comment"># 3D analysis with braille visualization</span>
+tdt tol analyze TOL@1 --3d --visualize
+
+<span class="comment"># 3D Monte Carlo simulation</span>
+tdt tol analyze TOL@1 --3d --method-3d monte-carlo
 
 <span class="comment"># List all stackups with results</span>
 tdt tol list

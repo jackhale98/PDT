@@ -135,6 +135,55 @@
       },
       "description": "Associated documents"
     },
+    "coordinate_system": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Origin point [x, y, z] in assembly coordinates"
+        },
+        "x_axis": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "X-axis direction [dx, dy, dz] - unit vector"
+        },
+        "z_axis": {
+          "type": "array",
+          "items": {"type": "number"},
+          "minItems": 3,
+          "maxItems": 3,
+          "description": "Z-axis direction [dx, dy, dz] - unit vector"
+        }
+      },
+      "required": ["origin", "x_axis", "z_axis"],
+      "description": "Component coordinate system for 3D tolerance analysis"
+    },
+    "datum_frame": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string",
+          "pattern": "^FEAT-[0-9A-Z]{26}$",
+          "description": "Primary datum feature (A)"
+        },
+        "b": {
+          "type": "string",
+          "pattern": "^FEAT-[0-9A-Z]{26}$",
+          "description": "Secondary datum feature (B)"
+        },
+        "c": {
+          "type": "string",
+          "pattern": "^FEAT-[0-9A-Z]{26}$",
+          "description": "Tertiary datum feature (C)"
+        }
+      },
+      "description": "Datum reference frame - auto-populated from features with datum_label"
+    },
     "tags": {
       "type": "array",
       "items": {

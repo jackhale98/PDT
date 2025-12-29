@@ -38,6 +38,8 @@ Components represent individual parts in your Bill of Materials (BOM). They can 
 | `unit_cost` | number | Cost per unit |
 | `suppliers` | array[Supplier] | List of approved suppliers |
 | `documents` | array[Document] | Related documents (drawings, specs) |
+| `coordinate_system` | CoordinateSystem | Component coordinate system for 3D analysis |
+| `datum_frame` | DatumFrame | Datum reference frame (auto-populated from features) |
 | `tags` | array[string] | Tags for filtering |
 | `entity_revision` | integer | Entity revision number (default: 1) |
 
@@ -61,6 +63,45 @@ Components represent individual parts in your Bill of Materials (BOM). They can 
 | `type` | string | Document type (drawing, spec, datasheet) |
 | `path` | string | Path to document file |
 | `revision` | string | Document revision |
+
+### CoordinateSystem Object (3D Tolerance Analysis)
+
+Defines the component's local coordinate system for 3D tolerance analysis. Used to transform feature positions into assembly coordinates.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `origin` | array[number] | Origin point [x, y, z] in assembly coordinates |
+| `x_axis` | array[number] | X-axis direction [dx, dy, dz] - unit vector |
+| `z_axis` | array[number] | Z-axis direction [dx, dy, dz] - unit vector |
+
+**Note**: The Y-axis is computed as the cross product of Z and X axes (right-hand rule).
+
+**Example**:
+```yaml
+coordinate_system:
+  origin: [0.0, 0.0, 0.0]       # Component origin in assembly
+  x_axis: [1.0, 0.0, 0.0]       # Standard X direction
+  z_axis: [0.0, 0.0, 1.0]       # Standard Z direction (up)
+```
+
+### DatumFrame Object (Auto-populated)
+
+The datum reference frame is automatically populated from features that have `datum_label` set (A, B, or C). This follows ASME Y14.5 datum hierarchy.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `a` | EntityId | Primary datum feature (A) - constrains 3 DOF |
+| `b` | EntityId | Secondary datum feature (B) - constrains 2 DOF |
+| `c` | EntityId | Tertiary datum feature (C) - constrains 1 DOF |
+
+**Example**:
+```yaml
+# Auto-populated from features with datum_label: A, B, C
+datum_frame:
+  a: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTA  # Bottom surface (plane)
+  b: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTB  # Locating hole (cylinder)
+  c: FEAT-01HC2JB7SMQX7RS1Y0GFKBHPTC  # Orientation slot (plane)
+```
 
 ### Links
 

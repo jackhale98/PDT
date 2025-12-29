@@ -326,14 +326,15 @@ pub struct AnalyzeArgs {
     #[arg(long)]
     pub mean_shift: Option<f64>,
 
-    /// Include GD&T position tolerances in statistical analysis
-    /// When set, contributors with gdt_position will include position tolerance in variance
+    /// Exclude GD&T position tolerances from statistical analysis
+    /// By default, GD&T position tolerances are automatically included when present
     #[arg(long)]
-    pub with_gdt: bool,
+    pub no_gdt: bool,
 
     // ===== 3D SDT Analysis Flags =====
     /// Enable 3D torsor-based analysis using Small Displacement Torsor (SDT) method
     /// Requires features to have geometry_3d defined
+    /// Always runs both Jacobian (analytical) and Monte Carlo simulation
     #[arg(long = "3d", short = '3')]
     pub three_d: bool,
 
@@ -341,10 +342,6 @@ pub struct AnalyzeArgs {
     /// Renders schematic and deviation ellipses in terminal
     #[arg(long)]
     pub visualize: bool,
-
-    /// 3D analysis method: "jacobian" (default) or "monte-carlo"
-    #[arg(long, default_value = "jacobian")]
-    pub method_3d: String,
 }
 
 #[derive(clap::Args, Debug)]
@@ -1148,8 +1145,11 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         stackup.mean_shift_k = mean_shift;
     }
 
-    // Apply GD&T inclusion override if provided
-    if args.with_gdt {
+    // GD&T is included by default; --no-gdt disables it
+    if args.no_gdt {
+        stackup.include_gdt = false;
+    } else {
+        // Auto-include GD&T when position tolerances are present
         stackup.include_gdt = true;
     }
 
@@ -1210,7 +1210,7 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
 
     // 3D SDT Analysis (if requested)
     let _contributors_3d = if args.three_d {
-        run_3d_analysis(&mut stackup, &project, args.method_3d.as_str(), args.iterations)?
+        run_3d_analysis(&mut stackup, &project, args.iterations)?
     } else {
         None
     };
@@ -2093,10 +2093,9 @@ fn run_add(args: AddArgs) -> Result<()> {
             sensitivity: false,
             sigma: None,
             mean_shift: None,
-            with_gdt: false,
+            no_gdt: false,
             three_d: false,
             visualize: false,
-            method_3d: "jacobian".to_string(),
         })?;
     }
 
@@ -2283,7 +2282,6 @@ fn print_torsor_dof_mrad(label: &str, stats: &TorsorStats) {
 fn run_3d_analysis(
     stackup: &mut Stackup,
     project: &Project,
-    method: &str,
     monte_carlo_iterations: u32,
 ) -> Result<Option<Vec<ChainContributor3D>>> {
     // Load all features from project
@@ -2415,9 +2413,8 @@ fn run_3d_analysis(
         return Ok(None);
     }
 
-    // Run 3D analysis
-    let run_mc = method == "monte-carlo" || method == "monte_carlo";
-    let result = sdt::analyze_chain_3d(&contributors_3d, run_mc || true, monte_carlo_iterations);
+    // Run 3D analysis (always includes Monte Carlo)
+    let result = sdt::analyze_chain_3d(&contributors_3d, true, monte_carlo_iterations);
 
     // Build sensitivity entries
     let sensitivity_3d: Vec<Sensitivity3DEntry> = contributors_3d
@@ -2434,6 +2431,7 @@ fn run_3d_analysis(
     let functional_result = calculate_functional_projection(
         &result.rss_stats,
         stackup.functional_direction.unwrap_or([1.0, 0.0, 0.0]),
+        stackup.target.nominal,
         stackup.target.lower_limit,
         stackup.target.upper_limit,
         stackup.sigma_level,
@@ -2489,6 +2487,7 @@ fn build_torsor_bounds_for_dofs(half_tol: f64, dof_indices: &[usize]) -> TorsorB
 fn calculate_functional_projection(
     torsor: &crate::entities::stackup::ResultTorsor,
     direction: [f64; 3],
+    nominal: f64,
     lsl: f64,
     usl: f64,
     sigma_level: f64,
@@ -2539,8 +2538,13 @@ fn calculate_functional_projection(
         None
     };
 
+    // Convert absolute limits to deviation limits for Cpk calculation
+    // The 3D analysis computes deviations from nominal, not absolute values
+    let dev_lsl = lsl - nominal; // e.g., 65.5 - 67 = -1.5
+    let dev_usl = usl - nominal; // e.g., 68.5 - 67 = +1.5
+    let tol_range = dev_usl - dev_lsl; // Total tolerance band width
+
     // Calculate capability indices based on projected deviation
-    let tol_range = usl - lsl;
     let cp = if sigma_projected > 0.0 {
         Some(tol_range / (sigma_level * sigma_projected))
     } else {
@@ -2548,8 +2552,8 @@ fn calculate_functional_projection(
     };
 
     let cpk = if sigma_projected > 0.0 {
-        let cpu = (usl - rss_mean) / (sigma_level / 2.0 * sigma_projected);
-        let cpl = (rss_mean - lsl) / (sigma_level / 2.0 * sigma_projected);
+        let cpu = (dev_usl - rss_mean) / (sigma_level / 2.0 * sigma_projected);
+        let cpl = (rss_mean - dev_lsl) / (sigma_level / 2.0 * sigma_projected);
         Some(cpu.min(cpl))
     } else {
         None

@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Tolerance Analysis Guide - TDT Tessera Design Toolkit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0e14;
+      --bg-secondary: #0d1117;
+      --bg-elevated: #151b23;
+      --bg-card: #1a2029;
+      --accent: #00d4aa;
+      --accent-glow: rgba(0, 212, 170, 0.15);
+      --accent-dim: #00a085;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --text-muted: #4a5568;
+      --border: #21262d;
+      --border-accent: #00d4aa33;
+      --grid-line: rgba(0, 212, 170, 0.04);
+      --code-bg: #0d1117;
+      --success: #3fb950;
+      --warning: #d29922;
+      --info: #58a6ff;
+      --error: #f85149;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .grid-bg::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 50% at 50% 0%, var(--accent-glow), transparent);
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    code, pre, .mono {
+      font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      background: rgba(10, 14, 20, 0.95);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    nav .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text-primary);
+    }
+
+    .logo-icon { width: 40px; height: 40px; flex-shrink: 0; }
+    .logo-icon svg, .logo-icon img { width: 100%; height: 100%; }
+    .logo-text {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.03em;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover, .nav-links a.active { color: var(--accent); }
+
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-elevated);
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .nav-btn svg { width: 18px; height: 18px; }
+
+    .mobile-menu-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      cursor: pointer;
+      padding: 8px;
+    }
+
+    .mobile-menu-btn svg { width: 24px; height: 24px; }
+
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 64px;
+      left: 0;
+      right: 0;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      z-index: 99;
+    }
+
+    .mobile-menu.open { display: block; }
+
+    .mobile-menu a {
+      display: block;
+      padding: 12px 0;
+      color: var(--text-secondary);
+      text-decoration: none;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .mobile-menu a:last-child { border-bottom: none; }
+
+    .tutorial-header {
+      padding: 120px 0 60px;
+      text-align: center;
+      background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+    }
+
+    .tutorial-header h1 {
+      font-size: 42px;
+      margin-bottom: 16px;
+    }
+
+    .tutorial-header h1 span { color: var(--accent); }
+
+    .tutorial-header .description {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    .tutorial-layout {
+      display: flex;
+      gap: 60px;
+      padding: 60px 0;
+    }
+
+    .toc-sidebar {
+      width: 220px;
+      flex-shrink: 0;
+      position: sticky;
+      top: 84px;
+      height: fit-content;
+    }
+
+    .toc-sidebar h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .toc-sidebar ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    .toc-sidebar li { margin-bottom: 8px; }
+
+    .toc-sidebar a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+
+    .toc-sidebar a:hover { color: var(--accent); }
+
+    .tutorial-content { flex: 1; min-width: 0; }
+
+    .tutorial-section {
+      margin-bottom: 60px;
+      scroll-margin-top: 84px;
+    }
+
+    .tutorial-section h2 {
+      font-size: 28px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+    }
+
+    .tutorial-section h3 {
+      font-size: 20px;
+      margin-top: 32px;
+      margin-bottom: 16px;
+      color: var(--text-primary);
+    }
+
+    .tutorial-section h4 {
+      font-size: 16px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      color: var(--text-secondary);
+    }
+
+    .tutorial-section p {
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+    }
+
+    .tutorial-section ul, .tutorial-section ol {
+      margin-bottom: 16px;
+      padding-left: 24px;
+      color: var(--text-secondary);
+    }
+
+    .tutorial-section li { margin-bottom: 8px; }
+    .tutorial-section strong { color: var(--text-primary); }
+
+    .code-block {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 16px 0;
+    }
+
+    .code-header {
+      background: var(--bg-elevated);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .code-lang {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .code-block pre {
+      padding: 16px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .code-block code {
+      color: var(--text-primary);
+    }
+
+    .cmd { color: var(--accent); }
+    .string { color: #a5d6ff; }
+    .comment { color: var(--text-muted); }
+    .flag { color: var(--warning); }
+    .number { color: #79c0ff; }
+
+    .info-box {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+
+    .info-box.warning {
+      border-left-color: var(--warning);
+    }
+
+    .info-box strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    .info-box.warning strong {
+      color: var(--warning);
+    }
+
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+
+    .info-table th, .info-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .info-table th {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .info-table td {
+      color: var(--text-secondary);
+    }
+
+    .info-table code {
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+
+    .output-block {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    footer {
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 24px;
+    }
+
+    .footer-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .footer-text {
+      color: var(--text-muted);
+      font-size: 14px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 32px;
+    }
+
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+
+    .footer-links a:hover { color: var(--accent); }
+
+    @media (max-width: 1024px) {
+      .toc-sidebar { display: none; }
+      .tutorial-layout { padding: 30px 0 60px; }
+    }
+
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .mobile-menu-btn { display: block; }
+      .tutorial-header { padding: 100px 0 40px; }
+      .tutorial-header h1 { font-size: 28px; }
+      .tutorial-header .description { font-size: 16px; }
+      .tutorial-section h2 { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-bg"></div>
+
+  <nav>
+    <div class="nav-container">
+      <a href="index.html" class="logo">
+        <div class="logo-icon">
+          <img src="logo.svg" alt="TDT Logo" width="40" height="40">
+        </div>
+        <span class="logo-text">TDT</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html#features">Features</a>
+        <a href="index.html#install">Install</a>
+        <a href="why-plain-text.html">Why Plain Text?</a>
+        <a href="tolerance.html">Tolerance</a>
+        <a href="reports.html">Reports</a>
+        <a href="collaboration.html">Collaboration</a>
+        <a href="integrations.html">Integrations</a>
+        <a href="tutorial.html">Tutorial</a>
+        <a href="https://github.com/jackhale98/TDT" class="nav-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+      <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  </nav>
+
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="index.html#features" onclick="closeMobileMenu()">Features</a>
+    <a href="index.html#install" onclick="closeMobileMenu()">Install</a>
+    <a href="why-plain-text.html" onclick="closeMobileMenu()">Why Plain Text?</a>
+    <a href="tolerance.html" onclick="closeMobileMenu()">Tolerance</a>
+    <a href="reports.html" onclick="closeMobileMenu()">Reports</a>
+    <a href="integrations.html" onclick="closeMobileMenu()">Integrations</a>
+    <a href="tutorial.html" onclick="closeMobileMenu()">Tutorial</a>
+    <a href="https://github.com/jackhale98/TDT" onclick="closeMobileMenu()">GitHub</a>
+  </div>
+
+  <header class="tutorial-header">
+    <div class="container">
+      <h1>3D Tolerance <span>Analysis</span></h1>
+      <p class="description">Learn how to perform 3D tolerance analysis using Small Displacement Torsor (SDT) theory. This guide walks through setting up geometry, running 6-DOF analysis, and interpreting results.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="container">
+      <div class="tutorial-layout">
+        <aside class="toc-sidebar">
+          <h3>Contents</h3>
+          <ul>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#concepts">Key Concepts</a></li>
+            <li><a href="#setup">1. Project Setup</a></li>
+            <li><a href="#geometry">2. Define Geometry</a></li>
+            <li><a href="#datums">3. Set Up Datums</a></li>
+            <li><a href="#stackup">4. Create Stackup</a></li>
+            <li><a href="#analyze">5. Run 3D Analysis</a></li>
+            <li><a href="#interpret">6. Interpret Results</a></li>
+            <li><a href="#reference">Reference</a></li>
+          </ul>
+        </aside>
+
+        <article class="tutorial-content">
+
+          <section id="overview" class="tutorial-section">
+            <h2>Overview</h2>
+            <p>TDT's 3D tolerance analysis uses <strong>Small Displacement Torsor (SDT)</strong> theory to analyze geometric variation in assemblies. Unlike 1D stackups that only consider linear dimensions, 3D analysis captures:</p>
+            <ul>
+              <li><strong>6 Degrees of Freedom</strong> - 3 translations (u, v, w) and 3 rotations (α, β, γ)</li>
+              <li><strong>Geometric constraints</strong> - How different geometry types (planes, cylinders, etc.) constrain motion</li>
+              <li><strong>Datum order effects</strong> - ASME Y14.5 3-2-1 rule for datum reference frames</li>
+              <li><strong>Position propagation</strong> - How deviations accumulate through kinematic chains</li>
+            </ul>
+
+            <div class="info-box">
+              <strong>When to Use 3D Analysis</strong>
+              <p>Use 3D analysis when your tolerance chain involves radial fits, angular alignment, or multi-axis positioning. For simple linear stacks (like gasket compression), 1D analysis is sufficient.</p>
+            </div>
+          </section>
+
+          <section id="concepts" class="tutorial-section">
+            <h2>Key Concepts</h2>
+
+            <h3>Small Displacement Torsor</h3>
+            <p>A torsor represents the small deviation of a feature from its nominal position using 6 parameters:</p>
+
+            <table class="info-table">
+              <thead>
+                <tr><th>Component</th><th>Symbol</th><th>Description</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>u</code></td><td>u</td><td>Translation along local X</td></tr>
+                <tr><td><code>v</code></td><td>v</td><td>Translation along local Y</td></tr>
+                <tr><td><code>w</code></td><td>w</td><td>Translation along local Z</td></tr>
+                <tr><td><code>alpha</code></td><td>α</td><td>Rotation about local X</td></tr>
+                <tr><td><code>beta</code></td><td>β</td><td>Rotation about local Y</td></tr>
+                <tr><td><code>gamma</code></td><td>γ</td><td>Rotation about local Z</td></tr>
+              </tbody>
+            </table>
+
+            <h3>Geometry Classes</h3>
+            <p>Different geometry types constrain different DOFs:</p>
+
+            <table class="info-table">
+              <thead>
+                <tr><th>Geometry</th><th>Constrained DOF</th><th>Free DOF</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>plane</code></td><td>w, α, β</td><td>u, v, γ</td></tr>
+                <tr><td><code>cylinder</code></td><td>u, v, α, β</td><td>w, γ</td></tr>
+                <tr><td><code>sphere</code></td><td>u, v, w</td><td>α, β, γ</td></tr>
+                <tr><td><code>cone</code></td><td>u, v, α, β</td><td>w, γ</td></tr>
+                <tr><td><code>line</code></td><td>u, v</td><td>w, α, β, γ</td></tr>
+                <tr><td><code>point</code></td><td>u, v, w</td><td>α, β, γ</td></tr>
+              </tbody>
+            </table>
+
+            <h3>Datum Reference Frames (ASME Y14.5)</h3>
+            <p>The 3-2-1 rule establishes coordinate systems from datum features:</p>
+            <ul>
+              <li><strong>Primary datum (A)</strong> - Constrains 3 DOF (typically a plane: w, α, β)</li>
+              <li><strong>Secondary datum (B)</strong> - Constrains 2 additional DOF</li>
+              <li><strong>Tertiary datum (C)</strong> - Constrains final 1 DOF</li>
+            </ul>
+            <p>GD&T tolerances only apply to the <strong>free DOFs</strong> not constrained by the datum reference frame.</p>
+          </section>
+
+          <section id="setup" class="tutorial-section">
+            <h2>1. Project Setup</h2>
+            <p>Initialize a new project for our example - a bearing assembly:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">mkdir</span> bearing-assembly
+<span class="cmd">cd</span> bearing-assembly
+<span class="cmd">tdt init</span></code></pre>
+            </div>
+
+            <h3>Create Components</h3>
+            <p>Create the components in our assembly:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Housing with bearing bore</span>
+<span class="cmd">tdt cmp new</span> --title <span class="string">"Housing"</span> --part-number <span class="string">"HSG-001"</span> --no-edit
+
+<span class="comment"># Shaft that fits through bearing</span>
+<span class="cmd">tdt cmp new</span> --title <span class="string">"Shaft"</span> --part-number <span class="string">"SFT-001"</span> --no-edit
+
+<span class="comment"># Standard bearing</span>
+<span class="cmd">tdt cmp new</span> --title <span class="string">"Bearing 6206"</span> --part-number <span class="string">"BRG-6206"</span> --no-edit</code></pre>
+            </div>
+          </section>
+
+          <section id="geometry" class="tutorial-section">
+            <h2>2. Define Feature Geometry</h2>
+            <p>Each feature needs 3D geometry for SDT analysis. Create features with geometry class, origin, and axis:</p>
+
+            <h3>Housing Bore Feature</h3>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt feat new</span> --component CMP@1 --title <span class="string">"Housing Bore"</span> \
+  --feature-type internal --no-edit</code></pre>
+            </div>
+
+            <p>Edit the feature file to add geometry and tolerances:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>id: FEAT-...
+component: CMP-...
+feature_type: internal
+title: Housing Bore
+
+dimensions:
+  - name: diameter
+    nominal: 62.0
+    plus_tol: 0.030
+    minus_tol: 0.0
+    units: mm
+    distribution: normal
+
+<span class="comment"># 3D Geometry for SDT Analysis</span>
+geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]
+  axis: [0.0, 0.0, 1.0]
+  length: 20.0
+
+<span class="comment"># Datum label (makes this a datum feature)</span>
+datum_label: B
+
+<span class="comment"># GD&T controls with datum references</span>
+gdt:
+  - symbol: position
+    value: 0.05
+    units: mm
+    datum_refs: ["A", "B"]
+    material_condition: mmc
+  - symbol: cylindricity
+    value: 0.01
+    units: mm</code></pre>
+            </div>
+
+            <h3>Key Geometry Fields</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Field</th><th>Description</th><th>Example</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>geometry_class</code></td><td>Type of geometry</td><td><code>cylinder</code>, <code>plane</code>, <code>sphere</code></td></tr>
+                <tr><td><code>geometry_3d.origin</code></td><td>Feature location [x, y, z]</td><td><code>[0.0, 0.0, 50.0]</code></td></tr>
+                <tr><td><code>geometry_3d.axis</code></td><td>Feature direction [dx, dy, dz]</td><td><code>[0.0, 0.0, 1.0]</code></td></tr>
+                <tr><td><code>datum_label</code></td><td>Datum identifier (A, B, C)</td><td><code>"A"</code></td></tr>
+              </tbody>
+            </table>
+
+            <h3>Create Remaining Features</h3>
+            <p>Similarly create features for shaft OD and bearing races with appropriate geometry.</p>
+
+            <div class="info-box warning">
+              <strong>Position Matters</strong>
+              <p>The <code>origin</code> field should reflect the actual position in the assembly coordinate system. This affects how deviations propagate through the chain.</p>
+            </div>
+          </section>
+
+          <section id="datums" class="tutorial-section">
+            <h2>3. Set Up Datums</h2>
+            <p>Datum features establish the reference frame for GD&T controls. Add <code>datum_label</code> to features that serve as datums:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code><span class="comment"># In shaft feature file</span>
+datum_label: A
+
+<span class="comment"># In housing bore feature file</span>
+datum_label: B</code></pre>
+            </div>
+
+            <p>When you run 3D analysis, TDT will:</p>
+            <ol>
+              <li>Find all features with <code>datum_label</code></li>
+              <li>For each contributor, read <code>gdt.datum_refs</code> (e.g., ["A", "B"])</li>
+              <li>Build the Datum Reference Frame following ASME Y14.5 order</li>
+              <li>Apply tolerances only to free DOFs (those not constrained by the DRF)</li>
+            </ol>
+          </section>
+
+          <section id="stackup" class="tutorial-section">
+            <h2>4. Create Tolerance Stackup</h2>
+            <p>Create a stackup for the radial fit analysis:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt tol new</span> --title <span class="string">"Bearing Radial Fit"</span> \
+  --target-name <span class="string">"Radial Position"</span> \
+  --target-nominal 0 \
+  --target-upper 0.030 \
+  --target-lower -0.015 \
+  --no-edit</code></pre>
+            </div>
+
+            <h3>Add Contributors</h3>
+            <p>Add features to the stackup chain:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># List features to get short IDs</span>
+<span class="cmd">tdt feat list</span>
+
+<span class="comment"># Add features with direction</span>
+<span class="comment"># + for positive (adds to result), ~ for negative (subtracts)</span>
+<span class="cmd">tdt tol add</span> TOL@1 +FEAT@1 ~FEAT@2 +FEAT@3 ~FEAT@4</code></pre>
+            </div>
+
+            <h3>Set Functional Direction</h3>
+            <p>Edit the stackup to specify the functional direction for result projection:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code><span class="comment"># In stackup file - project results onto X axis (radial direction)</span>
+functional_direction: [1.0, 0.0, 0.0]</code></pre>
+            </div>
+          </section>
+
+          <section id="analyze" class="tutorial-section">
+            <h2>5. Run 3D Analysis</h2>
+            <p>Run the analysis with the <code>--3d</code> flag:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt tol analyze</span> TOL@1 --3d</code></pre>
+            </div>
+
+            <p>This runs both Jacobian (analytical) and Monte Carlo simulation automatically.</p>
+
+            <h3>Example Output</h3>
+            <div class="output-block">
+<span style="color: var(--info)">ℹ</span> Found datum features: B, A
+<span style="color: var(--text-muted)">⚙</span> Analyzing stackup TOL@1 with 4 contributors...
+<span style="color: var(--success)">✓</span> Analysis complete for stackup TOL@1
+
+   Target: Radial Position = 0 (LSL: -0.015, USL: 0.03)
+
+   <span style="color: var(--text-primary); font-weight: bold">Worst-Case Analysis:</span>
+     Range: -0.025 to 0.045
+     Margin: -0.015
+     Result: <span style="color: var(--error)">fail</span>
+
+   <span style="color: var(--text-primary); font-weight: bold">RSS (Statistical) Analysis:</span>
+     Mean: 0.01
+     ±3σ: 0.0191
+     Capability: Cp=1.18, Cpk=1.05
+     Yield: 99.91%
+
+   <span style="color: var(--text-primary); font-weight: bold">3D SDT Analysis (6-DOF Torsor):</span>
+     Translations (mm):
+       u: WC [-0.026, 0.026] RSS μ=0 ±3σ=0.0132
+       v: WC [-0.018, 0.018] RSS μ=0 ±3σ=0.0102
+       w: WC [0, 0] RSS μ=0 ±3σ=0
+     Rotations (mrad):
+       α: WC [-0.230, 0.230] RSS μ=0.000 ±3σ=0.164
+       β: WC [-0.700, 0.700] RSS μ=0.000 ±3σ=0.382
+       γ: WC [0.000, 0.000] RSS μ=0.000 ±3σ=0.000
+
+   <span style="color: var(--text-primary); font-weight: bold">Functional Deviation</span> (projected onto [1.0,0.0,0.0]):
+     Worst Case: <span style="color: var(--error)">FAIL</span> (range: -0.026 to 0.026)
+     RSS: μ=0 ±3σ=0.0132
+     Capability: Cp=1.70, Cpk=1.13, Yield=99.93%</div>
+
+            <h3>Optional: Visualize the Chain</h3>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt tol analyze</span> TOL@1 --3d --visualize</code></pre>
+            </div>
+            <p>This adds ASCII braille graphics showing the tolerance chain schematic and deviation ellipse.</p>
+          </section>
+
+          <section id="interpret" class="tutorial-section">
+            <h2>6. Interpret Results</h2>
+
+            <h3>6-DOF Torsor Results</h3>
+            <p>The torsor shows deviation in each degree of freedom:</p>
+            <ul>
+              <li><strong>WC</strong> - Worst-case range [min, max]</li>
+              <li><strong>RSS</strong> - Statistical mean (μ) and 3-sigma spread (±3σ)</li>
+              <li><strong>MC</strong> - Monte Carlo mean and standard deviation</li>
+            </ul>
+
+            <h3>Functional Projection</h3>
+            <p>The 6-DOF result is projected onto your <code>functional_direction</code> vector to get a scalar deviation that can be compared against your target specification limits.</p>
+
+            <h3>Sensitivity Analysis</h3>
+            <p>The sensitivity shows which contributors dominate variation in each DOF:</p>
+
+            <div class="output-block">
+   3D Sensitivity (dominant DOF contribution):
+      61.7% (β) Housing Bore Position
+      24.1% (u) Bearing Outer Race
+      34.8% (u) Bearing Inner Race
+      41.2% (u) Shaft OD</div>
+
+            <p>Focus tolerance improvement efforts on high-sensitivity contributors.</p>
+
+            <h3>Understanding Zero DOFs</h3>
+            <p>DOFs showing <code>WC [0, 0]</code> are fully constrained - either by the geometry type or by datum order. For example, a stack of planes along Z will have <code>w</code> deviation but zero in-plane translation.</p>
+          </section>
+
+          <section id="reference" class="tutorial-section">
+            <h2>Reference</h2>
+
+            <h3>CLI Flags for 3D Analysis</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Flag</th><th>Description</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>--3d</code> or <code>-3</code></td><td>Enable 3D SDT analysis</td></tr>
+                <tr><td><code>--visualize</code></td><td>Show ASCII chain schematic and deviation ellipse</td></tr>
+                <tr><td><code>--iterations N</code></td><td>Monte Carlo iterations (default: 10000)</td></tr>
+                <tr><td><code>--no-gdt</code></td><td>Exclude GD&T position tolerances</td></tr>
+              </tbody>
+            </table>
+
+            <h3>Required Feature Fields for 3D</h3>
+            <ul>
+              <li><code>geometry_class</code> - plane, cylinder, sphere, cone, line, point</li>
+              <li><code>geometry_3d.origin</code> - [x, y, z] position</li>
+              <li><code>geometry_3d.axis</code> - [dx, dy, dz] direction vector</li>
+            </ul>
+
+            <h3>Optional Fields</h3>
+            <ul>
+              <li><code>datum_label</code> - Makes this a datum feature (A, B, or C)</li>
+              <li><code>gdt[].datum_refs</code> - Datum references for GD&T controls</li>
+              <li><code>functional_direction</code> - Result projection direction in stackup</li>
+            </ul>
+
+            <h3>Further Reading</h3>
+            <ul>
+              <li><a href="https://github.com/jackhale98/TDT/blob/main/docs/stackup.md" style="color: var(--accent)">Stackup Entity Reference</a></li>
+              <li><a href="https://github.com/jackhale98/TDT/blob/main/docs/feature.md" style="color: var(--accent)">Feature Entity Reference</a></li>
+              <li><a href="tolerance.html" style="color: var(--accent)">Tolerance Analysis Overview</a></li>
+            </ul>
+          </section>
+
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-brand">
+          <img src="logo.svg" alt="TDT" width="32" height="32">
+          <span class="footer-text">TDT - Tessera Design Toolkit</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/jackhale98/TDT">GitHub</a>
+          <a href="https://github.com/jackhale98/TDT/blob/main/LICENSE">MIT License</a>
+          <a href="https://github.com/jackhale98/TDT/issues">Issues</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function toggleMobileMenu() {
+      document.getElementById('mobileMenu').classList.toggle('open');
+    }
+    function closeMobileMenu() {
+      document.getElementById('mobileMenu').classList.remove('open');
+    }
+  </script>
+</body>
+</html>

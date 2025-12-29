@@ -549,12 +549,56 @@ pub struct JacobianSummary {
     pub result_free_dof: Vec<String>,
 }
 
+/// Functional projection result - scalar deviation along functional direction
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FunctionalProjection {
+    /// Functional direction used [dx, dy, dz]
+    pub direction: [f64; 3],
+
+    /// Worst-case range [min, max]
+    pub wc_range: [f64; 2],
+
+    /// RSS mean deviation
+    pub rss_mean: f64,
+
+    /// RSS 3-sigma deviation
+    pub rss_3sigma: f64,
+
+    /// Monte Carlo mean (if run)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mc_mean: Option<f64>,
+
+    /// Monte Carlo std dev (if run)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mc_std_dev: Option<f64>,
+
+    /// Capability index Cp (from 3D analysis)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cp: Option<f64>,
+
+    /// Capability index Cpk (from 3D analysis)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpk: Option<f64>,
+
+    /// Estimated yield percentage (from 3D analysis)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub yield_percent: Option<f64>,
+
+    /// Pass/fail result based on worst-case
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wc_result: Option<String>,
+}
+
 /// Combined 3D analysis results
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Analysis3DResults {
     /// Result torsor with 6-DOF statistics
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result_torsor: Option<ResultTorsor>,
+
+    /// Functional projection (scalar deviation along functional direction)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub functional_result: Option<FunctionalProjection>,
 
     /// 3D sensitivity analysis per contributor
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

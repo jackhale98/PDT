@@ -9,15 +9,20 @@ use std::fs;
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::{format_short_id, smart_round, truncate_str};
 use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::viz;
 use crate::cli::{GlobalOpts, OutputFormat};
 use crate::core::cache::EntityCache;
 use crate::core::entity::Entity;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
+use crate::core::sdt::{self, ChainContributor3D, DatumFeature};
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
-use crate::entities::feature::Feature;
-use crate::entities::stackup::{Contributor, Direction, Disposition, FeatureRef, Stackup};
+use crate::entities::feature::{Feature, GeometryClass, TorsorBounds};
+use crate::entities::stackup::{
+    Analysis3DResults, Contributor, Direction, Disposition, FeatureRef, FunctionalProjection,
+    Stackup,
+};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
@@ -935,6 +940,19 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         minus_str
                     );
 
+                    // Show feature info if available
+                    if let Some(ref feat_ref) = c.feature {
+                        let feat_short = short_ids
+                            .get_short_id(&feat_ref.id.to_string())
+                            .unwrap_or_else(|| format!("{}", feat_ref.id));
+                        let feat_name = feat_ref.name.as_deref().unwrap_or("");
+                        if !feat_name.is_empty() {
+                            println!("      Feature: {} ({})", style(&feat_short).yellow(), feat_name);
+                        } else {
+                            println!("      Feature: {}", style(&feat_short).yellow());
+                        }
+                    }
+
                     // Show component info if available from feature reference
                     if let Some(ref feat_ref) = c.feature {
                         if let Some(ref cmp_id) = feat_ref.component_id {
@@ -997,6 +1015,32 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         "  Monte Carlo: {} iter, Yield={:.1}%",
                         mc.iterations, mc.yield_percent
                     );
+                }
+            }
+
+            // 3D Analysis Results (if available)
+            if let Some(ref results_3d) = stackup.analysis_results_3d {
+                if let Some(ref func) = results_3d.functional_result {
+                    println!();
+                    println!(
+                        "{} (direction: [{:.1},{:.1},{:.1}]):",
+                        style("3D Analysis:").bold(),
+                        func.direction[0],
+                        func.direction[1],
+                        func.direction[2]
+                    );
+                    let wc_styled = if func.wc_result.as_deref() == Some("pass") {
+                        style("PASS").green()
+                    } else {
+                        style("FAIL").red()
+                    };
+                    println!(
+                        "  Worst Case: {} (range: {:.4} to {:.4})",
+                        wc_styled, func.wc_range[0], func.wc_range[1]
+                    );
+                    if let (Some(cpk), Some(yield_pct)) = (func.cpk, func.yield_percent) {
+                        println!("  3D Cpk={:.2}, Yield={:.1}%", cpk, yield_pct);
+                    }
                 }
             }
 
@@ -1164,6 +1208,13 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
     stackup.analysis_results.worst_case = Some(stackup.calculate_worst_case());
     stackup.analysis_results.rss = Some(stackup.calculate_rss());
 
+    // 3D SDT Analysis (if requested)
+    let _contributors_3d = if args.three_d {
+        run_3d_analysis(&mut stackup, &project, args.method_3d.as_str(), args.iterations)?
+    } else {
+        None
+    };
+
     // CSV output mode - just output samples and exit
     if args.csv {
         if let Some(samples) = mc_samples {
@@ -1323,6 +1374,134 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
             );
         }
         println!("     Yield: {:.2}%", mc.yield_percent);
+    }
+
+    // Show 3D analysis results if available
+    if args.three_d {
+        if let Some(ref results_3d) = stackup.analysis_results_3d {
+            if let Some(ref result_torsor) = results_3d.result_torsor {
+                println!();
+                println!("   {}:", style("3D SDT Analysis (6-DOF Torsor)").bold().cyan());
+
+                // Translation DOFs
+                println!("     Translations (mm):");
+                print_torsor_dof("       u:", &result_torsor.u, ref_precision);
+                print_torsor_dof("       v:", &result_torsor.v, ref_precision);
+                print_torsor_dof("       w:", &result_torsor.w, ref_precision);
+
+                // Rotation DOFs
+                println!("     Rotations (mrad):");
+                print_torsor_dof_mrad("       α:", &result_torsor.alpha);
+                print_torsor_dof_mrad("       β:", &result_torsor.beta);
+                print_torsor_dof_mrad("       γ:", &result_torsor.gamma);
+            }
+
+            // Show functional projection (scalar fit result)
+            if let Some(ref func) = results_3d.functional_result {
+                println!();
+                println!(
+                    "   {} (projected onto [{:.1},{:.1},{:.1}]):",
+                    style("Functional Deviation").bold().cyan(),
+                    func.direction[0],
+                    func.direction[1],
+                    func.direction[2]
+                );
+
+                // Worst-case result
+                let wc_styled = if func.wc_result.as_deref() == Some("pass") {
+                    style("PASS").green().bold()
+                } else {
+                    style("FAIL").red().bold()
+                };
+                println!(
+                    "     Worst Case: {} (range: {} to {})",
+                    wc_styled,
+                    smart_round(func.wc_range[0], ref_precision),
+                    smart_round(func.wc_range[1], ref_precision)
+                );
+
+                // RSS result
+                println!(
+                    "     RSS: μ={} ±3σ={}",
+                    smart_round(func.rss_mean, ref_precision),
+                    smart_round(func.rss_3sigma, ref_precision)
+                );
+
+                // Capability and yield
+                if let (Some(cp), Some(cpk), Some(yield_pct)) = (func.cp, func.cpk, func.yield_percent)
+                {
+                    println!(
+                        "     Capability: Cp={:.2}, Cpk={:.2}, Yield={:.2}%",
+                        cp, cpk, yield_pct
+                    );
+                }
+
+                // Monte Carlo if available
+                if let (Some(mc_mean), Some(mc_std)) = (func.mc_mean, func.mc_std_dev) {
+                    println!(
+                        "     Monte Carlo: μ={} σ={}",
+                        smart_round(mc_mean, ref_precision),
+                        smart_round(mc_std, ref_precision)
+                    );
+                }
+            }
+
+            // Show 3D sensitivity if available
+            if let Some(ref _result_torsor) = results_3d.result_torsor {
+                if !results_3d.sensitivity_3d.is_empty() {
+                    println!();
+                    println!(
+                        "   {} (dominant DOF contribution):",
+                        style("3D Sensitivity").bold()
+                    );
+                    for entry in &results_3d.sensitivity_3d {
+                        // Find max contribution
+                        let max_pct = entry
+                            .contribution_pct
+                            .iter()
+                            .cloned()
+                            .fold(0.0f64, f64::max);
+                        let max_idx = entry
+                            .contribution_pct
+                            .iter()
+                            .position(|&x| (x - max_pct).abs() < 0.01)
+                            .unwrap_or(0);
+                        let dof_name = ["u", "v", "w", "α", "β", "γ"][max_idx];
+                        if max_pct >= 5.0 {
+                            let pct_styled = if max_pct >= 50.0 {
+                                style(format!("{:5.1}%", max_pct)).red().bold()
+                            } else if max_pct >= 25.0 {
+                                style(format!("{:5.1}%", max_pct)).yellow()
+                            } else {
+                                style(format!("{:5.1}%", max_pct)).dim()
+                            };
+                            println!(
+                                "     {} ({}) {}",
+                                pct_styled,
+                                style(dof_name).cyan(),
+                                entry.name
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Show visualization if requested
+        if args.visualize {
+            println!();
+            println!("{}:", style("Tolerance Chain Schematic").bold());
+            println!("{}", viz::render_chain_schematic(&stackup));
+
+            // Show deviation ellipse if we have 3D results
+            if let Some(ref results_3d) = stackup.analysis_results_3d {
+                if let Some(ref result_torsor) = results_3d.result_torsor {
+                    println!();
+                    println!("{}:", style("UV Deviation Ellipse (3σ)").bold());
+                    println!("{}", viz::render_deviation_ellipse(result_torsor, 32));
+                }
+            }
+        }
     }
 
     // Show histogram if requested
@@ -2046,4 +2225,375 @@ fn stackup_to_row(stackup: &Stackup, short_ids: &ShortIdIndex) -> TableRow {
         .cell("critical", CellValue::Critical(stackup.target.critical))
         .cell("author", CellValue::Text(stackup.author.clone()))
         .cell("created", CellValue::DateTime(stackup.created))
+}
+
+// ===== 3D SDT Analysis Helpers =====
+
+use crate::entities::stackup::{Sensitivity3DEntry, TorsorStats};
+
+/// Print a torsor DOF line (for translation DOFs)
+fn print_torsor_dof(label: &str, stats: &TorsorStats, ref_precision: f64) {
+    let wc_range = format!(
+        "[{}, {}]",
+        smart_round(stats.wc_min, ref_precision),
+        smart_round(stats.wc_max, ref_precision)
+    );
+    let rss_info = format!(
+        "μ={} ±3σ={}",
+        smart_round(stats.rss_mean, ref_precision),
+        smart_round(stats.rss_3sigma, ref_precision)
+    );
+    let mc_info = if let (Some(mean), Some(std)) = (stats.mc_mean, stats.mc_std_dev) {
+        format!(
+            " MC: μ={} σ={}",
+            smart_round(mean, ref_precision),
+            smart_round(std, ref_precision)
+        )
+    } else {
+        String::new()
+    };
+    println!("{} WC {} RSS {}{})", label, wc_range, rss_info, mc_info);
+}
+
+/// Print a torsor DOF line for rotation (convert radians to mrad)
+fn print_torsor_dof_mrad(label: &str, stats: &TorsorStats) {
+    let to_mrad = 1000.0;
+    let wc_range = format!(
+        "[{:.3}, {:.3}]",
+        stats.wc_min * to_mrad,
+        stats.wc_max * to_mrad
+    );
+    let rss_info = format!(
+        "μ={:.3} ±3σ={:.3}",
+        stats.rss_mean * to_mrad,
+        stats.rss_3sigma * to_mrad
+    );
+    let mc_info = if let (Some(mean), Some(std)) = (stats.mc_mean, stats.mc_std_dev) {
+        format!(" MC: μ={:.3} σ={:.3}", mean * to_mrad, std * to_mrad)
+    } else {
+        String::new()
+    };
+    println!("{} WC {} RSS {}{}", label, wc_range, rss_info, mc_info);
+}
+
+/// Run 3D SDT analysis on a stackup
+///
+/// Loads features to get geometry data, builds 3D contributors,
+/// and runs the SDT analysis.
+fn run_3d_analysis(
+    stackup: &mut Stackup,
+    project: &Project,
+    method: &str,
+    monte_carlo_iterations: u32,
+) -> Result<Option<Vec<ChainContributor3D>>> {
+    // Load all features from project
+    let feat_dir = project.root().join("tolerances/features");
+    let mut features: std::collections::HashMap<String, Feature> =
+        std::collections::HashMap::new();
+
+    if feat_dir.exists() {
+        for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "yaml") {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(feat) = serde_yml::from_str::<Feature>(&content) {
+                        features.insert(feat.id.to_string(), feat);
+                    }
+                }
+            }
+        }
+    }
+
+    // Build datum features map from features with datum_label
+    let mut datum_features: std::collections::HashMap<String, DatumFeature> =
+        std::collections::HashMap::new();
+    for feat in features.values() {
+        if let Some(ref label) = feat.datum_label {
+            let geom_class = feat.geometry_class.clone().unwrap_or(GeometryClass::Complex);
+            let position = feat
+                .geometry_3d
+                .as_ref()
+                .map(|g| g.origin)
+                .unwrap_or([0.0, 0.0, 0.0]);
+            let axis = feat.geometry_3d.as_ref().map(|g| g.axis);
+            datum_features.insert(
+                label.clone(),
+                DatumFeature {
+                    label: label.clone(),
+                    geometry_class: geom_class,
+                    position,
+                    axis,
+                },
+            );
+        }
+    }
+
+    // Report found datum features
+    if !datum_features.is_empty() {
+        let labels: Vec<&String> = datum_features.keys().collect();
+        eprintln!(
+            "{} Found datum features: {}",
+            style("ℹ").blue(),
+            labels
+                .iter()
+                .map(|l| l.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+
+    // Build 3D contributors from stackup contributors
+    let mut contributors_3d: Vec<ChainContributor3D> = Vec::new();
+    let mut missing_geometry = Vec::new();
+
+    for contrib in &stackup.contributors {
+        // Get feature if linked
+        let feat_opt = contrib
+            .feature
+            .as_ref()
+            .and_then(|fr| features.get(&fr.id.to_string()));
+
+        // Get geometry class (from feature or default to Complex)
+        let geometry_class = feat_opt
+            .and_then(|f| f.geometry_class.clone())
+            .unwrap_or(GeometryClass::Complex);
+
+        // Get position (from feature geometry_3d or default to origin)
+        let position = feat_opt
+            .and_then(|f| f.geometry_3d.as_ref())
+            .map(|g| g.origin)
+            .unwrap_or([0.0, 0.0, 0.0]);
+
+        // Check if we have geometry data
+        if feat_opt.is_some() && feat_opt.unwrap().geometry_3d.is_none() {
+            missing_geometry.push(contrib.name.clone());
+        }
+
+        // Get GD&T datum references if available
+        let datum_refs: Vec<String> = feat_opt
+            .and_then(|f| f.gdt.first())
+            .map(|g| g.datum_refs.clone())
+            .unwrap_or_default();
+
+        // Determine which DOFs the tolerance applies to based on datum order
+        let tolerance_dofs = if !datum_refs.is_empty() && !datum_features.is_empty() {
+            sdt::get_tolerance_dofs(&datum_refs, &datum_features, geometry_class.clone())
+        } else {
+            // Fallback: use all DOFs the geometry can deviate in
+            sdt::get_constrained_dof(geometry_class.clone())
+        };
+
+        // Build torsor bounds from tolerances, applying only to relevant DOFs
+        let half_tol = (contrib.plus_tol + contrib.minus_tol) / 2.0;
+        let bounds = build_torsor_bounds_for_dofs(half_tol, &tolerance_dofs);
+
+        // Map distribution type
+        let distribution = contrib.distribution.clone();
+
+        contributors_3d.push(ChainContributor3D {
+            name: contrib.name.clone(),
+            feature_id: contrib.feature.as_ref().map(|f| f.id.to_string()),
+            geometry_class,
+            position,
+            bounds,
+            distribution,
+            sigma_level: stackup.sigma_level,
+        });
+    }
+
+    // Warn about missing geometry
+    if !missing_geometry.is_empty() {
+        eprintln!(
+            "{} Contributors without 3D geometry (using origin): {}",
+            style("⚠").yellow(),
+            missing_geometry.join(", ")
+        );
+    }
+
+    if contributors_3d.is_empty() {
+        return Ok(None);
+    }
+
+    // Run 3D analysis
+    let run_mc = method == "monte-carlo" || method == "monte_carlo";
+    let result = sdt::analyze_chain_3d(&contributors_3d, run_mc || true, monte_carlo_iterations);
+
+    // Build sensitivity entries
+    let sensitivity_3d: Vec<Sensitivity3DEntry> = contributors_3d
+        .iter()
+        .zip(result.sensitivity.iter())
+        .map(|(contrib, sens)| Sensitivity3DEntry {
+            name: contrib.name.clone(),
+            feature_id: contrib.feature_id.clone(),
+            contribution_pct: *sens,
+        })
+        .collect();
+
+    // Calculate functional projection (scalar deviation along functional direction)
+    let functional_result = calculate_functional_projection(
+        &result.rss_stats,
+        stackup.functional_direction.unwrap_or([1.0, 0.0, 0.0]),
+        stackup.target.lower_limit,
+        stackup.target.upper_limit,
+        stackup.sigma_level,
+    );
+
+    // Store results
+    stackup.analysis_results_3d = Some(Analysis3DResults {
+        result_torsor: Some(result.rss_stats.clone()),
+        functional_result: Some(functional_result),
+        sensitivity_3d,
+        jacobian_summary: None,
+        analyzed_at: Some(chrono::Utc::now()),
+    });
+
+    Ok(Some(contributors_3d))
+}
+
+/// Build TorsorBounds applying tolerance only to specified DOF indices
+///
+/// DOF indices: u=0, v=1, w=2, alpha=3, beta=4, gamma=5
+/// For translation DOFs (0-2), applies ±half_tol directly.
+/// For rotation DOFs (3-5), converts tolerance to angular (radians) assuming typical feature size.
+fn build_torsor_bounds_for_dofs(half_tol: f64, dof_indices: &[usize]) -> TorsorBounds {
+    use crate::entities::feature::TorsorBounds;
+
+    // For rotational DOFs, we need to convert linear tolerance to angular.
+    // Using a typical feature reference length (e.g., 50mm) for conversion.
+    // angular_tol = linear_tol / reference_length
+    let ref_length = 50.0; // mm - typical feature size
+    let angular_half_tol = half_tol / ref_length;
+
+    let mut bounds = TorsorBounds::default();
+
+    for &dof in dof_indices {
+        match dof {
+            0 => bounds.u = Some([-half_tol, half_tol]),
+            1 => bounds.v = Some([-half_tol, half_tol]),
+            2 => bounds.w = Some([-half_tol, half_tol]),
+            3 => bounds.alpha = Some([-angular_half_tol, angular_half_tol]),
+            4 => bounds.beta = Some([-angular_half_tol, angular_half_tol]),
+            5 => bounds.gamma = Some([-angular_half_tol, angular_half_tol]),
+            _ => {} // Invalid DOF index, ignore
+        }
+    }
+
+    bounds
+}
+
+/// Calculate functional projection from 6-DOF torsor to scalar deviation
+///
+/// Projects the result torsor onto the functional direction to get a scalar
+/// deviation that can be compared against target specifications.
+fn calculate_functional_projection(
+    torsor: &crate::entities::stackup::ResultTorsor,
+    direction: [f64; 3],
+    lsl: f64,
+    usl: f64,
+    sigma_level: f64,
+) -> FunctionalProjection {
+    // Normalize direction vector
+    let [dx, dy, dz] = direction;
+    let len = (dx * dx + dy * dy + dz * dz).sqrt();
+    let (dx, dy, dz) = if len > 1e-10 {
+        (dx / len, dy / len, dz / len)
+    } else {
+        (1.0, 0.0, 0.0)
+    };
+
+    // Project torsor onto functional direction (translations only for now)
+    // Scalar deviation = dx*u + dy*v + dz*w
+    let wc_min = dx * torsor.u.wc_min + dy * torsor.v.wc_min + dz * torsor.w.wc_min;
+    let wc_max = dx * torsor.u.wc_max + dy * torsor.v.wc_max + dz * torsor.w.wc_max;
+
+    let rss_mean = dx * torsor.u.rss_mean + dy * torsor.v.rss_mean + dz * torsor.w.rss_mean;
+
+    // RSS of projected variances: σ² = dx²σu² + dy²σv² + dz²σw²
+    let sigma_u = torsor.u.rss_3sigma / 3.0;
+    let sigma_v = torsor.v.rss_3sigma / 3.0;
+    let sigma_w = torsor.w.rss_3sigma / 3.0;
+    let sigma_projected = (dx * dx * sigma_u * sigma_u
+        + dy * dy * sigma_v * sigma_v
+        + dz * dz * sigma_w * sigma_w)
+        .sqrt();
+    let rss_3sigma = 3.0 * sigma_projected;
+
+    // Monte Carlo projection (if available)
+    let mc_mean = if torsor.u.mc_mean.is_some() {
+        Some(
+            dx * torsor.u.mc_mean.unwrap_or(0.0)
+                + dy * torsor.v.mc_mean.unwrap_or(0.0)
+                + dz * torsor.w.mc_mean.unwrap_or(0.0),
+        )
+    } else {
+        None
+    };
+
+    let mc_std_dev = if torsor.u.mc_std_dev.is_some() {
+        let su = torsor.u.mc_std_dev.unwrap_or(0.0);
+        let sv = torsor.v.mc_std_dev.unwrap_or(0.0);
+        let sw = torsor.w.mc_std_dev.unwrap_or(0.0);
+        Some((dx * dx * su * su + dy * dy * sv * sv + dz * dz * sw * sw).sqrt())
+    } else {
+        None
+    };
+
+    // Calculate capability indices based on projected deviation
+    let tol_range = usl - lsl;
+    let cp = if sigma_projected > 0.0 {
+        Some(tol_range / (sigma_level * sigma_projected))
+    } else {
+        None
+    };
+
+    let cpk = if sigma_projected > 0.0 {
+        let cpu = (usl - rss_mean) / (sigma_level / 2.0 * sigma_projected);
+        let cpl = (rss_mean - lsl) / (sigma_level / 2.0 * sigma_projected);
+        Some(cpu.min(cpl))
+    } else {
+        None
+    };
+
+    // Estimate yield from Cpk (approximation: yield ≈ 2*Φ(3*Cpk) - 1)
+    let yield_percent = cpk.map(|cpk_val| {
+        // Use normal CDF approximation for 3*Cpk sigma
+        let z = 3.0 * cpk_val;
+        // Approximation of normal CDF using error function
+        let erf_approx = |x: f64| -> f64 {
+            let a1 = 0.254829592;
+            let a2 = -0.284496736;
+            let a3 = 1.421413741;
+            let a4 = -1.453152027;
+            let a5 = 1.061405429;
+            let p = 0.3275911;
+            let sign = if x < 0.0 { -1.0 } else { 1.0 };
+            let x = x.abs();
+            let t = 1.0 / (1.0 + p * x);
+            let y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * (-x * x).exp();
+            sign * y
+        };
+        let phi = |x: f64| 0.5 * (1.0 + erf_approx(x / std::f64::consts::SQRT_2));
+        (2.0 * phi(z) - 1.0) * 100.0
+    });
+
+    // Worst-case pass/fail
+    let wc_result = if wc_min >= lsl && wc_max <= usl {
+        Some("pass".to_string())
+    } else {
+        Some("fail".to_string())
+    };
+
+    FunctionalProjection {
+        direction: [dx, dy, dz],
+        wc_range: [wc_min, wc_max],
+        rss_mean,
+        rss_3sigma,
+        mc_mean,
+        mc_std_dev,
+        cp,
+        cpk,
+        yield_percent,
+        wc_result,
+    }
 }

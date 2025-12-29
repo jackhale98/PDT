@@ -60,6 +60,260 @@ pub fn get_free_dof(geometry_class: GeometryClass) -> Vec<usize> {
     (0..6).filter(|dof| !constrained.contains(dof)).collect()
 }
 
+// ===== Datum Reference Frame (DRF) Handling =====
+// Per ASME Y14.5, the 3-2-1 rule establishes DOF constraints:
+// - Primary datum (A): constrains 3 DOFs
+// - Secondary datum (B): constrains 2 more DOFs
+// - Tertiary datum (C): constrains final 1 DOF
+
+/// Datum feature info for DRF construction
+#[derive(Debug, Clone)]
+pub struct DatumFeature {
+    /// Datum label (A, B, or C)
+    pub label: String,
+    /// Geometry class of the datum feature
+    pub geometry_class: GeometryClass,
+    /// Position in assembly coordinates
+    pub position: [f64; 3],
+    /// Axis direction (for cylinders, cones, lines)
+    pub axis: Option<[f64; 3]>,
+}
+
+/// Datum Reference Frame built from datum features
+#[derive(Debug, Clone, Default)]
+pub struct DatumReferenceFrame {
+    /// Primary datum (A) - constrains first 3 DOFs
+    pub primary: Option<DatumFeature>,
+    /// Secondary datum (B) - constrains next 2 DOFs
+    pub secondary: Option<DatumFeature>,
+    /// Tertiary datum (C) - constrains final DOF
+    pub tertiary: Option<DatumFeature>,
+    /// Accumulated constrained DOFs from all datums
+    pub constrained_dofs: Vec<usize>,
+}
+
+impl DatumReferenceFrame {
+    /// Create empty DRF
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Add primary datum and calculate its constrained DOFs
+    pub fn with_primary(mut self, datum: DatumFeature) -> Self {
+        let dofs = get_primary_datum_dofs(&datum);
+        self.constrained_dofs.extend(dofs);
+        self.primary = Some(datum);
+        self
+    }
+
+    /// Add secondary datum and calculate additional constrained DOFs
+    pub fn with_secondary(mut self, datum: DatumFeature) -> Self {
+        let dofs = get_secondary_datum_dofs(&datum, &self.constrained_dofs);
+        self.constrained_dofs.extend(dofs);
+        self.secondary = Some(datum);
+        self
+    }
+
+    /// Add tertiary datum and calculate final constrained DOF
+    pub fn with_tertiary(mut self, datum: DatumFeature) -> Self {
+        let dofs = get_tertiary_datum_dofs(&datum, &self.constrained_dofs);
+        self.constrained_dofs.extend(dofs);
+        self.tertiary = Some(datum);
+        self
+    }
+
+    /// Get the free (unconstrained) DOFs in this DRF
+    pub fn free_dofs(&self) -> Vec<usize> {
+        (0..6)
+            .filter(|dof| !self.constrained_dofs.contains(dof))
+            .collect()
+    }
+
+    /// Check if a specific DOF is constrained
+    pub fn is_constrained(&self, dof: usize) -> bool {
+        self.constrained_dofs.contains(&dof)
+    }
+
+    /// Get number of datums in the DRF
+    pub fn datum_count(&self) -> usize {
+        let mut count = 0;
+        if self.primary.is_some() {
+            count += 1;
+        }
+        if self.secondary.is_some() {
+            count += 1;
+        }
+        if self.tertiary.is_some() {
+            count += 1;
+        }
+        count
+    }
+}
+
+/// Get DOFs constrained by a primary datum (first 3 DOFs per 3-2-1 rule)
+///
+/// The primary datum establishes the first level of constraint.
+/// Typically a plane constrains w, α, β (normal and two tilts).
+fn get_primary_datum_dofs(datum: &DatumFeature) -> Vec<usize> {
+    match datum.geometry_class {
+        // Plane as primary: constrains w (normal translation), α, β (tilts)
+        GeometryClass::Plane => vec![DOF_W, DOF_ALPHA, DOF_BETA],
+
+        // Cylinder as primary: constrains u, v (radial), plus one rotation
+        // (unusual but possible - constrains perpendicular translations and one tilt)
+        GeometryClass::Cylinder => vec![DOF_U, DOF_V, DOF_ALPHA],
+
+        // Sphere as primary: constrains u, v, w (all translations)
+        GeometryClass::Sphere => vec![DOF_U, DOF_V, DOF_W],
+
+        // Point as primary: constrains u, v, w (position)
+        GeometryClass::Point => vec![DOF_U, DOF_V, DOF_W],
+
+        // Cone as primary: constrains u, v (radial at apex), α (one tilt)
+        GeometryClass::Cone => vec![DOF_U, DOF_V, DOF_ALPHA],
+
+        // Line as primary: constrains u, v (perpendicular), α (perpendicular tilt)
+        GeometryClass::Line => vec![DOF_U, DOF_V, DOF_ALPHA],
+
+        // Complex: assume full plane-like constraint
+        GeometryClass::Complex => vec![DOF_W, DOF_ALPHA, DOF_BETA],
+    }
+}
+
+/// Get DOFs constrained by a secondary datum (next 2 DOFs per 3-2-1 rule)
+///
+/// The secondary datum constrains 2 additional DOFs not already constrained by primary.
+fn get_secondary_datum_dofs(datum: &DatumFeature, already_constrained: &[usize]) -> Vec<usize> {
+    let potential_dofs = match datum.geometry_class {
+        // Plane as secondary (perpendicular to primary plane):
+        // Constrains u (parallel translation) and γ (rotation about normal)
+        GeometryClass::Plane => vec![DOF_U, DOF_GAMMA],
+
+        // Cylinder as secondary (typically perpendicular to primary plane):
+        // Constrains u, v (centering) - pick ones not already constrained
+        GeometryClass::Cylinder => vec![DOF_U, DOF_V, DOF_GAMMA],
+
+        // Line as secondary: constrains perpendicular translations
+        GeometryClass::Line => vec![DOF_U, DOF_V],
+
+        // Point as secondary: constrains remaining translations
+        GeometryClass::Point => vec![DOF_U, DOF_V, DOF_W],
+
+        // Sphere: shouldn't typically be secondary, but handle it
+        GeometryClass::Sphere => vec![DOF_U, DOF_V, DOF_W],
+
+        // Cone as secondary
+        GeometryClass::Cone => vec![DOF_U, DOF_V],
+
+        // Complex
+        GeometryClass::Complex => vec![DOF_U, DOF_GAMMA],
+    };
+
+    // Return only DOFs not already constrained, limit to 2
+    potential_dofs
+        .into_iter()
+        .filter(|d| !already_constrained.contains(d))
+        .take(2)
+        .collect()
+}
+
+/// Get DOF constrained by a tertiary datum (final 1 DOF per 3-2-1 rule)
+///
+/// The tertiary datum constrains the last remaining DOF.
+fn get_tertiary_datum_dofs(datum: &DatumFeature, already_constrained: &[usize]) -> Vec<usize> {
+    let potential_dofs = match datum.geometry_class {
+        // Plane as tertiary: constrains remaining translation or rotation
+        GeometryClass::Plane => vec![DOF_V, DOF_U, DOF_GAMMA],
+
+        // Point as tertiary: constrains remaining translation
+        GeometryClass::Point => vec![DOF_U, DOF_V, DOF_W],
+
+        // Cylinder as tertiary: constrains remaining translation
+        GeometryClass::Cylinder => vec![DOF_U, DOF_V, DOF_W],
+
+        // Line as tertiary
+        GeometryClass::Line => vec![DOF_U, DOF_V],
+
+        // Others
+        _ => vec![DOF_U, DOF_V, DOF_W, DOF_GAMMA],
+    };
+
+    // Return only the first DOF not already constrained
+    potential_dofs
+        .into_iter()
+        .filter(|d| !already_constrained.contains(d))
+        .take(1)
+        .collect()
+}
+
+/// Build a DRF from ordered datum references and a map of datum labels to features
+///
+/// # Arguments
+/// * `datum_refs` - Ordered list of datum labels, e.g., ["A", "B", "C"]
+/// * `datum_features` - Map of datum labels to their feature info
+///
+/// # Returns
+/// A DatumReferenceFrame with accumulated DOF constraints
+pub fn build_drf_from_refs(
+    datum_refs: &[String],
+    datum_features: &std::collections::HashMap<String, DatumFeature>,
+) -> DatumReferenceFrame {
+    let mut drf = DatumReferenceFrame::new();
+
+    for (i, label) in datum_refs.iter().enumerate() {
+        if let Some(datum) = datum_features.get(label) {
+            match i {
+                0 => drf = drf.with_primary(datum.clone()),
+                1 => drf = drf.with_secondary(datum.clone()),
+                2 => drf = drf.with_tertiary(datum.clone()),
+                _ => {} // Ignore more than 3 datums
+            }
+        }
+    }
+
+    drf
+}
+
+/// Determine which DOFs a tolerance applies to, given its datum references
+///
+/// The tolerance applies to the FREE DOFs (those not constrained by the DRF).
+/// This is the key insight: datums constrain DOFs, tolerances limit the remaining freedom.
+///
+/// # Arguments
+/// * `datum_refs` - The datum reference order from the GD&T control frame
+/// * `datum_features` - Map of datum labels to their geometry info
+/// * `feature_geometry` - The geometry class of the toleranced feature
+///
+/// # Returns
+/// Vector of DOF indices that the tolerance applies to
+pub fn get_tolerance_dofs(
+    datum_refs: &[String],
+    datum_features: &std::collections::HashMap<String, DatumFeature>,
+    feature_geometry: GeometryClass,
+) -> Vec<usize> {
+    if datum_refs.is_empty() {
+        // No datums: tolerance applies to all DOFs the feature can deviate in
+        return get_constrained_dof(feature_geometry);
+    }
+
+    // Build DRF from datum references
+    let drf = build_drf_from_refs(datum_refs, datum_features);
+
+    // Get the free DOFs (not constrained by DRF)
+    let free_dofs = drf.free_dofs();
+
+    // Intersect with the DOFs the feature geometry can deviate in
+    let feature_dofs = get_constrained_dof(feature_geometry);
+
+    // Tolerance applies to DOFs that are both:
+    // 1. Free (not constrained by DRF)
+    // 2. Relevant to the feature geometry
+    free_dofs
+        .into_iter()
+        .filter(|d| feature_dofs.contains(d))
+        .collect()
+}
+
 /// Build a Jacobian matrix for a contributor at position r
 ///
 /// The Jacobian transforms a local torsor to its contribution at the assembly origin.

@@ -602,23 +602,85 @@
 
           <section id="geometry" class="tutorial-section">
             <h2>2. Define Feature Geometry</h2>
-            <p>Each feature needs 3D geometry for SDT analysis. Create features with geometry class, origin, and axis:</p>
+            <p>This is the most important step for 3D analysis. Each feature needs geometry information that tells TDT:</p>
+            <ul>
+              <li><strong>What type of geometry</strong> - plane, cylinder, sphere, etc.</li>
+              <li><strong>Where it is located</strong> - the origin point in your assembly coordinate system</li>
+              <li><strong>How it's oriented</strong> - the axis direction (for cylinders, planes, cones)</li>
+            </ul>
 
-            <h3>Housing Bore Feature</h3>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">tdt feat new</span> --component CMP@1 --title <span class="string">"Housing Bore"</span> \
-  --feature-type internal --no-edit</code></pre>
+            <h3>Establishing Your Coordinate System</h3>
+            <p>Before defining feature geometry, establish a consistent assembly coordinate system. A common convention:</p>
+
+            <div class="output-block" style="text-align: center; line-height: 1.3;">
+                    Z (up)
+                    │
+                    │
+                    │
+                    └───────── Y
+                   ╱
+                  ╱
+                 X (toward you)
+
+   Right-hand rule: X × Y = Z</div>
+
+            <div class="info-box">
+              <strong>Coordinate System Tips</strong>
+              <p>Use the same coordinate system as your CAD model. If your assembly has a natural axis (like a shaft centerline), align Z with that axis. All feature origins should be defined in this single, consistent coordinate system.</p>
             </div>
 
-            <p>Edit the feature file to add geometry and tolerances:</p>
+            <h3>Understanding Origin and Axis</h3>
 
+            <table class="info-table">
+              <thead>
+                <tr><th>Field</th><th>What It Means</th><th>How to Determine It</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>origin</code></td>
+                  <td>A point ON the feature surface, typically the center</td>
+                  <td>For a bore: center point at one end. For a plane: any point on the surface.</td>
+                </tr>
+                <tr>
+                  <td><code>axis</code></td>
+                  <td>Unit vector defining the feature's primary direction</td>
+                  <td>For a cylinder: along the centerline. For a plane: the surface normal (perpendicular to surface).</td>
+                </tr>
+                <tr>
+                  <td><code>length</code></td>
+                  <td>Extent of the feature (optional)</td>
+                  <td>For cylindrical features: the depth/length of the bore or shaft section.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Geometry Type: Cylinder (Bores, Shafts, Pins)</h3>
+            <p>Cylinders are the most common geometry for fits and assemblies.</p>
+
+            <div class="output-block" style="line-height: 1.2;">
+   CYLINDER GEOMETRY
+   ═════════════════
+
+        axis [0,0,1]
+            ↑
+            │    ╭─────────╮
+            │   ╱           ╲
+            │  │             │  ← cylindrical surface
+            │  │      ●──────│───→ origin [x, y, z]
+            │  │    (center) │       at one end of cylinder
+            │   ╲           ╱
+            │    ╰─────────╯
+            │
+            ↓ length
+
+   The axis points along the cylinder centerline.
+   Origin is at the center of one end face.</div>
+
+            <h4>Example: Housing Bore (Internal Cylinder)</h4>
             <div class="code-block">
               <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code>id: FEAT-...
-component: CMP-...
+              <pre><code>title: Housing Bore
 feature_type: internal
-title: Housing Bore
 
 dimensions:
   - name: diameter
@@ -628,48 +690,252 @@ dimensions:
     units: mm
     distribution: normal
 
-<span class="comment"># 3D Geometry for SDT Analysis</span>
+<span class="comment"># Bore centered at assembly origin, running along Z</span>
+geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]    <span class="comment"># Center of bore at Z=0 face</span>
+  axis: [0.0, 0.0, 1.0]      <span class="comment"># Bore axis along +Z</span>
+  length: 20.0               <span class="comment"># Bore depth: 20mm</span></code></pre>
+            </div>
+
+            <h4>Example: Shaft Journal (External Cylinder)</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>title: Shaft Journal
+feature_type: external
+
+dimensions:
+  - name: diameter
+    nominal: 30.0
+    plus_tol: 0.015
+    minus_tol: 0.002
+    units: mm
+    distribution: normal
+
+<span class="comment"># Shaft section at Z=50mm (after shoulder)</span>
+geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 50.0]   <span class="comment"># Center at start of journal</span>
+  axis: [0.0, 0.0, 1.0]      <span class="comment"># Shaft axis along +Z</span>
+  length: 35.0               <span class="comment"># Journal length</span></code></pre>
+            </div>
+
+            <h3>Geometry Type: Plane (Faces, Flanges, Shoulders)</h3>
+            <p>Planes are flat surfaces used as datum faces and for axial positioning.</p>
+
+            <div class="output-block" style="line-height: 1.2;">
+   PLANE GEOMETRY
+   ══════════════
+
+              axis [0,0,1] (surface normal)
+                   ↑
+                   │
+        ┌──────────┼──────────┐
+        │          │          │
+        │          ● origin   │  ← flat surface
+        │        [x,y,z]      │
+        └─────────────────────┘
+
+   The axis is the NORMAL to the plane (perpendicular).
+   Origin is any point on the plane surface.</div>
+
+            <h4>Example: Housing Face (Primary Datum)</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>title: Housing Mounting Face
+feature_type: external
+
+dimensions:
+  - name: flatness
+    nominal: 0.0
+    plus_tol: 0.05
+    minus_tol: 0.0
+    units: mm
+
+<span class="comment"># Flat face at Z=0, normal pointing in -Z direction</span>
+geometry_class: plane
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]    <span class="comment"># Point on the face</span>
+  axis: [0.0, 0.0, -1.0]     <span class="comment"># Normal points DOWN (-Z)</span>
+
+<span class="comment"># This is our primary datum</span>
+datum_label: A</code></pre>
+            </div>
+
+            <h4>Example: Disk Thickness (Stacked Parts)</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>title: Disk 1 Thickness
+feature_type: external
+
+dimensions:
+  - name: thickness
+    nominal: 15.0
+    plus_tol: 0.5
+    minus_tol: 0.5
+    units: mm
+    distribution: normal
+
+<span class="comment"># Top face of disk at Z=0</span>
+geometry_class: plane
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]    <span class="comment"># Start of stack</span>
+  axis: [0.0, 0.0, 1.0]      <span class="comment"># Stack direction</span></code></pre>
+            </div>
+
+            <h3>Geometry Type: Sphere (Ball Joints, Locating Features)</h3>
+
+            <div class="output-block" style="line-height: 1.2;">
+   SPHERE GEOMETRY
+   ═══════════════
+
+            ╭───────╮
+          ╱    ●    ╲     ● = origin [x,y,z]
+         │   center   │       (center of sphere)
+          ╲          ╱
+            ╰───────╯
+
+   Spheres have no axis - they're symmetric.
+   Origin is the center point.
+   Set axis to [0,0,1] by convention.</div>
+
+            <h4>Example: Locating Ball</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>title: Locating Ball
+geometry_class: sphere
+geometry_3d:
+  origin: [25.0, 0.0, 10.0]  <span class="comment"># Center of ball</span>
+  axis: [0.0, 0.0, 1.0]      <span class="comment"># Convention (unused for sphere)</span></code></pre>
+            </div>
+
+            <h3>Positioning Features in a Chain</h3>
+            <p>In a tolerance chain, the <strong>origin position matters</strong> because it affects how rotational deviations propagate. The further a feature is from the origin, the more a small rotation creates linear displacement.</p>
+
+            <div class="output-block" style="line-height: 1.2;">
+   BEARING ASSEMBLY EXAMPLE
+   ════════════════════════
+
+   Assembly coordinate system (Z = shaft axis):
+
+         Housing          Bearing           Shaft
+      ┌───────────┐    ┌─────────┐     ┌─────────┐
+      │ ╭───────╮ │    │ OR   IR │     │         │
+   Z=0│ │ BORE  │ │────│ ●────●  │─────│  ●      │
+      │ ╰───────╯ │    │         │     │ JOURNAL │
+      └───────────┘    └─────────┘     └─────────┘
+           │               │                │
+      origin: [0,0,0]  [0,0,10]         [0,0,15]
+
+   Feature origins should be at the CENTER of mating interfaces.</div>
+
+            <h4>Complete Bearing Assembly Example</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code><span class="comment"># Housing Bore - at assembly origin</span>
+title: Housing Bore
 geometry_class: cylinder
 geometry_3d:
   origin: [0.0, 0.0, 0.0]
   axis: [0.0, 0.0, 1.0]
-  length: 20.0
+  length: 15.0
 
-<span class="comment"># Datum label (makes this a datum feature)</span>
-datum_label: B
+---
+<span class="comment"># Bearing Outer Race - pressed into housing</span>
+title: Bearing Outer Race
+geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]    <span class="comment"># Same as housing bore (mating)</span>
+  axis: [0.0, 0.0, 1.0]
+  length: 15.0
 
-<span class="comment"># GD&T controls with datum references</span>
-gdt:
-  - symbol: position
-    value: 0.05
-    units: mm
-    datum_refs: ["A", "B"]
-    material_condition: mmc
-  - symbol: cylindricity
-    value: 0.01
-    units: mm</code></pre>
+---
+<span class="comment"># Bearing Inner Race - shaft interface</span>
+title: Bearing Inner Race
+geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]    <span class="comment"># Same location (concentric)</span>
+  axis: [0.0, 0.0, 1.0]
+  length: 15.0
+
+---
+<span class="comment"># Shaft Journal - fits into bearing</span>
+title: Shaft OD
+geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 50.0]   <span class="comment"># Different Z if shaft extends beyond</span>
+  axis: [0.0, 0.0, 1.0]
+  length: 35.0</code></pre>
             </div>
 
-            <h3>Key Geometry Fields</h3>
-            <table class="info-table">
-              <thead>
-                <tr><th>Field</th><th>Description</th><th>Example</th></tr>
-              </thead>
-              <tbody>
-                <tr><td><code>geometry_class</code></td><td>Type of geometry</td><td><code>cylinder</code>, <code>plane</code>, <code>sphere</code></td></tr>
-                <tr><td><code>geometry_3d.origin</code></td><td>Feature location [x, y, z]</td><td><code>[0.0, 0.0, 50.0]</code></td></tr>
-                <tr><td><code>geometry_3d.axis</code></td><td>Feature direction [dx, dy, dz]</td><td><code>[0.0, 0.0, 1.0]</code></td></tr>
-                <tr><td><code>datum_label</code></td><td>Datum identifier (A, B, C)</td><td><code>"A"</code></td></tr>
-              </tbody>
-            </table>
-
-            <h3>Create Remaining Features</h3>
-            <p>Similarly create features for shaft OD and bearing races with appropriate geometry.</p>
+            <h3>Common Geometry Setup Mistakes</h3>
 
             <div class="info-box warning">
-              <strong>Position Matters</strong>
-              <p>The <code>origin</code> field should reflect the actual position in the assembly coordinate system. This affects how deviations propagate through the chain.</p>
+              <strong>Mistake 1: Inconsistent Coordinate Systems</strong>
+              <p>Don't mix coordinate systems from different CAD parts. Transform all features into one assembly coordinate system.</p>
             </div>
+
+            <div class="info-box warning">
+              <strong>Mistake 2: Wrong Axis Direction</strong>
+              <p>For planes, the axis is the <em>normal</em> (perpendicular), not a direction along the surface. For a horizontal face, use <code>[0,0,1]</code> or <code>[0,0,-1]</code>.</p>
+            </div>
+
+            <div class="info-box warning">
+              <strong>Mistake 3: Origin at Wrong Location</strong>
+              <p>Place origins at feature centers, not at arbitrary points. For a bore, the origin should be at the center of one end, not at a corner of the part.</p>
+            </div>
+
+            <h3>Quick Reference: Common Features</h3>
+
+            <table class="info-table">
+              <thead>
+                <tr><th>Feature Type</th><th>geometry_class</th><th>axis</th><th>origin</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Bore (vertical)</td>
+                  <td><code>cylinder</code></td>
+                  <td><code>[0,0,1]</code></td>
+                  <td>Center at entry face</td>
+                </tr>
+                <tr>
+                  <td>Shaft (horizontal)</td>
+                  <td><code>cylinder</code></td>
+                  <td><code>[1,0,0]</code></td>
+                  <td>Center at one end</td>
+                </tr>
+                <tr>
+                  <td>Top face</td>
+                  <td><code>plane</code></td>
+                  <td><code>[0,0,1]</code></td>
+                  <td>Any point on face</td>
+                </tr>
+                <tr>
+                  <td>Bottom face</td>
+                  <td><code>plane</code></td>
+                  <td><code>[0,0,-1]</code></td>
+                  <td>Any point on face</td>
+                </tr>
+                <tr>
+                  <td>Side face (right)</td>
+                  <td><code>plane</code></td>
+                  <td><code>[1,0,0]</code></td>
+                  <td>Any point on face</td>
+                </tr>
+                <tr>
+                  <td>Locating pin (vertical)</td>
+                  <td><code>cylinder</code></td>
+                  <td><code>[0,0,1]</code></td>
+                  <td>Center at base</td>
+                </tr>
+                <tr>
+                  <td>Ball/sphere</td>
+                  <td><code>sphere</code></td>
+                  <td><code>[0,0,1]</code></td>
+                  <td>Center of sphere</td>
+                </tr>
+              </tbody>
+            </table>
           </section>
 
           <section id="datums" class="tutorial-section">

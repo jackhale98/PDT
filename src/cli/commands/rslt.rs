@@ -636,7 +636,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&results).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Csv
+        | OutputFormat::Tsv
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build column list from args (filter out "short" since it's added automatically)
             let columns: Vec<&str> = args
                 .columns
@@ -696,7 +701,12 @@ fn output_cached_results(
     }
 
     match format {
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Csv
+        | OutputFormat::Tsv
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build column list from args (filter out "short" since it's added automatically)
             let columns: Vec<&str> = args
                 .columns

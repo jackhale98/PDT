@@ -263,7 +263,6 @@ pub struct Component {
     pub documents: Vec<Document>,
 
     // ===== 3D SDT Analysis Fields =====
-
     /// Component coordinate system for 3D tolerance analysis
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coordinate_system: Option<CoordinateSystem>,

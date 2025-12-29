@@ -445,7 +445,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&mates).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Csv
+        | OutputFormat::Tsv
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             let mut columns: Vec<&str> = args
                 .columns
                 .iter()

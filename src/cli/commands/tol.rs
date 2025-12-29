@@ -327,7 +327,6 @@ pub struct AnalyzeArgs {
     pub with_gdt: bool,
 
     // ===== 3D SDT Analysis Flags =====
-
     /// Enable 3D torsor-based analysis using Small Displacement Torsor (SDT) method
     /// Requires features to have geometry_3d defined
     #[arg(long = "3d", short = '3')]
@@ -602,7 +601,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&stackups).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Csv
+        | OutputFormat::Tsv
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             let mut columns: Vec<&str> = args
                 .columns
                 .iter()
@@ -1081,7 +1085,10 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
     // Apply sigma level override if provided
     if let Some(sigma) = args.sigma {
         if sigma <= 0.0 {
-            return Err(miette::miette!("Sigma level must be positive, got {}", sigma));
+            return Err(miette::miette!(
+                "Sigma level must be positive, got {}",
+                sigma
+            ));
         }
         stackup.sigma_level = sigma;
     }
@@ -1245,7 +1252,10 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
             rss.cp,
             rss.cpk,
             if (rss.cp - rss.cpk).abs() > 0.1 {
-                format!(" (centering loss: {:.0}%)", (1.0 - rss.cpk / rss.cp) * 100.0)
+                format!(
+                    " (centering loss: {:.0}%)",
+                    (1.0 - rss.cpk / rss.cp) * 100.0
+                )
             } else {
                 String::new()
             }

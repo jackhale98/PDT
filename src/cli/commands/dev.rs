@@ -638,7 +638,11 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Tsv
+        | OutputFormat::Auto
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build header
             let mut headers = vec![];
             let mut widths = vec![];
@@ -954,7 +958,12 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 dev.created.format("%Y-%m-%d")
             );
         }
-        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Tsv
+        | OutputFormat::Auto
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             let short_id = short_ids
                 .get_short_id(&dev.id.to_string())
                 .unwrap_or_default();

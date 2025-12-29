@@ -200,7 +200,7 @@ impl Project {
         match prefix {
             EntityPrefix::Req => "requirements/inputs", // Default to inputs
             EntityPrefix::Haz => "risks/hazards",
-            EntityPrefix::Risk => "risks/design",       // Default to design
+            EntityPrefix::Risk => "risks/design", // Default to design
             EntityPrefix::Test => "verification/protocols",
             EntityPrefix::Rslt => "verification/results",
             EntityPrefix::Tol => "tolerances/stackups",

@@ -502,7 +502,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&capas).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Csv
+        | OutputFormat::Tsv
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             // Build column list from args
             let columns: Vec<&str> = args
                 .columns
@@ -939,7 +944,12 @@ fn output_cached_capas(
     }
 
     match format {
-        OutputFormat::Csv | OutputFormat::Tsv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Csv
+        | OutputFormat::Tsv
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             let columns: Vec<&str> = args
                 .columns
                 .iter()

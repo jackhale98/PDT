@@ -60,15 +60,13 @@ pub fn render_chain_schematic(stackup: &Stackup) -> String {
     // But last one has no connector, just arrow and "Functional Dir" (16 chars)
 
     // Top border
-    let content_width = std::cmp::max(
-        count * 15 + 16,
-        stackup.title.len() + 4
-    );
+    let content_width = std::cmp::max(count * 15 + 16, stackup.title.len() + 4);
     let border_width = content_width + 4;
     lines.push(format!("┌{}┐", "─".repeat(border_width)));
 
     // Title line
-    lines.push(format!("│  {}{}  │",
+    lines.push(format!(
+        "│  {}{}  │",
         stackup.title,
         " ".repeat(content_width - stackup.title.len())
     ));
@@ -197,8 +195,8 @@ pub fn render_deviation_ellipse(result: &ResultTorsor, size: u32) -> String {
 
     // Draw axes
     for i in 0..size {
-        canvas.set(center_x, i);  // Vertical axis
-        canvas.set(i, center_y);  // Horizontal axis
+        canvas.set(center_x, i); // Vertical axis
+        canvas.set(i, center_y); // Horizontal axis
     }
 
     // Draw center point (cross)
@@ -306,15 +304,24 @@ pub fn render_3d_analysis(stackup: &Stackup) -> String {
             ));
             output.push(format!(
                 "  α      {:>8.4}  {:>8.4}  {:>9.4}  {:>7.4}",
-                torsor.alpha.wc_min, torsor.alpha.wc_max, torsor.alpha.rss_mean, torsor.alpha.rss_3sigma
+                torsor.alpha.wc_min,
+                torsor.alpha.wc_max,
+                torsor.alpha.rss_mean,
+                torsor.alpha.rss_3sigma
             ));
             output.push(format!(
                 "  β      {:>8.4}  {:>8.4}  {:>9.4}  {:>7.4}",
-                torsor.beta.wc_min, torsor.beta.wc_max, torsor.beta.rss_mean, torsor.beta.rss_3sigma
+                torsor.beta.wc_min,
+                torsor.beta.wc_max,
+                torsor.beta.rss_mean,
+                torsor.beta.rss_3sigma
             ));
             output.push(format!(
                 "  γ      {:>8.4}  {:>8.4}  {:>9.4}  {:>7.4}",
-                torsor.gamma.wc_min, torsor.gamma.wc_max, torsor.gamma.rss_mean, torsor.gamma.rss_3sigma
+                torsor.gamma.wc_min,
+                torsor.gamma.wc_max,
+                torsor.gamma.rss_mean,
+                torsor.gamma.rss_3sigma
             ));
         }
     }
@@ -379,8 +386,14 @@ mod tests {
         // Check that output contains expected elements
         assert!(output.contains("Test Gap Stackup"), "Should contain title");
         // The names get truncated to 6 chars
-        assert!(output.contains("Housi") || output.contains("Housin"), "Should contain truncated first contributor");
-        assert!(output.contains("Shaft"), "Should contain truncated second contributor");
+        assert!(
+            output.contains("Housi") || output.contains("Housin"),
+            "Should contain truncated first contributor"
+        );
+        assert!(
+            output.contains("Shaft"),
+            "Should contain truncated second contributor"
+        );
         assert!(output.contains("→"), "Should contain direction arrows");
     }
 
@@ -425,7 +438,9 @@ mod tests {
         assert!(output.contains("U:"));
         assert!(output.contains("V:"));
         // Should contain braille characters
-        assert!(output.chars().any(|c| c as u32 >= 0x2800 && c as u32 <= 0x28FF));
+        assert!(output
+            .chars()
+            .any(|c| c as u32 >= 0x2800 && c as u32 <= 0x28FF));
     }
 
     #[test]

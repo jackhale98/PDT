@@ -175,7 +175,6 @@ pub struct GdtContribution {
     /// Auto-calculated
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effective_tolerance: Option<f64>,
-
     // Future 3D fields (reserved for torsor-based analysis):
     // pub torsor_constraints: Option<TorsorConstraints>,
     // pub datum_reference_frame: Option<DatumReferenceFrame>,
@@ -644,7 +643,6 @@ pub struct Stackup {
     pub include_gdt: bool,
 
     // ===== 3D SDT Analysis Fields =====
-
     /// Functional measurement direction [dx, dy, dz] for 3D analysis
     /// The result torsor will be projected onto this direction for 1D comparison
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2112,14 +2110,8 @@ author: "Test"
         let mc = stackup.calculate_monte_carlo(10000);
 
         // Pp and Ppk should be present
-        assert!(
-            mc.pp.is_some(),
-            "Monte Carlo should calculate Pp"
-        );
-        assert!(
-            mc.ppk.is_some(),
-            "Monte Carlo should calculate Ppk"
-        );
+        assert!(mc.pp.is_some(), "Monte Carlo should calculate Pp");
+        assert!(mc.ppk.is_some(), "Monte Carlo should calculate Ppk");
 
         let pp = mc.pp.unwrap();
         let ppk = mc.ppk.unwrap();

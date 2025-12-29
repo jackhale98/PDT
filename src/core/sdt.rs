@@ -395,7 +395,12 @@ pub fn monte_carlo_3d(contributors: &[ChainContributor3D], iterations: u32) -> R
 
         for contrib in contributors {
             let j = build_jacobian(contrib.position);
-            let sample = sample_torsor(&contrib.bounds, contrib.distribution, contrib.sigma_level, &mut rng);
+            let sample = sample_torsor(
+                &contrib.bounds,
+                contrib.distribution,
+                contrib.sigma_level,
+                &mut rng,
+            );
 
             // Transform through Jacobian
             result_torsor += j * sample;

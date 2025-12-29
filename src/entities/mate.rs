@@ -269,7 +269,11 @@ fn normal_cdf(z: f64) -> f64 {
 impl StatisticalFit {
     /// Calculate statistical fit from hole and shaft dimensions
     /// sigma_level: process capability (6.0 for ±3σ, 4.0 for ±2σ, etc.)
-    pub fn calculate(hole_dim: &Dimension, shaft_dim: &Dimension, sigma_level: f64) -> Result<Self> {
+    pub fn calculate(
+        hole_dim: &Dimension,
+        shaft_dim: &Dimension,
+        sigma_level: f64,
+    ) -> Result<Self> {
         // Verify we have one internal and one external
         if !hole_dim.internal {
             return Err(miette!("First dimension must be internal (hole)"));

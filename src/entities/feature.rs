@@ -366,7 +366,6 @@ pub struct Feature {
     pub gdt: Vec<GdtControl>,
 
     // ===== 3D SDT Analysis Fields =====
-
     /// Geometry class for 3D tolerance analysis
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub geometry_class: Option<GeometryClass>,

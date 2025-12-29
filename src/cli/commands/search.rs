@@ -167,7 +167,11 @@ pub fn run(args: SearchArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Tsv
+        | OutputFormat::Auto
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             println!(
                 "{} results for '{}':",
                 style(results.len()).cyan(),

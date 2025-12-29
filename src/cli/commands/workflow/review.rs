@@ -95,7 +95,12 @@ impl ReviewListArgs {
     }
 
     /// Discover PRs using --target, --all-open, or --needs-role filtering
-    fn run_pr_discovery(&self, project: &Project, config: &Config, global: &GlobalOpts) -> Result<()> {
+    fn run_pr_discovery(
+        &self,
+        project: &Project,
+        config: &Config,
+        global: &GlobalOpts,
+    ) -> Result<()> {
         use console::style;
 
         if config.workflow.provider == Provider::None {
@@ -497,7 +502,12 @@ impl ReviewListArgs {
         Ok(())
     }
 
-    fn scan_local_reviews(&self, project: &Project, config: &Config, global: &GlobalOpts) -> Result<()> {
+    fn scan_local_reviews(
+        &self,
+        project: &Project,
+        config: &Config,
+        global: &GlobalOpts,
+    ) -> Result<()> {
         use walkdir::WalkDir;
 
         let target_prefix: Option<EntityPrefix> = self

@@ -380,7 +380,9 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             // Default visible columns
-            let visible: Vec<&str> = vec!["id", "category", "severity", "title", "risks", "ctrls", "status"];
+            let visible: Vec<&str> = vec![
+                "id", "category", "severity", "title", "risks", "ctrls", "status",
+            ];
 
             // Convert to TableRows
             let rows: Vec<TableRow> = filtered
@@ -393,7 +395,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let formatter = TableFormatter::new(HAZ_COLUMNS, "hazard", "HAZ").with_config(config);
             formatter.output(rows, format, &visible);
 
-            let uncontrolled = filtered.iter().filter(|h| h.links.controlled_by.is_empty()).count();
+            let uncontrolled = filtered
+                .iter()
+                .filter(|h| h.links.controlled_by.is_empty())
+                .count();
             if uncontrolled > 0 {
                 println!(
                     "\n{} hazards, {} uncontrolled",
@@ -417,7 +422,10 @@ fn hazard_to_row(hazard: &Hazard, short_ids: &ShortIdIndex) -> TableRow {
         .cell("severity", CellValue::Text(hazard.severity.to_string()))
         .cell("title", CellValue::Text(hazard.title.clone()))
         .cell("risks", CellValue::Number(hazard.links.causes.len() as i64))
-        .cell("ctrls", CellValue::Number(hazard.links.controlled_by.len() as i64))
+        .cell(
+            "ctrls",
+            CellValue::Number(hazard.links.controlled_by.len() as i64),
+        )
         .cell("status", CellValue::Status(hazard.status))
 }
 
@@ -438,10 +446,10 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             .map(String::from)
             .unwrap_or_else(|| "New Hazard".to_string());
 
-        let category_str = result
-            .get_string("category")
-            .unwrap_or("electrical");
-        let category = category_str.parse::<HazardCategory>().unwrap_or(HazardCategory::Electrical);
+        let category_str = result.get_string("category").unwrap_or("electrical");
+        let category = category_str
+            .parse::<HazardCategory>()
+            .unwrap_or(HazardCategory::Electrical);
 
         let description = result
             .get_string("description")
@@ -473,7 +481,11 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{}", id);
             }
             _ => {
-                println!("Created hazard {} at {}", style(&id.to_string()).cyan(), file_path.display());
+                println!(
+                    "Created hazard {} at {}",
+                    style(&id.to_string()).cyan(),
+                    file_path.display()
+                );
             }
         }
         return Ok(());
@@ -545,13 +557,20 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
                 "title": hazard.title,
                 "path": file_path.display().to_string()
             });
-            println!("{}", serde_json::to_string_pretty(&output).into_diagnostic()?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&output).into_diagnostic()?
+            );
         }
         OutputFormat::Id => {
             println!("{}", id);
         }
         _ => {
-            println!("Created hazard {} at {}", style(&id.to_string()).cyan(), file_path.display());
+            println!(
+                "Created hazard {} at {}",
+                style(&id.to_string()).cyan(),
+                file_path.display()
+            );
         }
     }
     Ok(())
@@ -586,7 +605,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 .get_short_id(&hazard.id.to_string())
                 .unwrap_or_else(|| hazard.id.to_string());
 
-            println!("{} {}", style(&short_id).cyan(), style(&hazard.title).bold());
+            println!(
+                "{} {}",
+                style(&short_id).cyan(),
+                style(&hazard.title).bold()
+            );
             println!();
             println!("  Category:    {}", hazard.category);
             println!("  Severity:    {}", hazard.severity);

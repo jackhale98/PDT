@@ -337,7 +337,12 @@ pub struct ArchiveArgs {
 }
 
 /// Directories where risks are stored
-const RISK_DIRS: &[&str] = &["risks/design", "risks/process", "risks/use", "risks/software"];
+const RISK_DIRS: &[&str] = &[
+    "risks/design",
+    "risks/process",
+    "risks/use",
+    "risks/software",
+];
 
 #[derive(clap::Args, Debug)]
 pub struct SummaryArgs {
@@ -1015,7 +1020,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let yaml = serde_yml::to_string(&risk).into_diagnostic()?;
             print!("{}", yaml);
         }
-        OutputFormat::Id | OutputFormat::ShortId
+        OutputFormat::Id
+        | OutputFormat::ShortId
         | OutputFormat::Table
         | OutputFormat::Dot
         | OutputFormat::Tree => {

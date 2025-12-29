@@ -758,7 +758,8 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
             let json = serde_json::to_string_pretty(&proc).into_diagnostic()?;
             println!("{}", json);
         }
-        OutputFormat::Id | OutputFormat::ShortId
+        OutputFormat::Id
+        | OutputFormat::ShortId
         | OutputFormat::Table
         | OutputFormat::Dot
         | OutputFormat::Tree => {

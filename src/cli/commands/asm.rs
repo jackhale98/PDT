@@ -519,7 +519,12 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
                 }
             }
         }
-        OutputFormat::Tsv | OutputFormat::Csv | OutputFormat::Md | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Tsv
+        | OutputFormat::Csv
+        | OutputFormat::Md
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             let config = TableConfig {
                 wrap_width: args.wrap,
                 show_summary: true,
@@ -927,7 +932,11 @@ fn run_bom(args: BomArgs, global: &GlobalOpts) -> Result<()> {
     println!();
 
     match format {
-        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Tsv
+        | OutputFormat::Auto
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             println!(
                 "{:<6} {:<15} {:<12} {:<30} {:<20}",
                 style("QTY").bold(),

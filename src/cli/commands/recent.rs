@@ -144,7 +144,11 @@ pub fn run(args: RecentArgs, global: &GlobalOpts) -> Result<()> {
                 );
             }
         }
-        OutputFormat::Tsv | OutputFormat::Auto | OutputFormat::Table | OutputFormat::Dot | OutputFormat::Tree => {
+        OutputFormat::Tsv
+        | OutputFormat::Auto
+        | OutputFormat::Table
+        | OutputFormat::Dot
+        | OutputFormat::Tree => {
             println!(
                 "{} recently modified entities:",
                 style(results.len()).cyan()

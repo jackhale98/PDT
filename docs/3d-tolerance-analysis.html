@@ -198,15 +198,17 @@
 
     .tutorial-layout {
       display: flex;
-      gap: 60px;
+      gap: 40px;
       padding: 60px 0;
+      max-width: 1100px;
+      margin: 0 auto;
     }
 
     .toc-sidebar {
-      width: 220px;
-      flex-shrink: 0;
       position: sticky;
-      top: 84px;
+      top: 100px;
+      width: 200px;
+      flex-shrink: 0;
       height: fit-content;
     }
 
@@ -220,7 +222,6 @@
 
     .toc-sidebar ul {
       list-style: none;
-      padding: 0;
     }
 
     .toc-sidebar li { margin-bottom: 8px; }
@@ -234,32 +235,31 @@
 
     .toc-sidebar a:hover { color: var(--accent); }
 
-    .tutorial-content { flex: 1; min-width: 0; }
+    .tutorial-content {
+      flex: 1;
+      min-width: 0;
+    }
 
     .tutorial-section {
       margin-bottom: 60px;
-      scroll-margin-top: 84px;
     }
 
     .tutorial-section h2 {
       font-size: 28px;
-      margin-bottom: 20px;
+      margin-bottom: 24px;
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
-      color: var(--accent);
     }
 
     .tutorial-section h3 {
       font-size: 20px;
-      margin-top: 32px;
-      margin-bottom: 16px;
+      margin: 32px 0 16px;
       color: var(--text-primary);
     }
 
     .tutorial-section h4 {
       font-size: 16px;
-      margin-top: 24px;
-      margin-bottom: 12px;
+      margin: 24px 0 12px;
       color: var(--text-secondary);
     }
 
@@ -269,35 +269,28 @@
     }
 
     .tutorial-section ul, .tutorial-section ol {
-      margin-bottom: 16px;
-      padding-left: 24px;
+      margin: 0 0 20px 20px;
       color: var(--text-secondary);
     }
 
-    .tutorial-section li { margin-bottom: 8px; }
-    .tutorial-section strong { color: var(--text-primary); }
+    .tutorial-section li {
+      margin-bottom: 8px;
+    }
 
     .code-block {
-      background: var(--bg-secondary);
+      background: var(--code-bg);
       border: 1px solid var(--border);
       border-radius: 8px;
-      overflow: hidden;
       margin: 16px 0;
+      overflow: hidden;
     }
 
     .code-header {
       background: var(--bg-elevated);
       padding: 8px 16px;
       border-bottom: 1px solid var(--border);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .code-lang {
       font-size: 12px;
       color: var(--text-muted);
-      text-transform: uppercase;
     }
 
     .code-block pre {
@@ -311,33 +304,44 @@
       color: var(--text-primary);
     }
 
-    .cmd { color: var(--accent); }
-    .string { color: #a5d6ff; }
-    .comment { color: var(--text-muted); }
-    .flag { color: var(--warning); }
-    .number { color: #79c0ff; }
+    .code-block .comment { color: var(--text-muted); }
+    .code-block .string { color: #a5d6ff; }
+    .code-block .number { color: #79c0ff; }
+    .code-block .flag { color: var(--accent); }
+    .code-block .cmd { color: #d2a8ff; }
+    .code-block .key { color: #ff7b72; }
+
+    .output-block {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre;
+      overflow-x: auto;
+      color: var(--text-secondary);
+    }
 
     .info-box {
       background: var(--bg-elevated);
-      border: 1px solid var(--border);
       border-left: 3px solid var(--accent);
-      border-radius: 8px;
       padding: 16px 20px;
       margin: 20px 0;
-    }
-
-    .info-box.warning {
-      border-left-color: var(--warning);
+      border-radius: 0 8px 8px 0;
     }
 
     .info-box strong {
       display: block;
-      margin-bottom: 8px;
       color: var(--accent);
+      margin-bottom: 8px;
     }
 
-    .info-box.warning strong {
-      color: var(--warning);
+    .info-box p {
+      margin: 0;
+      font-size: 14px;
     }
 
     .info-table {
@@ -350,7 +354,7 @@
     .info-table th, .info-table td {
       padding: 12px;
       text-align: left;
-      border-bottom: 1px solid var(--border);
+      border: 1px solid var(--border);
     }
 
     .info-table th {
@@ -364,37 +368,64 @@
     }
 
     .info-table code {
-      background: var(--code-bg);
+      background: var(--bg-card);
       padding: 2px 6px;
       border-radius: 4px;
-      color: var(--accent);
+      font-size: 13px;
     }
 
-    .output-block {
-      background: var(--bg-secondary);
-      border: 1px solid var(--border);
-      border-radius: 8px;
+    .gdt-symbol {
+      font-size: 18px;
+      font-weight: bold;
+      color: var(--text-primary);
+    }
+
+    .workflow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin: 20px 0;
       padding: 16px;
-      margin: 16px 0;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 12px;
-      line-height: 1.5;
-      overflow-x: auto;
-      white-space: pre;
+      background: var(--bg-card);
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .workflow-step .step-num {
+      width: 32px;
+      height: 32px;
+      background: var(--accent);
+      color: var(--bg-primary);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .workflow-step .step-content {
+      flex: 1;
+    }
+
+    .workflow-step .step-content strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--text-primary);
     }
 
     footer {
-      padding: 60px 0;
-      border-top: 1px solid var(--border);
       background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+      padding: 40px 0;
+      margin-top: 60px;
     }
 
     .footer-content {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      flex-wrap: wrap;
-      gap: 24px;
     }
 
     .footer-brand {
@@ -410,7 +441,7 @@
 
     .footer-links {
       display: flex;
-      gap: 32px;
+      gap: 24px;
     }
 
     .footer-links a {
@@ -422,18 +453,13 @@
 
     .footer-links a:hover { color: var(--accent); }
 
-    @media (max-width: 1024px) {
+    @media (max-width: 900px) {
+      .tutorial-layout { flex-direction: column; padding: 40px 24px; }
       .toc-sidebar { display: none; }
-      .tutorial-layout { padding: 30px 0 60px; }
-    }
-
-    @media (max-width: 768px) {
+      .tutorial-header h1 { font-size: 32px; }
       .nav-links { display: none; }
       .mobile-menu-btn { display: block; }
-      .tutorial-header { padding: 100px 0 40px; }
-      .tutorial-header h1 { font-size: 28px; }
-      .tutorial-header .description { font-size: 16px; }
-      .tutorial-section h2 { font-size: 24px; }
+      .footer-content { flex-direction: column; gap: 20px; text-align: center; }
     }
   </style>
 </head>
@@ -443,50 +469,37 @@
   <nav>
     <div class="nav-container">
       <a href="index.html" class="logo">
-        <div class="logo-icon">
-          <img src="logo.svg" alt="TDT Logo" width="40" height="40">
-        </div>
+        <div class="logo-icon"><img src="logo.svg" alt="TDT Logo"></div>
         <span class="logo-text">TDT</span>
       </a>
       <div class="nav-links">
-        <a href="index.html#features">Features</a>
-        <a href="index.html#install">Install</a>
-        <a href="why-plain-text.html">Why Plain Text?</a>
-        <a href="tolerance.html">Tolerance</a>
-        <a href="reports.html">Reports</a>
-        <a href="collaboration.html">Collaboration</a>
-        <a href="integrations.html">Integrations</a>
+        <a href="index.html">Home</a>
         <a href="tutorial.html">Tutorial</a>
+        <a href="tolerance.html">Tolerance</a>
+        <a href="3d-tolerance-analysis.html" class="active">3D Analysis</a>
         <a href="https://github.com/jackhale98/TDT" class="nav-btn">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           GitHub
         </a>
       </div>
-      <button class="mobile-menu-btn" onclick="toggleMobileMenu()" aria-label="Toggle menu">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
+      <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
     </div>
   </nav>
 
   <div class="mobile-menu" id="mobileMenu">
-    <a href="index.html#features" onclick="closeMobileMenu()">Features</a>
-    <a href="index.html#install" onclick="closeMobileMenu()">Install</a>
-    <a href="why-plain-text.html" onclick="closeMobileMenu()">Why Plain Text?</a>
-    <a href="tolerance.html" onclick="closeMobileMenu()">Tolerance</a>
-    <a href="reports.html" onclick="closeMobileMenu()">Reports</a>
-    <a href="integrations.html" onclick="closeMobileMenu()">Integrations</a>
+    <a href="index.html" onclick="closeMobileMenu()">Home</a>
     <a href="tutorial.html" onclick="closeMobileMenu()">Tutorial</a>
+    <a href="tolerance.html" onclick="closeMobileMenu()">Tolerance</a>
+    <a href="3d-tolerance-analysis.html" onclick="closeMobileMenu()">3D Analysis</a>
     <a href="https://github.com/jackhale98/TDT" onclick="closeMobileMenu()">GitHub</a>
   </div>
 
   <header class="tutorial-header">
     <div class="container">
-      <h1>3D Tolerance <span>Analysis</span></h1>
-      <p class="description">Learn how to perform 3D tolerance analysis using Small Displacement Torsor (SDT) theory. This guide walks through setting up geometry, running 6-DOF analysis, and interpreting results.</p>
+      <h1>3D Tolerance Analysis with <span>GD&T</span></h1>
+      <p class="description">Enter your GD&T callouts and let TDT compute 6-DOF tolerance stackups automatically.</p>
     </div>
   </header>
 
@@ -497,14 +510,12 @@
           <h3>Contents</h3>
           <ul>
             <li><a href="#overview">Overview</a></li>
-            <li><a href="#concepts">Key Concepts</a></li>
-            <li><a href="#setup">1. Project Setup</a></li>
-            <li><a href="#geometry">2. Define Geometry</a></li>
-            <li><a href="#torsor-bounds">Auto-Compute Bounds</a></li>
-            <li><a href="#datums">3. Set Up Datums</a></li>
-            <li><a href="#stackup">4. Create Stackup</a></li>
-            <li><a href="#analyze">5. Run 3D Analysis</a></li>
-            <li><a href="#interpret">6. Interpret Results</a></li>
+            <li><a href="#gdt-reference">GD&T Reference</a></li>
+            <li><a href="#workflow">Quick Start Workflow</a></li>
+            <li><a href="#features">Feature Setup</a></li>
+            <li><a href="#datums">Datums</a></li>
+            <li><a href="#analysis">Running Analysis</a></li>
+            <li><a href="#theory">Theory Deep Dive</a></li>
             <li><a href="#reference">Reference</a></li>
           </ul>
         </aside>
@@ -513,24 +524,517 @@
 
           <section id="overview" class="tutorial-section">
             <h2>Overview</h2>
-            <p>TDT's 3D tolerance analysis uses <strong>Small Displacement Torsor (SDT)</strong> theory to analyze geometric variation in assemblies. Unlike 1D stackups that only consider linear dimensions, 3D analysis captures:</p>
-            <ul>
-              <li><strong>6 Degrees of Freedom</strong> - 3 translations (u, v, w) and 3 rotations (α, β, γ)</li>
-              <li><strong>Geometric constraints</strong> - How different geometry types (planes, cylinders, etc.) constrain motion</li>
-              <li><strong>Datum order effects</strong> - ASME Y14.5 3-2-1 rule for datum reference frames</li>
-              <li><strong>Position propagation</strong> - How deviations accumulate through kinematic chains</li>
-            </ul>
+            <p>TDT's 3D tolerance analysis lets you work with familiar GD&T symbols from your drawings. Enter your position, perpendicularity, runout, and other callouts, and TDT automatically converts them to a 6-DOF analysis.</p>
 
             <div class="info-box">
-              <strong>When to Use 3D Analysis</strong>
-              <p>Use 3D analysis when your tolerance chain involves radial fits, angular alignment, or multi-axis positioning. For simple linear stacks (like gasket compression), 1D analysis is sufficient.</p>
+              <strong>The GD&T-First Approach</strong>
+              <p>Most tolerance tools require you to understand torsor theory before specifying tolerances. TDT works the other way: enter your GD&T as it appears on the drawing, and we handle the math.</p>
+            </div>
+
+            <h3>What You Get</h3>
+            <ul>
+              <li><strong>Automatic DOF mapping</strong> - GD&T symbols map to the correct degrees of freedom based on geometry</li>
+              <li><strong>Material condition bonuses</strong> - MMC/LMC bonus calculations are automatic</li>
+              <li><strong>Datum reference frames</strong> - ASME Y14.5 3-2-1 rule is applied automatically</li>
+              <li><strong>Validation</strong> - TDT warns if your GD&T changes but torsor bounds are stale</li>
+            </ul>
+          </section>
+
+          <section id="gdt-reference" class="tutorial-section">
+            <h2>GD&T Symbol Reference</h2>
+            <p>TDT supports these GD&T symbols. The table shows which degrees of freedom each symbol affects based on your geometry type.</p>
+
+            <h3>Position and Location</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Symbol</th><th>GD&T</th><th>Geometry</th><th>Affects DOF</th><th>Formula</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="gdt-symbol">&#x2316;</td>
+                  <td><code>position</code></td>
+                  <td>cylinder</td>
+                  <td>u, v</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2316;</td>
+                  <td><code>position</code></td>
+                  <td>sphere, point</td>
+                  <td>u, v, w</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2316;</td>
+                  <td><code>position</code></td>
+                  <td>plane</td>
+                  <td>w</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x25CE;</td>
+                  <td><code>concentricity</code></td>
+                  <td>cylinder, sphere</td>
+                  <td>u, v</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2300;</td>
+                  <td><code>symmetry</code></td>
+                  <td>plane</td>
+                  <td>u or v</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Orientation</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Symbol</th><th>GD&T</th><th>Geometry</th><th>Affects DOF</th><th>Formula</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="gdt-symbol">&#x27C2;</td>
+                  <td><code>perpendicularity</code></td>
+                  <td>cylinder, cone</td>
+                  <td>&#x03B1;, &#x03B2;</td>
+                  <td>±(tol / length)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x27C2;</td>
+                  <td><code>perpendicularity</code></td>
+                  <td>plane</td>
+                  <td>&#x03B1; or &#x03B2;</td>
+                  <td>±(tol / extent)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2225;</td>
+                  <td><code>parallelism</code></td>
+                  <td>cylinder</td>
+                  <td>&#x03B1;, &#x03B2;</td>
+                  <td>±(tol / length)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2225;</td>
+                  <td><code>parallelism</code></td>
+                  <td>plane</td>
+                  <td>&#x03B1; or &#x03B2;</td>
+                  <td>±(tol / extent)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2220;</td>
+                  <td><code>angularity</code></td>
+                  <td>any</td>
+                  <td>&#x03B1;, &#x03B2;</td>
+                  <td>±(tol / length)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Form</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Symbol</th><th>GD&T</th><th>Geometry</th><th>Affects DOF</th><th>Formula</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="gdt-symbol">&#x23E5;</td>
+                  <td><code>flatness</code></td>
+                  <td>plane</td>
+                  <td>w</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x25CB;</td>
+                  <td><code>cylindricity</code></td>
+                  <td>cylinder</td>
+                  <td>u, v</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x25CB;</td>
+                  <td><code>circularity</code></td>
+                  <td>cylinder, sphere</td>
+                  <td>u, v</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2312;</td>
+                  <td><code>straightness</code></td>
+                  <td>cylinder, line</td>
+                  <td>&#x03B1;, &#x03B2;</td>
+                  <td>±(tol / length)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Runout</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Symbol</th><th>GD&T</th><th>Geometry</th><th>Affects DOF</th><th>Formula</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="gdt-symbol">&#x2197;</td>
+                  <td><code>circular_runout</code></td>
+                  <td>cylinder</td>
+                  <td>u, v, &#x03B1;, &#x03B2;</td>
+                  <td>radial + angular</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x21D7;</td>
+                  <td><code>total_runout</code></td>
+                  <td>cylinder</td>
+                  <td>u, v, &#x03B1;, &#x03B2;</td>
+                  <td>radial + angular</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Profile</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Symbol</th><th>GD&T</th><th>Geometry</th><th>Affects DOF</th><th>Formula</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="gdt-symbol">&#x2313;</td>
+                  <td><code>profile_line</code></td>
+                  <td>any</td>
+                  <td>w (normal)</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+                <tr>
+                  <td class="gdt-symbol">&#x2313;</td>
+                  <td><code>profile_surface</code></td>
+                  <td>any</td>
+                  <td>w (normal)</td>
+                  <td>±(tol / 2)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Material Condition Modifiers</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Modifier</th><th>Code</th><th>Bonus Calculation</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>MMC</strong> (&#x24C2;)</td>
+                  <td><code>mmc</code></td>
+                  <td>bonus = |actual_size - mmc_size|</td>
+                </tr>
+                <tr>
+                  <td><strong>LMC</strong> (&#x24C1;)</td>
+                  <td><code>lmc</code></td>
+                  <td>bonus = |actual_size - lmc_size|</td>
+                </tr>
+                <tr>
+                  <td><strong>RFS</strong></td>
+                  <td><code>rfs</code></td>
+                  <td>No bonus (default)</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="workflow" class="tutorial-section">
+            <h2>Quick Start Workflow</h2>
+            <p>Here's the typical workflow for 3D tolerance analysis with GD&T:</p>
+
+            <div class="workflow-step">
+              <div class="step-num">1</div>
+              <div class="step-content">
+                <strong>Create Feature with GD&T</strong>
+                <p>Create a feature and add your GD&T controls directly from the drawing.</p>
+              </div>
+            </div>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt feat new</span> --title <span class="string">"Bore"</span> --component CMP@1 --feature-type internal --no-edit</code></pre>
+            </div>
+
+            <p>Then edit the feature file to add GD&T:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>title: Bore
+feature_type: internal
+geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]
+  axis: [0.0, 0.0, 1.0]
+  length: 25.0
+
+dimensions:
+  - name: diameter
+    nominal: 20.0
+    plus_tol: 0.021
+    minus_tol: 0.0
+
+<span class="comment"># GD&T from drawing</span>
+gdt:
+  - symbol: position
+    value: 0.25
+    datum_refs: [A, B]
+    material_condition: mmc
+  - symbol: perpendicularity
+    value: 0.05
+    datum_refs: [A]</code></pre>
+            </div>
+
+            <div class="workflow-step">
+              <div class="step-num">2</div>
+              <div class="step-content">
+                <strong>Compute Torsor Bounds</strong>
+                <p>Let TDT convert your GD&T to torsor bounds automatically.</p>
+              </div>
+            </div>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Preview the computed bounds</span>
+<span class="cmd">tdt feat compute-bounds</span> FEAT@1
+
+<span class="comment"># Compute and save to feature file</span>
+<span class="cmd">tdt feat compute-bounds</span> FEAT@1 <span class="flag">--update</span>
+
+<span class="comment"># Include MMC bonus (if you know actual size)</span>
+<span class="cmd">tdt feat compute-bounds</span> FEAT@1 <span class="flag">--actual-size</span> <span class="number">20.015</span> <span class="flag">--update</span></code></pre>
+            </div>
+
+            <div class="output-block">
+<span style="color: var(--info)">i</span> Feature: Bore (FEAT-01ABC...)
+  Geometry: cylinder (length: 25.0)
+
+<span style="color: var(--accent)">GD&T Controls:</span>
+  position: 0.25 (MMC) -> u: ±0.125, v: ±0.125
+  perpendicularity: 0.05 -> α: ±0.002, β: ±0.002
+
+<span style="color: var(--success)">Computed torsor_bounds:</span>
+  u: [-0.125, 0.125]
+  v: [-0.125, 0.125]
+  w: [0, 0]
+  alpha: [-0.002, 0.002]
+  beta: [-0.002, 0.002]
+  gamma: [0, 0]</div>
+
+            <div class="workflow-step">
+              <div class="step-num">3</div>
+              <div class="step-content">
+                <strong>Create Stackup</strong>
+                <p>Add features to a tolerance stackup and run 3D analysis.</p>
+              </div>
+            </div>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Create stackup</span>
+<span class="cmd">tdt tol new</span> --title <span class="string">"Shaft-Bore Fit"</span> --target-name <span class="string">"Clearance"</span> \
+  --target-nominal 0.02 --target-upper 0.05 --target-lower 0.005 --no-edit
+
+<span class="comment"># Add contributors</span>
+<span class="cmd">tdt tol add</span> TOL@1 +FEAT@1 ~FEAT@2
+
+<span class="comment"># Run 3D analysis</span>
+<span class="cmd">tdt tol analyze</span> TOL@1 <span class="flag">--3d</span></code></pre>
+            </div>
+
+            <div class="workflow-step">
+              <div class="step-num">4</div>
+              <div class="step-content">
+                <strong>Keep Bounds Current</strong>
+                <p>TDT validates that your torsor bounds match your GD&T.</p>
+              </div>
+            </div>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Check for stale bounds</span>
+<span class="cmd">tdt validate</span>
+
+<span class="comment"># Auto-fix stale bounds</span>
+<span class="cmd">tdt validate</span> <span class="flag">--fix</span></code></pre>
+            </div>
+
+            <div class="info-box">
+              <strong>Tip: Validate After Changes</strong>
+              <p>After modifying GD&T values, run <code>tdt validate</code> to ensure your torsor bounds are current. Use <code>--fix</code> to automatically update stale bounds.</p>
             </div>
           </section>
 
-          <section id="concepts" class="tutorial-section">
-            <h2>Key Concepts</h2>
+          <section id="features" class="tutorial-section">
+            <h2>Feature Setup</h2>
+            <p>Features need geometry information for 3D analysis. This tells TDT what type of geometry and where it is in your assembly.</p>
 
-            <h3>Small Displacement Torsor</h3>
+            <h3>Required Fields</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Field</th><th>Description</th><th>Example</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>geometry_class</code></td>
+                  <td>Type of geometry</td>
+                  <td>cylinder, plane, sphere, cone, point, line</td>
+                </tr>
+                <tr>
+                  <td><code>geometry_3d.origin</code></td>
+                  <td>Position in assembly coordinates</td>
+                  <td>[0.0, 0.0, 50.0]</td>
+                </tr>
+                <tr>
+                  <td><code>geometry_3d.axis</code></td>
+                  <td>Direction vector (normalized)</td>
+                  <td>[0.0, 0.0, 1.0]</td>
+                </tr>
+                <tr>
+                  <td><code>geometry_3d.length</code></td>
+                  <td>Feature length (for angular tolerances)</td>
+                  <td>25.0</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Geometry Examples</h3>
+
+            <h4>Cylinder (Bore or Shaft)</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>geometry_class: cylinder
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]    <span class="comment"># Center at one end</span>
+  axis: [0.0, 0.0, 1.0]      <span class="comment"># Along Z axis</span>
+  length: 25.0               <span class="comment"># Depth of bore</span></code></pre>
+            </div>
+
+            <h4>Plane (Face or Datum Surface)</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>geometry_class: plane
+geometry_3d:
+  origin: [0.0, 0.0, 0.0]    <span class="comment"># Point on surface</span>
+  axis: [0.0, 0.0, 1.0]      <span class="comment"># Surface normal</span></code></pre>
+            </div>
+
+            <h4>Sphere (Ball or Locating Feature)</h4>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>geometry_class: sphere
+geometry_3d:
+  origin: [50.0, 25.0, 10.0] <span class="comment"># Center point</span>
+  axis: [0.0, 0.0, 1.0]      <span class="comment"># Reference direction</span></code></pre>
+            </div>
+
+            <h3>Coordinate System</h3>
+            <p>Use a consistent coordinate system for all features. A common convention:</p>
+            <div class="output-block" style="text-align: center; line-height: 1.3;">
+        Z (up)
+        |
+        |
+        |
+        +--------- Y
+       /
+      /
+     X
+
+Right-hand rule: X x Y = Z</div>
+          </section>
+
+          <section id="datums" class="tutorial-section">
+            <h2>Datums</h2>
+            <p>Add <code>datum_label</code> to features that serve as datums:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>title: Mounting Face
+geometry_class: plane
+<span class="comment"># ... geometry ...</span>
+
+<span class="comment"># This feature is datum A</span>
+datum_label: A</code></pre>
+            </div>
+
+            <p>TDT applies the ASME Y14.5 3-2-1 rule automatically:</p>
+            <ul>
+              <li><strong>Primary datum (A)</strong> - Constrains 3 DOF</li>
+              <li><strong>Secondary datum (B)</strong> - Constrains 2 additional DOF</li>
+              <li><strong>Tertiary datum (C)</strong> - Constrains final 1 DOF</li>
+            </ul>
+
+            <p>When you specify <code>datum_refs: [A, B]</code> in your GD&T, TDT only applies tolerances to DOFs not already constrained by those datums.</p>
+          </section>
+
+          <section id="analysis" class="tutorial-section">
+            <h2>Running Analysis</h2>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt tol analyze</span> TOL@1 <span class="flag">--3d</span></code></pre>
+            </div>
+
+            <h3>Example Output</h3>
+            <div class="output-block">
+<span style="color: var(--info)">i</span> Found datum features: A, B
+<span style="color: var(--text-muted)">⚙</span> Analyzing stackup TOL@1 with 4 contributors...
+<span style="color: var(--success)">✓</span> Analysis complete
+
+   Target: Clearance = 0.02 (LSL: 0.005, USL: 0.05)
+
+   <span style="color: var(--text-primary); font-weight: bold">Worst-Case Analysis:</span>
+     Range: -0.01 to 0.04
+     Result: <span style="color: var(--warning)">marginal</span>
+
+   <span style="color: var(--text-primary); font-weight: bold">RSS (Statistical) Analysis:</span>
+     Mean: 0.015
+     ±3σ: 0.012
+     Capability: Cp=1.87, Cpk=1.46
+     Yield: 99.99%
+
+   <span style="color: var(--text-primary); font-weight: bold">6-DOF Torsor Results:</span>
+     Translations (mm):
+       u: WC [-0.018, 0.018] RSS ±3σ=0.0102
+       v: WC [-0.018, 0.018] RSS ±3σ=0.0102
+       w: WC [0, 0]
+     Rotations (mrad):
+       α: WC [-0.50, 0.50] RSS ±3σ=0.28
+       β: WC [-0.50, 0.50] RSS ±3σ=0.28
+       γ: WC [0, 0]
+
+   <span style="color: var(--text-primary); font-weight: bold">Functional Deviation</span> (projected onto [1,0,0]):
+     Worst Case: 0.018
+     RSS 3σ: 0.0102</div>
+
+            <h3>Analysis Options</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Flag</th><th>Description</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>--3d</code></td><td>Enable 6-DOF SDT analysis</td></tr>
+                <tr><td><code>--visualize</code></td><td>Show ASCII chain diagram</td></tr>
+                <tr><td><code>--iterations N</code></td><td>Monte Carlo iterations (default: 10000)</td></tr>
+                <tr><td><code>--no-gdt</code></td><td>Ignore GD&T position tolerances</td></tr>
+              </tbody>
+            </table>
+
+            <h3>Understanding Results</h3>
+            <ul>
+              <li><strong>WC [min, max]</strong> - Worst-case deviation range</li>
+              <li><strong>RSS ±3σ</strong> - Statistical 3-sigma spread</li>
+              <li><strong>Cp/Cpk</strong> - Process capability indices</li>
+              <li><strong>Zero DOFs</strong> - Fully constrained by geometry or datums</li>
+            </ul>
+          </section>
+
+          <section id="theory" class="tutorial-section">
+            <h2>Theory Deep Dive</h2>
+            <p>This section explains the underlying math for those who want to understand how TDT works internally.</p>
+
+            <h3>Small Displacement Torsor (SDT)</h3>
             <p>A torsor represents the small deviation of a feature from its nominal position using 6 parameters:</p>
 
             <table class="info-table">
@@ -541,703 +1045,87 @@
                 <tr><td><code>u</code></td><td>u</td><td>Translation along local X</td></tr>
                 <tr><td><code>v</code></td><td>v</td><td>Translation along local Y</td></tr>
                 <tr><td><code>w</code></td><td>w</td><td>Translation along local Z</td></tr>
-                <tr><td><code>alpha</code></td><td>α</td><td>Rotation about local X</td></tr>
-                <tr><td><code>beta</code></td><td>β</td><td>Rotation about local Y</td></tr>
-                <tr><td><code>gamma</code></td><td>γ</td><td>Rotation about local Z</td></tr>
+                <tr><td><code>alpha</code></td><td>&#x03B1;</td><td>Rotation about local X</td></tr>
+                <tr><td><code>beta</code></td><td>&#x03B2;</td><td>Rotation about local Y</td></tr>
+                <tr><td><code>gamma</code></td><td>&#x03B3;</td><td>Rotation about local Z</td></tr>
               </tbody>
             </table>
 
-            <h3>Geometry Classes</h3>
-            <p>Different geometry types constrain different DOFs:</p>
+            <h3>Geometry Class DOF Constraints</h3>
+            <p>Different geometry types constrain different degrees of freedom:</p>
 
             <table class="info-table">
               <thead>
-                <tr><th>Geometry</th><th>Constrained DOF</th><th>Free DOF</th></tr>
+                <tr><th>Geometry</th><th>Constrained</th><th>Free</th></tr>
               </thead>
               <tbody>
-                <tr><td><code>plane</code></td><td>w, α, β</td><td>u, v, γ</td></tr>
-                <tr><td><code>cylinder</code></td><td>u, v, α, β</td><td>w, γ</td></tr>
-                <tr><td><code>sphere</code></td><td>u, v, w</td><td>α, β, γ</td></tr>
-                <tr><td><code>cone</code></td><td>u, v, α, β</td><td>w, γ</td></tr>
-                <tr><td><code>line</code></td><td>u, v</td><td>w, α, β, γ</td></tr>
-                <tr><td><code>point</code></td><td>u, v, w</td><td>α, β, γ</td></tr>
+                <tr><td><code>plane</code></td><td>w, &#x03B1;, &#x03B2;</td><td>u, v, &#x03B3;</td></tr>
+                <tr><td><code>cylinder</code></td><td>u, v, &#x03B1;, &#x03B2;</td><td>w, &#x03B3;</td></tr>
+                <tr><td><code>sphere</code></td><td>u, v, w</td><td>&#x03B1;, &#x03B2;, &#x03B3;</td></tr>
+                <tr><td><code>cone</code></td><td>u, v, w, &#x03B1;, &#x03B2;</td><td>&#x03B3;</td></tr>
+                <tr><td><code>line</code></td><td>u, v</td><td>w, &#x03B1;, &#x03B2;, &#x03B3;</td></tr>
+                <tr><td><code>point</code></td><td>u, v, w</td><td>&#x03B1;, &#x03B2;, &#x03B3;</td></tr>
               </tbody>
             </table>
 
-            <h3>Datum Reference Frames (ASME Y14.5)</h3>
-            <p>The 3-2-1 rule establishes coordinate systems from datum features:</p>
-            <ul>
-              <li><strong>Primary datum (A)</strong> - Constrains 3 DOF (typically a plane: w, α, β)</li>
-              <li><strong>Secondary datum (B)</strong> - Constrains 2 additional DOF</li>
-              <li><strong>Tertiary datum (C)</strong> - Constrains final 1 DOF</li>
-            </ul>
-            <p>GD&T tolerances only apply to the <strong>free DOFs</strong> not constrained by the datum reference frame.</p>
-          </section>
-
-          <section id="setup" class="tutorial-section">
-            <h2>1. Project Setup</h2>
-            <p>Initialize a new project for our example - a bearing assembly:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">mkdir</span> bearing-assembly
-<span class="cmd">cd</span> bearing-assembly
-<span class="cmd">tdt init</span></code></pre>
-            </div>
-
-            <h3>Create Components</h3>
-            <p>Create the components in our assembly:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="comment"># Housing with bearing bore</span>
-<span class="cmd">tdt cmp new</span> --title <span class="string">"Housing"</span> --part-number <span class="string">"HSG-001"</span> --no-edit
-
-<span class="comment"># Shaft that fits through bearing</span>
-<span class="cmd">tdt cmp new</span> --title <span class="string">"Shaft"</span> --part-number <span class="string">"SFT-001"</span> --no-edit
-
-<span class="comment"># Standard bearing</span>
-<span class="cmd">tdt cmp new</span> --title <span class="string">"Bearing 6206"</span> --part-number <span class="string">"BRG-6206"</span> --no-edit</code></pre>
-            </div>
-          </section>
-
-          <section id="geometry" class="tutorial-section">
-            <h2>2. Define Feature Geometry</h2>
-            <p>This is the most important step for 3D analysis. Each feature needs geometry information that tells TDT:</p>
-            <ul>
-              <li><strong>What type of geometry</strong> - plane, cylinder, sphere, etc.</li>
-              <li><strong>Where it is located</strong> - the origin point in your assembly coordinate system</li>
-              <li><strong>How it's oriented</strong> - the axis direction (for cylinders, planes, cones)</li>
-            </ul>
-
-            <h3>Establishing Your Coordinate System</h3>
-            <p>Before defining feature geometry, establish a consistent assembly coordinate system. A common convention:</p>
-
-            <div class="output-block" style="text-align: center; line-height: 1.3;">
-                    Z (up)
-                    │
-                    │
-                    │
-                    └───────── Y
-                   ╱
-                  ╱
-                 X (toward you)
-
-   Right-hand rule: X × Y = Z</div>
-
-            <div class="info-box">
-              <strong>Coordinate System Tips</strong>
-              <p>Use the same coordinate system as your CAD model. If your assembly has a natural axis (like a shaft centerline), align Z with that axis. All feature origins should be defined in this single, consistent coordinate system.</p>
-            </div>
-
-            <h3>Understanding Origin and Axis</h3>
-
-            <table class="info-table">
-              <thead>
-                <tr><th>Field</th><th>What It Means</th><th>How to Determine It</th></tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><code>origin</code></td>
-                  <td>A point ON the feature surface, typically the center</td>
-                  <td>For a bore: center point at one end. For a plane: any point on the surface.</td>
-                </tr>
-                <tr>
-                  <td><code>axis</code></td>
-                  <td>Unit vector defining the feature's primary direction</td>
-                  <td>For a cylinder: along the centerline. For a plane: the surface normal (perpendicular to surface).</td>
-                </tr>
-                <tr>
-                  <td><code>length</code></td>
-                  <td>Extent of the feature (optional)</td>
-                  <td>For cylindrical features: the depth/length of the bore or shaft section.</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <h3>Geometry Type: Cylinder (Bores, Shafts, Pins)</h3>
-            <p>Cylinders are the most common geometry for fits and assemblies.</p>
-
-            <div class="output-block" style="line-height: 1.2;">
-   CYLINDER GEOMETRY
-   ═════════════════
-
-        axis [0,0,1]
-            ↑
-            │    ╭─────────╮
-            │   ╱           ╲
-            │  │             │  ← cylindrical surface
-            │  │      ●──────│───→ origin [x, y, z]
-            │  │    (center) │       at one end of cylinder
-            │   ╲           ╱
-            │    ╰─────────╯
-            │
-            ↓ length
-
-   The axis points along the cylinder centerline.
-   Origin is at the center of one end face.</div>
-
-            <h4>Example: Housing Bore (Internal Cylinder)</h4>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code>title: Housing Bore
-feature_type: internal
-
-dimensions:
-  - name: diameter
-    nominal: 62.0
-    plus_tol: 0.030
-    minus_tol: 0.0
-    units: mm
-    distribution: normal
-
-<span class="comment"># Bore centered at assembly origin, running along Z</span>
-geometry_class: cylinder
-geometry_3d:
-  origin: [0.0, 0.0, 0.0]    <span class="comment"># Center of bore at Z=0 face</span>
-  axis: [0.0, 0.0, 1.0]      <span class="comment"># Bore axis along +Z</span>
-  length: 20.0               <span class="comment"># Bore depth: 20mm</span></code></pre>
-            </div>
-
-            <h4>Example: Shaft Journal (External Cylinder)</h4>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code>title: Shaft Journal
-feature_type: external
-
-dimensions:
-  - name: diameter
-    nominal: 30.0
-    plus_tol: 0.015
-    minus_tol: 0.002
-    units: mm
-    distribution: normal
-
-<span class="comment"># Shaft section at Z=50mm (after shoulder)</span>
-geometry_class: cylinder
-geometry_3d:
-  origin: [0.0, 0.0, 50.0]   <span class="comment"># Center at start of journal</span>
-  axis: [0.0, 0.0, 1.0]      <span class="comment"># Shaft axis along +Z</span>
-  length: 35.0               <span class="comment"># Journal length</span></code></pre>
-            </div>
-
-            <h3>Geometry Type: Plane (Faces, Flanges, Shoulders)</h3>
-            <p>Planes are flat surfaces used as datum faces and for axial positioning.</p>
-
-            <div class="output-block" style="line-height: 1.2;">
-   PLANE GEOMETRY
-   ══════════════
-
-              axis [0,0,1] (surface normal)
-                   ↑
-                   │
-        ┌──────────┼──────────┐
-        │          │          │
-        │          ● origin   │  ← flat surface
-        │        [x,y,z]      │
-        └─────────────────────┘
-
-   The axis is the NORMAL to the plane (perpendicular).
-   Origin is any point on the plane surface.</div>
-
-            <h4>Example: Housing Face (Primary Datum)</h4>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code>title: Housing Mounting Face
-feature_type: external
-
-dimensions:
-  - name: flatness
-    nominal: 0.0
-    plus_tol: 0.05
-    minus_tol: 0.0
-    units: mm
-
-<span class="comment"># Flat face at Z=0, normal pointing in -Z direction</span>
-geometry_class: plane
-geometry_3d:
-  origin: [0.0, 0.0, 0.0]    <span class="comment"># Point on the face</span>
-  axis: [0.0, 0.0, -1.0]     <span class="comment"># Normal points DOWN (-Z)</span>
-
-<span class="comment"># This is our primary datum</span>
-datum_label: A</code></pre>
-            </div>
-
-            <h4>Example: Disk Thickness (Stacked Parts)</h4>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code>title: Disk 1 Thickness
-feature_type: external
-
-dimensions:
-  - name: thickness
-    nominal: 15.0
-    plus_tol: 0.5
-    minus_tol: 0.5
-    units: mm
-    distribution: normal
-
-<span class="comment"># Top face of disk at Z=0</span>
-geometry_class: plane
-geometry_3d:
-  origin: [0.0, 0.0, 0.0]    <span class="comment"># Start of stack</span>
-  axis: [0.0, 0.0, 1.0]      <span class="comment"># Stack direction</span></code></pre>
-            </div>
-
-            <h3>Geometry Type: Sphere (Ball Joints, Locating Features)</h3>
-
-            <div class="output-block" style="line-height: 1.2;">
-   SPHERE GEOMETRY
-   ═══════════════
-
-            ╭───────╮
-          ╱    ●    ╲     ● = origin [x,y,z]
-         │   center   │       (center of sphere)
-          ╲          ╱
-            ╰───────╯
-
-   Spheres have no axis - they're symmetric.
-   Origin is the center point.
-   Set axis to [0,0,1] by convention.</div>
-
-            <h4>Example: Locating Ball</h4>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code>title: Locating Ball
-geometry_class: sphere
-geometry_3d:
-  origin: [25.0, 0.0, 10.0]  <span class="comment"># Center of ball</span>
-  axis: [0.0, 0.0, 1.0]      <span class="comment"># Convention (unused for sphere)</span></code></pre>
-            </div>
-
-            <h3>Positioning Features in a Chain</h3>
-            <p>In a tolerance chain, the <strong>origin position matters</strong> because it affects how rotational deviations propagate. The further a feature is from the origin, the more a small rotation creates linear displacement.</p>
-
-            <div class="output-block" style="line-height: 1.2;">
-   BEARING ASSEMBLY EXAMPLE
-   ════════════════════════
-
-   Assembly coordinate system (Z = shaft axis):
-
-         Housing          Bearing           Shaft
-      ┌───────────┐    ┌─────────┐     ┌─────────┐
-      │ ╭───────╮ │    │ OR   IR │     │         │
-   Z=0│ │ BORE  │ │────│ ●────●  │─────│  ●      │
-      │ ╰───────╯ │    │         │     │ JOURNAL │
-      └───────────┘    └─────────┘     └─────────┘
-           │               │                │
-      origin: [0,0,0]  [0,0,10]         [0,0,15]
-
-   Feature origins should be at the CENTER of mating interfaces.</div>
-
-            <h4>Complete Bearing Assembly Example</h4>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code><span class="comment"># Housing Bore - at assembly origin</span>
-title: Housing Bore
-geometry_class: cylinder
-geometry_3d:
-  origin: [0.0, 0.0, 0.0]
-  axis: [0.0, 0.0, 1.0]
-  length: 15.0
-
----
-<span class="comment"># Bearing Outer Race - pressed into housing</span>
-title: Bearing Outer Race
-geometry_class: cylinder
-geometry_3d:
-  origin: [0.0, 0.0, 0.0]    <span class="comment"># Same as housing bore (mating)</span>
-  axis: [0.0, 0.0, 1.0]
-  length: 15.0
-
----
-<span class="comment"># Bearing Inner Race - shaft interface</span>
-title: Bearing Inner Race
-geometry_class: cylinder
-geometry_3d:
-  origin: [0.0, 0.0, 0.0]    <span class="comment"># Same location (concentric)</span>
-  axis: [0.0, 0.0, 1.0]
-  length: 15.0
-
----
-<span class="comment"># Shaft Journal - fits into bearing</span>
-title: Shaft OD
-geometry_class: cylinder
-geometry_3d:
-  origin: [0.0, 0.0, 50.0]   <span class="comment"># Different Z if shaft extends beyond</span>
-  axis: [0.0, 0.0, 1.0]
-  length: 35.0</code></pre>
-            </div>
-
-            <h3>Common Geometry Setup Mistakes</h3>
-
-            <div class="info-box warning">
-              <strong>Mistake 1: Inconsistent Coordinate Systems</strong>
-              <p>Don't mix coordinate systems from different CAD parts. Transform all features into one assembly coordinate system.</p>
-            </div>
-
-            <div class="info-box warning">
-              <strong>Mistake 2: Wrong Axis Direction</strong>
-              <p>For planes, the axis is the <em>normal</em> (perpendicular), not a direction along the surface. For a horizontal face, use <code>[0,0,1]</code> or <code>[0,0,-1]</code>.</p>
-            </div>
-
-            <div class="info-box warning">
-              <strong>Mistake 3: Origin at Wrong Location</strong>
-              <p>Place origins at feature centers, not at arbitrary points. For a bore, the origin should be at the center of one end, not at a corner of the part.</p>
-            </div>
-
-            <h3>Quick Reference: Common Features</h3>
-
-            <table class="info-table">
-              <thead>
-                <tr><th>Feature Type</th><th>geometry_class</th><th>axis</th><th>origin</th></tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>Bore (vertical)</td>
-                  <td><code>cylinder</code></td>
-                  <td><code>[0,0,1]</code></td>
-                  <td>Center at entry face</td>
-                </tr>
-                <tr>
-                  <td>Shaft (horizontal)</td>
-                  <td><code>cylinder</code></td>
-                  <td><code>[1,0,0]</code></td>
-                  <td>Center at one end</td>
-                </tr>
-                <tr>
-                  <td>Top face</td>
-                  <td><code>plane</code></td>
-                  <td><code>[0,0,1]</code></td>
-                  <td>Any point on face</td>
-                </tr>
-                <tr>
-                  <td>Bottom face</td>
-                  <td><code>plane</code></td>
-                  <td><code>[0,0,-1]</code></td>
-                  <td>Any point on face</td>
-                </tr>
-                <tr>
-                  <td>Side face (right)</td>
-                  <td><code>plane</code></td>
-                  <td><code>[1,0,0]</code></td>
-                  <td>Any point on face</td>
-                </tr>
-                <tr>
-                  <td>Locating pin (vertical)</td>
-                  <td><code>cylinder</code></td>
-                  <td><code>[0,0,1]</code></td>
-                  <td>Center at base</td>
-                </tr>
-                <tr>
-                  <td>Ball/sphere</td>
-                  <td><code>sphere</code></td>
-                  <td><code>[0,0,1]</code></td>
-                  <td>Center of sphere</td>
-                </tr>
-              </tbody>
-            </table>
-          </section>
-
-          <section id="torsor-bounds" class="tutorial-section">
-            <h2>Auto-Compute Torsor Bounds from GD&T</h2>
-            <p>TDT can automatically compute <code>torsor_bounds</code> from your GD&T controls and geometry class, eliminating manual calculation:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="comment"># Show computed bounds for a feature</span>
-<span class="cmd">tdt feat compute-bounds</span> FEAT@1
-
-<span class="comment"># Compute and update the feature file</span>
-<span class="cmd">tdt feat compute-bounds</span> FEAT@1 <span class="flag">--update</span>
-
-<span class="comment"># Include MMC/LMC bonus calculation</span>
-<span class="cmd">tdt feat compute-bounds</span> FEAT@1 <span class="flag">--actual-size</span> <span class="number">10.02</span></code></pre>
-            </div>
-
-            <h3>How GD&T Maps to Torsor DOFs</h3>
-            <p>The conversion follows ASME Y14.5 principles:</p>
-
-            <table class="info-table">
-              <thead>
-                <tr><th>GD&T Symbol</th><th>Geometry</th><th>Affected DOF</th><th>Formula</th></tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><code>position</code></td>
-                  <td>cylinder</td>
-                  <td>u, v</td>
-                  <td>±(tolerance / 2)</td>
-                </tr>
-                <tr>
-                  <td><code>position</code></td>
-                  <td>sphere/point</td>
-                  <td>u, v, w</td>
-                  <td>±(tolerance / 2)</td>
-                </tr>
-                <tr>
-                  <td><code>perpendicularity</code></td>
-                  <td>cylinder</td>
-                  <td>α, β</td>
-                  <td>±(tolerance / length)</td>
-                </tr>
-                <tr>
-                  <td><code>flatness</code></td>
-                  <td>plane</td>
-                  <td>w</td>
-                  <td>±(tolerance / 2)</td>
-                </tr>
-                <tr>
-                  <td><code>concentricity</code></td>
-                  <td>cylinder</td>
-                  <td>u, v</td>
-                  <td>±(tolerance / 2)</td>
-                </tr>
-                <tr>
-                  <td><code>runout</code></td>
-                  <td>cylinder</td>
-                  <td>u, v, α, β</td>
-                  <td>radial + angular</td>
-                </tr>
-              </tbody>
-            </table>
-
-            <h3>Example: Feature with GD&T</h3>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code>title: Mounting Hole
-feature_type: internal
-geometry_class: cylinder
-geometry_3d:
-  origin: [50.0, 25.0, 0.0]
-  axis: [0.0, 0.0, 1.0]
-  length: 15.0
-
-gdt:
-  - symbol: position
-    value: 0.25
-    datum_refs: ["A", "B", "C"]
-    material_condition: mmc
-  - symbol: perpendicularity
-    value: 0.10
-    datum_refs: ["A"]
-    material_condition: rfs
-
-<span class="comment"># Auto-computed by: tdt feat compute-bounds FEAT@1 --update</span>
-torsor_bounds:
-  u: [-0.125, 0.125]       <span class="comment"># position / 2</span>
-  v: [-0.125, 0.125]       <span class="comment"># position / 2</span>
-  alpha: [-0.00667, 0.00667]  <span class="comment"># perpendicularity / length</span>
-  beta: [-0.00667, 0.00667]   <span class="comment"># perpendicularity / length</span></code></pre>
-            </div>
-
-            <h3>Validation Integration</h3>
-            <p>The <code>tdt validate</code> command automatically detects stale torsor bounds:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="comment"># Check for stale bounds (warns if stored ≠ computed)</span>
-<span class="cmd">tdt validate</span>
-
-<span class="comment"># Automatically fix stale bounds</span>
-<span class="cmd">tdt validate</span> <span class="flag">--fix</span></code></pre>
-            </div>
-
-            <div class="info-box">
-              <strong>Tip: GD&T Workflow</strong>
-              <p>Enter your GD&T controls as shown on the drawing, then run <code>tdt feat compute-bounds --update</code> to auto-populate torsor bounds. The validate command will warn you if bounds become stale after GD&T changes.</p>
-            </div>
-          </section>
-
-          <section id="datums" class="tutorial-section">
-            <h2>3. Set Up Datums</h2>
-            <p>Datum features establish the reference frame for GD&T controls. Add <code>datum_label</code> to features that serve as datums:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code><span class="comment"># In shaft feature file</span>
-datum_label: A
-
-<span class="comment"># In housing bore feature file</span>
-datum_label: B</code></pre>
-            </div>
-
-            <p>When you run 3D analysis, TDT will:</p>
+            <h3>Jacobian Propagation</h3>
+            <p>TDT uses Jacobian matrices to propagate deviations through the tolerance chain. For each contributor, the deviation at position <strong>P</strong> is:</p>
+            <div class="output-block">
+δP = δT + δR × (P - O)
+
+where:
+  δT = [u, v, w]           (translation deviation)
+  δR = [α, β, γ]           (rotation deviation)
+  O  = feature origin
+  P  = point of interest</div>
+
+            <h3>GD&T to Torsor Mapping</h3>
+            <p>The <code>compute-bounds</code> command applies these rules:</p>
             <ol>
-              <li>Find all features with <code>datum_label</code></li>
-              <li>For each contributor, read <code>gdt.datum_refs</code> (e.g., ["A", "B"])</li>
-              <li>Build the Datum Reference Frame following ASME Y14.5 order</li>
-              <li>Apply tolerances only to free DOFs (those not constrained by the DRF)</li>
+              <li>Parse GD&T controls from feature</li>
+              <li>For each control, determine affected DOFs based on geometry class</li>
+              <li>Compute bounds: translation tolerances → ±(tol/2), angular tolerances → ±(tol/length)</li>
+              <li>Apply material condition bonus if actual size provided</li>
+              <li>Merge multiple controls (tightest bound wins for same DOF)</li>
             </ol>
-          </section>
-
-          <section id="stackup" class="tutorial-section">
-            <h2>4. Create Tolerance Stackup</h2>
-            <p>Create a stackup for the radial fit analysis:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">tdt tol new</span> --title <span class="string">"Bearing Radial Fit"</span> \
-  --target-name <span class="string">"Radial Position"</span> \
-  --target-nominal 0 \
-  --target-upper 0.030 \
-  --target-lower -0.015 \
-  --no-edit</code></pre>
-            </div>
-
-            <h3>Add Contributors</h3>
-            <p>Add features to the stackup chain:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="comment"># List features to get short IDs</span>
-<span class="cmd">tdt feat list</span>
-
-<span class="comment"># Add features with direction</span>
-<span class="comment"># + for positive (adds to result), ~ for negative (subtracts)</span>
-<span class="cmd">tdt tol add</span> TOL@1 +FEAT@1 ~FEAT@2 +FEAT@3 ~FEAT@4</code></pre>
-            </div>
-
-            <h3>Set Functional Direction</h3>
-            <p>Edit the stackup to specify the functional direction for result projection:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">yaml</span></div>
-              <pre><code><span class="comment"># In stackup file - project results onto X axis (radial direction)</span>
-functional_direction: [1.0, 0.0, 0.0]</code></pre>
-            </div>
-          </section>
-
-          <section id="analyze" class="tutorial-section">
-            <h2>5. Run 3D Analysis</h2>
-            <p>Run the analysis with the <code>--3d</code> flag:</p>
-
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">tdt tol analyze</span> TOL@1 --3d</code></pre>
-            </div>
-
-            <p>This runs both Jacobian (analytical) and Monte Carlo simulation automatically.</p>
-
-            <h3>Example Output</h3>
-            <div class="output-block">
-<span style="color: var(--info)">ℹ</span> Found datum features: B, A
-<span style="color: var(--text-muted)">⚙</span> Analyzing stackup TOL@1 with 4 contributors...
-<span style="color: var(--success)">✓</span> Analysis complete for stackup TOL@1
-
-   Target: Radial Position = 0 (LSL: -0.015, USL: 0.03)
-
-   <span style="color: var(--text-primary); font-weight: bold">Worst-Case Analysis:</span>
-     Range: -0.025 to 0.045
-     Margin: -0.015
-     Result: <span style="color: var(--error)">fail</span>
-
-   <span style="color: var(--text-primary); font-weight: bold">RSS (Statistical) Analysis:</span>
-     Mean: 0.01
-     ±3σ: 0.0191
-     Capability: Cp=1.18, Cpk=1.05
-     Yield: 99.91%
-
-   <span style="color: var(--text-primary); font-weight: bold">3D SDT Analysis (6-DOF Torsor):</span>
-     Translations (mm):
-       u: WC [-0.026, 0.026] RSS μ=0 ±3σ=0.0132
-       v: WC [-0.018, 0.018] RSS μ=0 ±3σ=0.0102
-       w: WC [0, 0] RSS μ=0 ±3σ=0
-     Rotations (mrad):
-       α: WC [-0.230, 0.230] RSS μ=0.000 ±3σ=0.164
-       β: WC [-0.700, 0.700] RSS μ=0.000 ±3σ=0.382
-       γ: WC [0.000, 0.000] RSS μ=0.000 ±3σ=0.000
-
-   <span style="color: var(--text-primary); font-weight: bold">Functional Deviation</span> (projected onto [1.0,0.0,0.0]):
-     Worst Case: <span style="color: var(--error)">FAIL</span> (range: -0.026 to 0.026)
-     RSS: μ=0 ±3σ=0.0132
-     Capability: Cp=1.70, Cpk=1.13, Yield=99.93%</div>
-
-            <h3>Optional: Visualize the Chain</h3>
-            <div class="code-block">
-              <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">tdt tol analyze</span> TOL@1 --3d --visualize</code></pre>
-            </div>
-            <p>This adds ASCII braille graphics showing the tolerance chain schematic and deviation ellipse.</p>
-          </section>
-
-          <section id="interpret" class="tutorial-section">
-            <h2>6. Interpret Results</h2>
-
-            <h3>6-DOF Torsor Results</h3>
-            <p>The torsor shows deviation in each degree of freedom:</p>
-            <ul>
-              <li><strong>WC</strong> - Worst-case range [min, max]</li>
-              <li><strong>RSS</strong> - Statistical mean (μ) and 3-sigma spread (±3σ)</li>
-              <li><strong>MC</strong> - Monte Carlo mean and standard deviation</li>
-            </ul>
-
-            <h3>Functional Projection</h3>
-            <p>The 6-DOF result is projected onto your <code>functional_direction</code> vector to get a scalar deviation that can be compared against your target specification limits.</p>
-
-            <h3>Sensitivity Analysis</h3>
-            <p>The sensitivity shows which contributors dominate variation in each DOF:</p>
-
-            <div class="output-block">
-   3D Sensitivity (dominant DOF contribution):
-      61.7% (β) Housing Bore Position
-      24.1% (u) Bearing Outer Race
-      34.8% (u) Bearing Inner Race
-      41.2% (u) Shaft OD</div>
-
-            <p>Focus tolerance improvement efforts on high-sensitivity contributors.</p>
-
-            <h3>Understanding Zero DOFs</h3>
-            <p>DOFs showing <code>WC [0, 0]</code> are fully constrained - either by the geometry type or by datum order. For example, a stack of planes along Z will have <code>w</code> deviation but zero in-plane translation.</p>
           </section>
 
           <section id="reference" class="tutorial-section">
             <h2>Reference</h2>
 
-            <h3>CLI Commands for 3D Analysis</h3>
+            <h3>CLI Commands</h3>
             <table class="info-table">
               <thead>
                 <tr><th>Command</th><th>Description</th></tr>
               </thead>
               <tbody>
-                <tr><td><code>tdt tol analyze TOL@1 --3d</code></td><td>Run 3D SDT analysis on a stackup</td></tr>
-                <tr><td><code>tdt feat compute-bounds FEAT@1</code></td><td>Auto-compute torsor bounds from GD&T</td></tr>
+                <tr><td><code>tdt feat compute-bounds FEAT@1</code></td><td>Show computed torsor bounds from GD&T</td></tr>
                 <tr><td><code>tdt feat compute-bounds FEAT@1 --update</code></td><td>Compute and save to file</td></tr>
-                <tr><td><code>tdt validate --fix</code></td><td>Auto-fix stale torsor bounds</td></tr>
+                <tr><td><code>tdt feat compute-bounds FEAT@1 --actual-size 20.01</code></td><td>Include MMC/LMC bonus</td></tr>
+                <tr><td><code>tdt tol analyze TOL@1 --3d</code></td><td>Run 3D SDT analysis</td></tr>
+                <tr><td><code>tdt tol analyze TOL@1 --3d --visualize</code></td><td>With chain visualization</td></tr>
+                <tr><td><code>tdt validate</code></td><td>Check for stale torsor bounds</td></tr>
+                <tr><td><code>tdt validate --fix</code></td><td>Auto-fix stale bounds</td></tr>
               </tbody>
             </table>
 
-            <h3>CLI Flags for 3D Analysis</h3>
-            <table class="info-table">
-              <thead>
-                <tr><th>Flag</th><th>Description</th></tr>
-              </thead>
-              <tbody>
-                <tr><td><code>--3d</code> or <code>-3</code></td><td>Enable 3D SDT analysis</td></tr>
-                <tr><td><code>--visualize</code></td><td>Show ASCII chain schematic and deviation ellipse</td></tr>
-                <tr><td><code>--iterations N</code></td><td>Monte Carlo iterations (default: 10000)</td></tr>
-                <tr><td><code>--no-gdt</code></td><td>Exclude GD&T position tolerances</td></tr>
-              </tbody>
-            </table>
+            <h3>GD&T Field Format</h3>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>gdt:
+  - symbol: position           <span class="comment"># GD&T symbol name</span>
+    value: 0.25                <span class="comment"># Tolerance value</span>
+    datum_refs: [A, B, C]      <span class="comment"># Datum references (optional)</span>
+    material_condition: mmc    <span class="comment"># mmc, lmc, or rfs (default)</span></code></pre>
+            </div>
 
-            <h3>Required Feature Fields for 3D</h3>
-            <ul>
-              <li><code>geometry_class</code> - plane, cylinder, sphere, cone, line, point</li>
-              <li><code>geometry_3d.origin</code> - [x, y, z] position</li>
-              <li><code>geometry_3d.axis</code> - [dx, dy, dz] direction vector</li>
-            </ul>
-
-            <h3>Optional Fields</h3>
-            <ul>
-              <li><code>datum_label</code> - Makes this a datum feature (A, B, or C)</li>
-              <li><code>gdt[].datum_refs</code> - Datum references for GD&T controls</li>
-              <li><code>functional_direction</code> - Result projection direction in stackup</li>
-            </ul>
+            <h3>Supported Symbols</h3>
+            <p><code>position</code>, <code>concentricity</code>, <code>symmetry</code>, <code>perpendicularity</code>, <code>parallelism</code>, <code>angularity</code>, <code>flatness</code>, <code>cylindricity</code>, <code>circularity</code>, <code>straightness</code>, <code>circular_runout</code>, <code>total_runout</code>, <code>profile_line</code>, <code>profile_surface</code></p>
 
             <h3>Further Reading</h3>
             <ul>
-              <li><a href="https://github.com/jackhale98/TDT/blob/main/docs/stackup.md" style="color: var(--accent)">Stackup Entity Reference</a></li>
               <li><a href="https://github.com/jackhale98/TDT/blob/main/docs/feature.md" style="color: var(--accent)">Feature Entity Reference</a></li>
+              <li><a href="https://github.com/jackhale98/TDT/blob/main/docs/stackup.md" style="color: var(--accent)">Stackup Entity Reference</a></li>
               <li><a href="tolerance.html" style="color: var(--accent)">Tolerance Analysis Overview</a></li>
             </ul>
           </section>

@@ -337,6 +337,18 @@ impl Quote {
             .map(|pb| pb.unit_price)
     }
 
+    /// Get lead time for a given quantity
+    /// Returns the lead time from the applicable price break, or the default lead_time_days
+    pub fn lead_time_for_qty(&self, qty: u32) -> Option<u32> {
+        // Find the highest min_qty that is <= qty
+        self.price_breaks
+            .iter()
+            .filter(|pb| pb.min_qty <= qty)
+            .max_by_key(|pb| pb.min_qty)
+            .and_then(|pb| pb.lead_time_days)
+            .or(self.lead_time_days)
+    }
+
     /// Calculate total NRE cost
     pub fn total_nre(&self) -> f64 {
         let nre_sum: f64 = self.nre_costs.iter().map(|n| n.cost).sum();

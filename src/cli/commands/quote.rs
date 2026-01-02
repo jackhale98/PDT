@@ -41,6 +41,9 @@ pub enum QuoteCommands {
 
     /// Compare quotes for a component
     Compare(CompareArgs),
+
+    /// Get price for a specific quantity (shows price break and total cost)
+    Price(PriceArgs),
 }
 
 /// Quote status filter
@@ -273,6 +276,38 @@ const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {
 pub struct CompareArgs {
     /// Component or Assembly ID to compare quotes for
     pub item: String,
+
+    /// Quantity to compare prices at (default: 1)
+    #[arg(long, short = 'Q', default_value = "1")]
+    pub qty: u32,
+
+    /// Include NRE/tooling costs amortized over this production run
+    /// (e.g., --amortize 1000 spreads tooling cost over 1000 units)
+    #[arg(long, short = 'a')]
+    pub amortize: Option<u32>,
+
+    /// Exclude NRE/tooling costs from comparison
+    #[arg(long)]
+    pub no_nre: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct PriceArgs {
+    /// Quote ID or short ID (QUOT@N)
+    pub id: String,
+
+    /// Quantity to get price for
+    #[arg(long, short = 'Q', default_value = "1")]
+    pub qty: u32,
+
+    /// Include NRE/tooling costs amortized over this production run
+    /// (e.g., --amortize 1000 spreads tooling cost over 1000 units)
+    #[arg(long, short = 'a')]
+    pub amortize: Option<u32>,
+
+    /// Show all price breaks for this quote
+    #[arg(long, short = 'A')]
+    pub all: bool,
 }
 
 /// Parse a price break triplet (QTY:PRICE:LEAD_TIME)
@@ -318,6 +353,7 @@ pub fn run(cmd: QuoteCommands, global: &GlobalOpts) -> Result<()> {
         QuoteCommands::Delete(args) => run_delete(args),
         QuoteCommands::Archive(args) => run_archive(args),
         QuoteCommands::Compare(args) => run_compare(args, global),
+        QuoteCommands::Price(args) => run_price(args, global),
     }
 }
 
@@ -1174,6 +1210,25 @@ fn run_archive(args: ArchiveArgs) -> Result<()> {
     crate::cli::commands::utils::run_delete(&args.id, QUOTE_DIRS, args.force, true, args.quiet)
 }
 
+/// Calculate effective unit price including amortized NRE/tooling costs
+fn effective_unit_price(quote: &Quote, qty: u32, amortize: Option<u32>, include_nre: bool) -> f64 {
+    let base_price = quote.price_for_qty(qty).unwrap_or(0.0);
+
+    if !include_nre {
+        return base_price;
+    }
+
+    // Calculate NRE per unit
+    let nre_per_unit = if let Some(amort_qty) = amortize {
+        let total_nre = quote.total_nre();
+        total_nre / amort_qty as f64
+    } else {
+        0.0
+    };
+
+    base_price + nre_per_unit
+}
+
 fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let quote_dir = project.root().join("bom/quotes");
@@ -1188,6 +1243,9 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
     let item = short_ids
         .resolve(&args.item)
         .unwrap_or_else(|| args.item.clone());
+
+    let qty = args.qty;
+    let include_nre = !args.no_nre;
 
     // Load quotes for this item (component or assembly)
     let mut quotes: Vec<Quote> = Vec::new();
@@ -1214,10 +1272,10 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    // Sort by unit price (lowest first)
+    // Sort by effective unit price at the specified quantity (lowest first)
     quotes.sort_by(|a, b| {
-        let price_a = a.price_for_qty(1).unwrap_or(f64::MAX);
-        let price_b = b.price_for_qty(1).unwrap_or(f64::MAX);
+        let price_a = effective_unit_price(a, qty, args.amortize, include_nre);
+        let price_b = effective_unit_price(b, qty, args.amortize, include_nre);
         price_a
             .partial_cmp(&price_b)
             .unwrap_or(std::cmp::Ordering::Equal)
@@ -1245,71 +1303,115 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
         }
         OutputFormat::Tsv => {
             println!(
-                "Comparing {} quotes for {}",
+                "Comparing {} quotes for {} at qty {}",
                 style(quotes.len()).cyan(),
-                style(&args.item).yellow()
+                style(&args.item).yellow(),
+                style(qty).white()
             );
+            if let Some(amort) = args.amortize {
+                println!(
+                    "   {} NRE/tooling amortized over {} units",
+                    style("→").dim(),
+                    style(amort).cyan()
+                );
+            }
             println!();
-            println!(
-                "{:<8} {:<20} {:<15} {:<10} {:<8} {:<10} {:<10} {:<10}",
-                style("SHORT").bold().dim(),
-                style("TITLE").bold(),
-                style("SUPPLIER").bold(),
-                style("PRICE").bold(),
-                style("MOQ").bold(),
-                style("LEAD").bold(),
-                style("TOOLING").bold(),
-                style("STATUS").bold()
-            );
-            println!("{}", "-".repeat(100));
+
+            // Adjust header based on whether we're showing NRE
+            let show_nre_col = include_nre && args.amortize.is_some();
+            if show_nre_col {
+                println!(
+                    "{:<8} {:<18} {:<12} {:<10} {:<10} {:<8} {:<8} {:<10} {:<10}",
+                    style("SHORT").bold().dim(),
+                    style("TITLE").bold(),
+                    style("SUPPLIER").bold(),
+                    style("UNIT").bold(),
+                    style("EFF.UNIT").bold(),
+                    style("MOQ").bold(),
+                    style("LEAD").bold(),
+                    style("TOOLING").bold(),
+                    style("STATUS").bold()
+                );
+            } else {
+                println!(
+                    "{:<8} {:<20} {:<15} {:<10} {:<8} {:<10} {:<10} {:<10}",
+                    style("SHORT").bold().dim(),
+                    style("TITLE").bold(),
+                    style("SUPPLIER").bold(),
+                    style("PRICE").bold(),
+                    style("MOQ").bold(),
+                    style("LEAD").bold(),
+                    style("TOOLING").bold(),
+                    style("STATUS").bold()
+                );
+            }
+            println!("{}", "-".repeat(if show_nre_col { 110 } else { 100 }));
 
             for (i, quote) in quotes.iter().enumerate() {
                 let short_id = short_ids
                     .get_short_id(&quote.id.to_string())
                     .unwrap_or_default();
-                let title_truncated = truncate_str(&quote.title, 18);
+                let title_truncated = truncate_str(&quote.title, if show_nre_col { 16 } else { 18 });
                 let supplier_short = short_ids
                     .get_short_id(&quote.supplier)
-                    .unwrap_or_else(|| truncate_str(&quote.supplier, 13).to_string());
-                let unit_price = quote
-                    .price_for_qty(1)
-                    .map_or("-".to_string(), |p| format!("{:.2}", p));
+                    .unwrap_or_else(|| truncate_str(&quote.supplier, if show_nre_col { 10 } else { 13 }).to_string());
+                let base_price = quote.price_for_qty(qty);
+                let unit_price_str = base_price.map_or("-".to_string(), |p| format!("{:.2}", p));
+                let eff_price = effective_unit_price(quote, qty, args.amortize, include_nre);
+                let eff_price_str = format!("{:.2}", eff_price);
                 let moq = quote.moq.map_or("-".to_string(), |m| m.to_string());
                 let lead_time = quote
-                    .lead_time_days
+                    .lead_time_for_qty(qty)
                     .map_or("-".to_string(), |d| format!("{}d", d));
                 let tooling = quote
                     .tooling_cost
                     .map_or("-".to_string(), |t| format!("{:.0}", t));
 
                 let price_style = if i == 0 {
-                    style(unit_price).green()
+                    style(if show_nre_col { eff_price_str.clone() } else { unit_price_str.clone() }).green()
                 } else {
-                    style(unit_price).white()
+                    style(if show_nre_col { eff_price_str.clone() } else { unit_price_str.clone() }).white()
                 };
 
-                println!(
-                    "{:<8} {:<20} {:<15} {:<10} {:<8} {:<10} {:<10} {:<10}",
-                    style(&short_id).cyan(),
-                    title_truncated,
-                    supplier_short,
-                    price_style,
-                    moq,
-                    lead_time,
-                    tooling,
-                    quote.quote_status
-                );
+                if show_nre_col {
+                    println!(
+                        "{:<8} {:<18} {:<12} {:<10} {:<10} {:<8} {:<8} {:<10} {:<10}",
+                        style(&short_id).cyan(),
+                        title_truncated,
+                        supplier_short,
+                        unit_price_str,
+                        price_style,
+                        moq,
+                        lead_time,
+                        tooling,
+                        quote.quote_status
+                    );
+                } else {
+                    println!(
+                        "{:<8} {:<20} {:<15} {:<10} {:<8} {:<10} {:<10} {:<10}",
+                        style(&short_id).cyan(),
+                        title_truncated,
+                        supplier_short,
+                        price_style,
+                        moq,
+                        lead_time,
+                        tooling,
+                        quote.quote_status
+                    );
+                }
             }
 
             if let Some(lowest) = quotes.first() {
                 let supplier_display = short_ids
                     .get_short_id(&lowest.supplier)
                     .unwrap_or_else(|| lowest.supplier.clone());
+                let best_price = effective_unit_price(lowest, qty, args.amortize, include_nre);
                 println!();
                 println!(
-                    "{} Lowest price: {} from {}",
+                    "{} Lowest price at qty {}: ${:.2} from {}",
                     style("★").yellow(),
-                    style(format!("{:.2}", lowest.price_for_qty(1).unwrap_or(0.0))).green(),
+                    qty,
+                    style(format!("{:.2}", best_price)).green(),
                     style(&supplier_display).cyan()
                 );
             }
@@ -1317,6 +1419,207 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
         _ => {
             let yaml = serde_yml::to_string(&quotes).into_diagnostic()?;
             print!("{}", yaml);
+        }
+    }
+
+    Ok(())
+}
+
+fn run_price(args: PriceArgs, global: &GlobalOpts) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+
+    // Resolve short ID if needed
+    let short_ids = ShortIdIndex::load(&project);
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
+
+    // Find the quote file
+    let quote_dir = project.root().join("bom/quotes");
+    let mut found_path = None;
+
+    if quote_dir.exists() {
+        for entry in fs::read_dir(&quote_dir).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path();
+
+            if path.extension().is_some_and(|e| e == "yaml") {
+                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
+                    found_path = Some(path);
+                    break;
+                }
+            }
+        }
+    }
+
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No quote found matching '{}'", args.id))?;
+
+    // Read and parse quote
+    let content = fs::read_to_string(&path).into_diagnostic()?;
+    let quote: Quote = serde_yml::from_str(&content).into_diagnostic()?;
+
+    let qty = args.qty;
+
+    match global.output {
+        OutputFormat::Json => {
+            #[derive(serde::Serialize)]
+            struct PriceResult {
+                quote_id: String,
+                quantity: u32,
+                unit_price: Option<f64>,
+                extended_price: Option<f64>,
+                nre_total: f64,
+                nre_per_unit: Option<f64>,
+                effective_unit_price: Option<f64>,
+                lead_time_days: Option<u32>,
+            }
+
+            let unit_price = quote.price_for_qty(qty);
+            let nre_total = quote.total_nre();
+            let nre_per_unit = args.amortize.map(|a| nre_total / a as f64);
+            let effective = unit_price.map(|p| p + nre_per_unit.unwrap_or(0.0));
+
+            let result = PriceResult {
+                quote_id: quote.id.to_string(),
+                quantity: qty,
+                unit_price,
+                extended_price: unit_price.map(|p| p * qty as f64),
+                nre_total,
+                nre_per_unit,
+                effective_unit_price: effective,
+                lead_time_days: quote.lead_time_for_qty(qty),
+            };
+
+            let json = serde_json::to_string_pretty(&result).into_diagnostic()?;
+            println!("{}", json);
+        }
+        _ => {
+            let quote_short = short_ids
+                .get_short_id(&quote.id.to_string())
+                .unwrap_or_else(|| quote.id.to_string());
+
+            println!(
+                "{} {}",
+                style("Quote:").bold(),
+                style(&quote_short).cyan()
+            );
+            println!("{} {}", style("Title:").bold(), &quote.title);
+
+            // Show expiration warning if applicable
+            if quote.is_expired() {
+                println!(
+                    "{} {}",
+                    style("⚠").red(),
+                    style("This quote has expired!").red().bold()
+                );
+            }
+
+            println!();
+
+            if args.all {
+                // Show all price breaks
+                println!("{}", style("Price Breaks:").bold());
+                println!(
+                    "{:<10} {:<12} {:<12} {:<10}",
+                    style("MIN QTY").dim(),
+                    style("UNIT PRICE").dim(),
+                    style("LEAD TIME").dim(),
+                    style("APPLIES").dim()
+                );
+                println!("{}", "-".repeat(50));
+
+                for pb in &quote.price_breaks {
+                    let applies = if pb.min_qty <= qty { "✓" } else { "" };
+                    let lead = pb
+                        .lead_time_days
+                        .map_or("-".to_string(), |d| format!("{}d", d));
+                    println!(
+                        "{:<10} ${:<11.2} {:<12} {}",
+                        pb.min_qty,
+                        pb.unit_price,
+                        lead,
+                        style(applies).green()
+                    );
+                }
+                println!();
+            }
+
+            // Show price for specified quantity
+            println!(
+                "{} {}",
+                style("Quantity:").bold(),
+                style(qty).yellow()
+            );
+
+            if let Some(unit_price) = quote.price_for_qty(qty) {
+                println!(
+                    "{} ${}",
+                    style("Unit Price:").bold(),
+                    style(format!("{:.2}", unit_price)).green()
+                );
+                println!(
+                    "{} ${:.2}",
+                    style("Extended:").bold(),
+                    unit_price * qty as f64
+                );
+
+                if let Some(lead) = quote.lead_time_for_qty(qty) {
+                    println!("{} {} days", style("Lead Time:").bold(), lead);
+                }
+
+                // Show NRE breakdown if applicable
+                let nre_total = quote.total_nre();
+                if nre_total > 0.0 {
+                    println!();
+                    println!("{}", style("NRE/Tooling Costs:").bold());
+                    if let Some(tooling) = quote.tooling_cost {
+                        println!("  Tooling: ${:.2}", tooling);
+                    }
+                    for nre in &quote.nre_costs {
+                        println!(
+                            "  {}: ${:.2}{}",
+                            nre.description,
+                            nre.cost,
+                            if nre.one_time { " (one-time)" } else { "" }
+                        );
+                    }
+                    println!("  {} ${:.2}", style("Total NRE:").bold(), nre_total);
+
+                    if let Some(amort_qty) = args.amortize {
+                        let nre_per_unit = nre_total / amort_qty as f64;
+                        let effective_price = unit_price + nre_per_unit;
+                        println!();
+                        println!(
+                            "{} {} units",
+                            style("Amortization:").bold(),
+                            style(amort_qty).cyan()
+                        );
+                        println!(
+                            "  NRE per unit: ${:.4}",
+                            nre_per_unit
+                        );
+                        println!(
+                            "  {} ${:.4}",
+                            style("Effective Unit Price:").bold().green(),
+                            effective_price
+                        );
+                    }
+                }
+            } else {
+                println!(
+                    "{} No price available for qty {}",
+                    style("!").yellow(),
+                    qty
+                );
+                if let Some(moq) = quote.moq {
+                    println!(
+                        "   Minimum order quantity is {}",
+                        style(moq).cyan()
+                    );
+                }
+            }
         }
     }
 

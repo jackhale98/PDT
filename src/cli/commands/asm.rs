@@ -296,6 +296,19 @@ pub struct CostArgs {
     /// Show breakdown by component
     #[arg(long)]
     pub breakdown: bool,
+
+    /// Include NRE/tooling costs amortized over this production run quantity
+    /// (e.g., --amortize 1000 spreads tooling cost over 1000 units)
+    #[arg(long, short = 'a')]
+    pub amortize: Option<u32>,
+
+    /// Exclude NRE/tooling costs from the total
+    #[arg(long)]
+    pub no_nre: bool,
+
+    /// Warn about expired quotes (enabled by default)
+    #[arg(long, default_value = "true")]
+    pub warn_expired: bool,
 }
 
 #[derive(clap::Args, Debug)]
@@ -1333,13 +1346,20 @@ fn run_cost(args: CostArgs) -> Result<()> {
     }
 
     let production_qty = args.qty;
+    let include_nre = !args.no_nre;
 
     // Track components with quotes but no selection (for user feedback)
     let mut unselected_quote_warnings: Vec<(String, String, usize)> = Vec::new(); // (id, title, quote_count)
 
+    // Track expired quotes used
+    let mut expired_quote_warnings: Vec<(String, String, String)> = Vec::new(); // (quote_id, component_title, valid_until)
+
+    // Track NRE costs from selected quotes
+    let mut nre_items: Vec<(String, String, f64)> = Vec::new(); // (quote_id, component_title, nre_amount)
+
     // Calculate costs recursively
-    // breakdown: (id, title, bom_qty, unit_price, line_cost, price_source)
-    let mut breakdown: Vec<(String, String, u32, f64, f64, String)> = Vec::new();
+    // breakdown: (id, title, bom_qty, unit_price, line_cost, price_source, nre)
+    let mut breakdown: Vec<(String, String, u32, f64, f64, String, f64)> = Vec::new();
     let mut visited = std::collections::HashSet::new();
     visited.insert(assembly.id.to_string());
 
@@ -1349,10 +1369,13 @@ fn run_cost(args: CostArgs) -> Result<()> {
         assembly_map: &std::collections::HashMap<String, &Assembly>,
         quote_map: &std::collections::HashMap<String, &Quote>,
         component_quotes: &std::collections::HashMap<String, Vec<&Quote>>,
-        breakdown: &mut Vec<(String, String, u32, f64, f64, String)>,
+        breakdown: &mut Vec<(String, String, u32, f64, f64, String, f64)>,
         unselected_warnings: &mut Vec<(String, String, usize)>,
+        expired_warnings: &mut Vec<(String, String, String)>,
+        nre_items: &mut Vec<(String, String, f64)>,
         visited: &mut std::collections::HashSet<String>,
         production_qty: u32,
+        warn_expired: bool,
     ) -> f64 {
         let mut total = 0.0;
         for item in bom {
@@ -1360,13 +1383,41 @@ fn run_cost(args: CostArgs) -> Result<()> {
             if let Some(cmp) = component_map.get(&item_id) {
                 // Determine price: selected quote > unit_cost > 0.0
                 let purchase_qty = item.quantity * production_qty;
-                let (unit_price, price_source) = get_component_price(
+                let (unit_price, price_source, nre, is_expired, valid_until) = get_component_price_with_nre(
                     cmp,
                     quote_map,
                     component_quotes,
                     purchase_qty,
                     unselected_warnings,
                 );
+
+                // Track expired quote warning
+                if is_expired && warn_expired {
+                    let already_warned = expired_warnings
+                        .iter()
+                        .any(|(_, title, _)| title == &cmp.title);
+                    if !already_warned {
+                        expired_warnings.push((
+                            cmp.selected_quote.clone().unwrap_or_default(),
+                            cmp.title.clone(),
+                            valid_until,
+                        ));
+                    }
+                }
+
+                // Track NRE if present
+                if nre > 0.0 {
+                    let already_tracked = nre_items
+                        .iter()
+                        .any(|(_, title, _)| title == &cmp.title);
+                    if !already_tracked {
+                        nre_items.push((
+                            cmp.selected_quote.clone().unwrap_or_default(),
+                            cmp.title.clone(),
+                            nre,
+                        ));
+                    }
+                }
 
                 let line_cost = unit_price * item.quantity as f64;
                 total += line_cost;
@@ -1377,6 +1428,7 @@ fn run_cost(args: CostArgs) -> Result<()> {
                     unit_price,
                     line_cost,
                     price_source,
+                    nre,
                 ));
             } else if let Some(sub_asm) = assembly_map.get(&item_id) {
                 if !visited.contains(&item_id) {
@@ -1389,8 +1441,11 @@ fn run_cost(args: CostArgs) -> Result<()> {
                         component_quotes,
                         breakdown,
                         unselected_warnings,
+                        expired_warnings,
+                        nre_items,
                         visited,
                         production_qty,
+                        warn_expired,
                     );
                     let line_cost = sub_cost * item.quantity as f64;
                     total += line_cost;
@@ -1401,6 +1456,7 @@ fn run_cost(args: CostArgs) -> Result<()> {
                         sub_cost,
                         line_cost,
                         "sub-asm".to_string(),
+                        0.0,
                     ));
                     visited.remove(&item_id);
                 }
@@ -1409,18 +1465,25 @@ fn run_cost(args: CostArgs) -> Result<()> {
         total
     }
 
-    fn get_component_price(
+    fn get_component_price_with_nre(
         cmp: &Component,
         quote_map: &std::collections::HashMap<String, &Quote>,
         component_quotes: &std::collections::HashMap<String, Vec<&Quote>>,
         purchase_qty: u32,
         unselected_warnings: &mut Vec<(String, String, usize)>,
-    ) -> (f64, String) {
+    ) -> (f64, String, f64, bool, String) {
+        // Returns: (unit_price, source, nre_total, is_expired, valid_until)
+
         // Priority 1: Use selected quote if set
         if let Some(ref quote_id) = cmp.selected_quote {
             if let Some(quote) = quote_map.get(quote_id) {
                 if let Some(price) = quote.price_for_qty(purchase_qty) {
-                    return (price, format!("quote@{}", purchase_qty));
+                    let nre = quote.total_nre();
+                    let is_expired = quote.is_expired();
+                    let valid_until = quote.valid_until
+                        .map(|d| d.to_string())
+                        .unwrap_or_default();
+                    return (price, format!("quote@{}", purchase_qty), nre, is_expired, valid_until);
                 }
             }
         }
@@ -1443,7 +1506,7 @@ fn run_cost(args: CostArgs) -> Result<()> {
                     }
                 }
             }
-            return (cost, "unit_cost".to_string());
+            return (cost, "unit_cost".to_string(), 0.0, false, String::new());
         }
 
         // Check if there are quotes available but none selected (and no unit_cost)
@@ -1458,10 +1521,10 @@ fn run_cost(args: CostArgs) -> Result<()> {
             }
         }
 
-        (0.0, "none".to_string())
+        (0.0, "none".to_string(), 0.0, false, String::new())
     }
 
-    let total_cost = calculate_bom_cost(
+    let total_piece_cost = calculate_bom_cost(
         &assembly.bom,
         &component_map,
         &assembly_map,
@@ -1469,9 +1532,22 @@ fn run_cost(args: CostArgs) -> Result<()> {
         &component_quotes,
         &mut breakdown,
         &mut unselected_quote_warnings,
+        &mut expired_quote_warnings,
+        &mut nre_items,
         &mut visited,
         production_qty,
+        args.warn_expired,
     );
+
+    // Calculate total NRE
+    let total_nre: f64 = nre_items.iter().map(|(_, _, nre)| nre).sum();
+
+    // Calculate amortized NRE per unit if requested
+    let nre_per_unit = if include_nre {
+        args.amortize.map(|qty| total_nre / qty as f64).unwrap_or(0.0)
+    } else {
+        0.0
+    };
 
     // Output
     println!(
@@ -1487,49 +1563,152 @@ fn run_cost(args: CostArgs) -> Result<()> {
             style(production_qty).yellow()
         );
     }
+    if let Some(amort_qty) = args.amortize {
+        if include_nre {
+            println!(
+                "{} {} units",
+                style("NRE Amortization:").bold(),
+                style(amort_qty).cyan()
+            );
+        }
+    }
     println!();
 
     if args.breakdown && !breakdown.is_empty() {
-        println!(
-            "{:<10} {:<26} {:<5} {:<10} {:<10} {:<10}",
-            style("ID").bold(),
-            style("TITLE").bold(),
-            style("QTY").bold(),
-            style("UNIT").bold(),
-            style("LINE").bold(),
-            style("SOURCE").bold()
-        );
-        println!("{}", "-".repeat(75));
-        for (id, title, qty, unit_price, line_cost, source) in &breakdown {
+        let show_nre_col = include_nre && total_nre > 0.0;
+        if show_nre_col {
+            println!(
+                "{:<10} {:<24} {:<5} {:<10} {:<10} {:<10} {:<10}",
+                style("ID").bold(),
+                style("TITLE").bold(),
+                style("QTY").bold(),
+                style("UNIT").bold(),
+                style("LINE").bold(),
+                style("NRE").bold(),
+                style("SOURCE").bold()
+            );
+            println!("{}", "-".repeat(85));
+        } else {
+            println!(
+                "{:<10} {:<26} {:<5} {:<10} {:<10} {:<10}",
+                style("ID").bold(),
+                style("TITLE").bold(),
+                style("QTY").bold(),
+                style("UNIT").bold(),
+                style("LINE").bold(),
+                style("SOURCE").bold()
+            );
+            println!("{}", "-".repeat(75));
+        }
+
+        for (id, title, qty, unit_price, line_cost, source, nre) in &breakdown {
             let id_short = short_ids
                 .get_short_id(id)
                 .unwrap_or_else(|| truncate_str(id, 8));
             if *line_cost > 0.0 || *unit_price > 0.0 {
-                println!(
-                    "{:<10} {:<26} {:<5} ${:<9.2} ${:<9.2} {}",
-                    id_short,
-                    truncate_str(title, 24),
-                    qty,
-                    unit_price,
-                    line_cost,
-                    style(source).dim()
-                );
+                if show_nre_col {
+                    let nre_str = if *nre > 0.0 {
+                        format!("${:.0}", nre)
+                    } else {
+                        "-".to_string()
+                    };
+                    println!(
+                        "{:<10} {:<24} {:<5} ${:<9.2} ${:<9.2} {:<10} {}",
+                        id_short,
+                        truncate_str(title, 22),
+                        qty,
+                        unit_price,
+                        line_cost,
+                        nre_str,
+                        style(source).dim()
+                    );
+                } else {
+                    println!(
+                        "{:<10} {:<26} {:<5} ${:<9.2} ${:<9.2} {}",
+                        id_short,
+                        truncate_str(title, 24),
+                        qty,
+                        unit_price,
+                        line_cost,
+                        style(source).dim()
+                    );
+                }
             } else {
-                println!(
-                    "{:<10} {:<26} {:<5} {:<10} {:<10} {}",
-                    id_short,
-                    truncate_str(title, 24),
-                    qty,
-                    style("-").dim(),
-                    style("-").dim(),
-                    style(source).dim()
-                );
+                if show_nre_col {
+                    println!(
+                        "{:<10} {:<24} {:<5} {:<10} {:<10} {:<10} {}",
+                        id_short,
+                        truncate_str(title, 22),
+                        qty,
+                        style("-").dim(),
+                        style("-").dim(),
+                        style("-").dim(),
+                        style(source).dim()
+                    );
+                } else {
+                    println!(
+                        "{:<10} {:<26} {:<5} {:<10} {:<10} {}",
+                        id_short,
+                        truncate_str(title, 24),
+                        qty,
+                        style("-").dim(),
+                        style("-").dim(),
+                        style(source).dim()
+                    );
+                }
             }
         }
-        println!("{}", "-".repeat(75));
+        println!("{}", "-".repeat(if show_nre_col { 85 } else { 75 }));
     }
 
-    println!("{} ${:.2}", style("Total Cost:").green().bold(), total_cost);
+    // Cost summary
+    println!("{} ${:.2}", style("Piece Cost:").bold(), total_piece_cost);
+
+    if include_nre && total_nre > 0.0 {
+        println!("{} ${:.2}", style("Total NRE:").bold(), total_nre);
+        if let Some(amort_qty) = args.amortize {
+            println!(
+                "{} ${:.4} (NRE / {} units)",
+                style("NRE per Unit:").bold(),
+                nre_per_unit,
+                amort_qty
+            );
+            let effective_unit = total_piece_cost + nre_per_unit;
+            println!(
+                "{} ${:.4}",
+                style("Effective Unit Cost:").green().bold(),
+                effective_unit
+            );
+        }
+    } else {
+        println!("{} ${:.2}", style("Total Cost:").green().bold(), total_piece_cost);
+    }
+
+    // Show warnings about expired quotes
+    if !expired_quote_warnings.is_empty() && args.warn_expired {
+        println!();
+        println!(
+            "{} {} quote(s) used in this BOM have expired:",
+            style("⚠ Warning:").red().bold(),
+            expired_quote_warnings.len()
+        );
+        for (quote_id, title, valid_until) in &expired_quote_warnings {
+            let quote_short = short_ids
+                .get_short_id(quote_id)
+                .unwrap_or_else(|| truncate_str(quote_id, 10));
+            println!(
+                "   {} {} (quote {} expired {})",
+                style("•").dim(),
+                style(truncate_str(title, 30)).cyan(),
+                style(&quote_short).yellow(),
+                style(valid_until).red()
+            );
+        }
+        println!(
+            "   {}",
+            style("Consider requesting updated quotes for accurate pricing").dim()
+        );
+    }
 
     // Show warnings about components with quotes but no selection
     if !unselected_quote_warnings.is_empty() {

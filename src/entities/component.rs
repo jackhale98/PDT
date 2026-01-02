@@ -84,10 +84,15 @@ impl std::str::FromStr for ComponentCategory {
     }
 }
 
-/// Supplier information
+/// Supplier information for a component
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Supplier {
-    /// Supplier name
+pub struct ComponentSupplier {
+    /// Supplier entity ID (SUP-...) - links to SUP entity
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supplier_id: Option<String>,
+
+    /// Supplier name (fallback if supplier_id not set)
+    #[serde(default)]
     pub name: String,
 
     /// Supplier's part number
@@ -256,7 +261,7 @@ pub struct Component {
 
     /// Supplier information
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub suppliers: Vec<Supplier>,
+    pub suppliers: Vec<ComponentSupplier>,
 
     /// Associated documents
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

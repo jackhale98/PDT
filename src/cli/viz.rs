@@ -499,6 +499,7 @@ mod tests {
                 beta: TorsorStats::default(),
                 gamma: TorsorStats::default(),
             }),
+            functional_result: None,
             sensitivity_3d: vec![],
             jacobian_summary: None,
             analyzed_at: None,

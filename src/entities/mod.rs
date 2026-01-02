@@ -43,7 +43,7 @@ pub mod work_instruction;
 
 pub use assembly::Assembly;
 pub use capa::Capa;
-pub use component::Component;
+pub use component::{Component, ComponentSupplier};
 pub use control::Control;
 pub use dev::Dev;
 pub use feature::Feature;

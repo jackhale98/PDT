@@ -309,6 +309,15 @@ tdt quote compare CMP@1
 # Compare quotes for an assembly
 tdt quote compare ASM@1
 
+# Compare at a specific quantity (gets price from applicable price break)
+tdt quote compare CMP@1 --qty 1000
+
+# Include NRE/tooling costs amortized over production run
+tdt quote compare CMP@1 --qty 1000 --amortize 5000
+
+# Exclude NRE from comparison (piece price only)
+tdt quote compare CMP@1 --no-nre
+
 # Output as JSON
 tdt quote compare CMP@1 -o json
 
@@ -316,7 +325,36 @@ tdt quote compare CMP@1 -o json
 tdt quote compare CMP@1 -o yaml
 ```
 
-The compare command sorts quotes by unit price (lowest first) and shows a summary highlighting the best price.
+The compare command sorts quotes by unit price (lowest first) and shows a summary highlighting the best price. When `--amortize` is specified, quotes are sorted by effective unit price (piece price + NRE/amortization qty).
+
+### Get price for specific quantity
+
+Query price and lead time for a quote at a specific quantity:
+
+```bash
+# Get price at quantity 1 (default)
+tdt quote price QUOT@1
+
+# Get price at specific quantity (uses applicable price break)
+tdt quote price QUOT@1 --qty 500
+
+# Show all price breaks
+tdt quote price QUOT@1 --all
+
+# Include NRE amortization in effective price
+tdt quote price QUOT@1 --qty 500 --amortize 2000
+
+# Output as JSON (useful for scripting)
+tdt quote price QUOT@1 --qty 1000 -o json
+```
+
+The price command shows:
+- Unit price at the specified quantity
+- Extended price (unit price × quantity)
+- Lead time (from price break or default)
+- NRE/tooling breakdown (if present)
+- Effective unit price (with amortization)
+- Expiration warning (if quote has expired)
 
 ## Quote Status Values
 

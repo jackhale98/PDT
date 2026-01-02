@@ -370,6 +370,47 @@ tdt feat delete FEAT@1 --force
 tdt feat archive FEAT@1
 ```
 
+### Compute torsor bounds from GD&T
+
+The `compute-bounds` command automatically calculates torsor bounds from a feature's GD&T controls and geometry class:
+
+```bash
+# Show computed bounds (doesn't modify file)
+tdt feat compute-bounds FEAT@1
+
+# Compute and update the feature file
+tdt feat compute-bounds FEAT@1 --update
+
+# Compute with actual size for MMC/LMC bonus calculation
+tdt feat compute-bounds FEAT@1 --actual-size 10.02
+
+# Output as JSON
+tdt feat compute-bounds FEAT@1 -o json
+
+# Output as YAML
+tdt feat compute-bounds FEAT@1 -o yaml
+```
+
+**What it does:**
+
+1. Reads the feature's `gdt` controls and `geometry_class`
+2. Maps each GD&T symbol to affected torsor DOFs (see mapping table above)
+3. Calculates bounds: position tolerance / 2 for translations, tolerance / length for rotations
+4. If `--actual-size` is provided and GD&T specifies MMC/LMC, adds bonus tolerance
+5. With `--update`, writes the computed `torsor_bounds` to the feature file
+
+**Validation integration:**
+
+The `tdt validate` command automatically checks for stale torsor bounds:
+
+```bash
+# Check for stale bounds (warns if stored != computed)
+tdt validate
+
+# Automatically fix stale bounds
+tdt validate --fix
+```
+
 ## Feature Types
 
 Features are classified by their material behavior for tolerance analysis:

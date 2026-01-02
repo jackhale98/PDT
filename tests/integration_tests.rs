@@ -7179,3 +7179,337 @@ fn test_quote_lead_time_for_qty() {
         .success()
         .stdout(predicate::str::contains("Lead Time: 28 days"));
 }
+
+// ===== GD&T to Torsor Bounds Tests =====
+
+#[test]
+fn test_feat_compute_bounds_basic() {
+    let tmp = setup_test_project();
+
+    // Create a component first
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "cmp",
+            "new",
+            "--title",
+            "Housing",
+            "--part-number",
+            "HSG-001",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Assign short ID
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    // Create a feature with GD&T and geometry_class
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Mounting Hole",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Assign short ID
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Manually edit the feature to add GD&T and geometry_class
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    assert_eq!(entries.len(), 1);
+    let feat_path = entries[0].path();
+
+    let content = std::fs::read_to_string(&feat_path).unwrap();
+    let updated = content
+        + r#"
+geometry_class: cylinder
+geometry_3d:
+  origin: [50.0, 25.0, 0.0]
+  axis: [0.0, 0.0, 1.0]
+  length: 15.0
+gdt:
+  - symbol: position
+    value: 0.25
+    datum_refs: ["A", "B", "C"]
+    material_condition: rfs
+"#;
+    std::fs::write(&feat_path, updated).unwrap();
+
+    // Now test compute-bounds
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "compute-bounds", "FEAT@1"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Computed torsor bounds"))
+        .stdout(predicate::str::contains("u:"))
+        .stdout(predicate::str::contains("-0.125000, 0.125000"));
+}
+
+#[test]
+fn test_feat_compute_bounds_with_update() {
+    let tmp = setup_test_project();
+
+    // Create component and feature
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "cmp",
+            "new",
+            "--title",
+            "Bracket",
+            "--part-number",
+            "BRK-001",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Pin Hole",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Add GD&T manually
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    let feat_path = entries[0].path();
+
+    let content = std::fs::read_to_string(&feat_path).unwrap();
+    let updated = content
+        + r#"
+geometry_class: cylinder
+gdt:
+  - symbol: position
+    value: 0.50
+    material_condition: rfs
+"#;
+    std::fs::write(&feat_path, updated).unwrap();
+
+    // Compute bounds and update file
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "compute-bounds", "FEAT@1", "--update"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated"));
+
+    // Verify the file now has torsor_bounds
+    let content = std::fs::read_to_string(&feat_path).unwrap();
+    assert!(
+        content.contains("torsor_bounds"),
+        "File should have torsor_bounds after --update"
+    );
+}
+
+#[test]
+fn test_validate_detects_stale_torsor_bounds() {
+    let tmp = setup_test_project();
+
+    // Create component and feature with GD&T
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "cmp",
+            "new",
+            "--title",
+            "Frame",
+            "--part-number",
+            "FRM-001",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Bore",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Add GD&T and WRONG torsor_bounds manually
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    let feat_path = entries[0].path();
+
+    let content = std::fs::read_to_string(&feat_path).unwrap();
+    let updated = content
+        + r#"
+geometry_class: cylinder
+gdt:
+  - symbol: position
+    value: 0.25
+    material_condition: rfs
+torsor_bounds:
+  u: [-0.5, 0.5]
+  v: [-0.5, 0.5]
+"#;
+    std::fs::write(&feat_path, updated).unwrap();
+
+    // Validate should warn about stale bounds
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("calculation warning"))
+        .stdout(predicate::str::contains("differs from computed"));
+}
+
+#[test]
+fn test_validate_fix_updates_torsor_bounds() {
+    let tmp = setup_test_project();
+
+    // Create component and feature with GD&T but no torsor_bounds
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "cmp",
+            "new",
+            "--title",
+            "Plate",
+            "--part-number",
+            "PLT-001",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Locator Hole",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Add GD&T without torsor_bounds
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    let feat_path = entries[0].path();
+
+    let content = std::fs::read_to_string(&feat_path).unwrap();
+    let updated = content
+        + r#"
+geometry_class: cylinder
+gdt:
+  - symbol: position
+    value: 0.30
+    material_condition: rfs
+"#;
+    std::fs::write(&feat_path, updated).unwrap();
+
+    // Validate with --fix should add torsor_bounds
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate", "--fix"])
+        .assert()
+        .success();
+
+    // Verify the file now has torsor_bounds
+    let content = std::fs::read_to_string(&feat_path).unwrap();
+    assert!(
+        content.contains("torsor_bounds"),
+        "File should have torsor_bounds after validate --fix"
+    );
+    assert!(
+        content.contains("-0.15") || content.contains("0.15"),
+        "Bounds should be 0.30/2 = 0.15"
+    );
+}

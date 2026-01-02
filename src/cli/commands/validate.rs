@@ -271,6 +271,9 @@ pub fn run(args: ValidateArgs) -> Result<()> {
                         &mut stats,
                         &feature_loader,
                     )?,
+                    EntityPrefix::Feat => {
+                        check_feature_values(&content, path, args.fix, &mut stats)?
+                    }
                     _ => vec![],
                 };
 
@@ -857,6 +860,76 @@ fn check_stackup_values(
             .map_err(|e| miette::miette!("Failed to write file: {}", e))?;
 
         stats.files_fixed += 1;
+    }
+
+    Ok(issues)
+}
+
+/// Check and optionally fix calculated values in FEAT entities
+/// This includes checking if torsor_bounds are stale compared to GD&T controls
+fn check_feature_values(
+    content: &str,
+    path: &PathBuf,
+    fix: bool,
+    stats: &mut ValidationStats,
+) -> Result<Vec<String>> {
+    use crate::core::gdt_torsor::{check_stale_bounds, compute_torsor_bounds};
+
+    let mut issues = Vec::new();
+
+    // Parse the feature
+    let feat: Feature = match serde_yml::from_str(content) {
+        Ok(f) => f,
+        Err(_) => return Ok(issues), // Already reported by schema validation
+    };
+
+    // Skip if no GD&T controls or dimensions (nothing to compute)
+    if feat.gdt.is_empty() && feat.dimensions.is_empty() {
+        return Ok(issues);
+    }
+
+    // Skip if no geometry_class defined (can't compute bounds without knowing geometry type)
+    if feat.geometry_class.is_none() {
+        // Only warn if there ARE GD&T controls that could be used
+        if !feat.gdt.is_empty() {
+            issues.push(
+                "Feature has GD&T controls but no geometry_class - cannot auto-compute torsor_bounds"
+                    .to_string(),
+            );
+        }
+        return Ok(issues);
+    }
+
+    // Compute expected bounds
+    let result = compute_torsor_bounds(&feat, None);
+
+    // Check if stored bounds match computed bounds
+    if let Some(stale_msg) = check_stale_bounds(&feat.torsor_bounds, &result.bounds, 1e-6) {
+        issues.push(stale_msg);
+    }
+
+    // Add any warnings from computation
+    for warning in result.warnings {
+        issues.push(warning);
+    }
+
+    // Fix if requested and there are issues
+    if fix && !issues.is_empty() {
+        // Re-parse as a mutable feature to fix
+        let mut feat: Feature = serde_yml::from_str(content)
+            .map_err(|e| miette::miette!("Failed to re-parse YAML: {}", e))?;
+
+        // Update torsor_bounds with computed values
+        feat.torsor_bounds = Some(result.bounds);
+
+        // Write back
+        let updated_content = serde_yml::to_string(&feat)
+            .map_err(|e| miette::miette!("Failed to serialize YAML: {}", e))?;
+        fs::write(path, updated_content)
+            .map_err(|e| miette::miette!("Failed to write file: {}", e))?;
+
+        stats.files_fixed += 1;
+        issues.clear(); // Clear issues since we fixed them
     }
 
     Ok(issues)

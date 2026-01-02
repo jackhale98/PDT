@@ -1683,9 +1683,23 @@
 
             <div class="code-block">
               <div class="code-header"><span class="code-lang">bash</span></div>
-              <pre><code><span class="cmd">tdt asm cost</span> ASM@1
+              <pre><code><span class="comment"># Basic cost calculation</span>
+<span class="cmd">tdt asm cost</span> ASM@1
+
+<span class="comment"># Cost with breakdown by component</span>
+<span class="cmd">tdt asm cost</span> ASM@1 --breakdown
+
+<span class="comment"># Cost at production quantity (uses quote price breaks)</span>
+<span class="cmd">tdt asm cost</span> ASM@1 --qty 1000
+
+<span class="comment"># Include NRE/tooling costs amortized over production run</span>
+<span class="cmd">tdt asm cost</span> ASM@1 --qty 500 --amortize 2000 --breakdown
+
+<span class="comment"># Mass calculation</span>
 <span class="cmd">tdt asm mass</span> ASM@1</code></pre>
             </div>
+
+            <p>The cost command uses prices from selected quotes when set on components. Use <code>tdt cmp set-quote CMP@1 QUOT@1</code> to select a quote for a component. NRE/tooling costs from quotes are tracked and can be amortized over a production run with <code>--amortize N</code>.</p>
 
             <h3>Filter by Assembly</h3>
             <p>List only components or sub-assemblies within a specific assembly's BOM (recursive):</p>

@@ -39,6 +39,10 @@ pub enum FeatCommands {
 
     /// Archive a feature (soft delete)
     Archive(ArchiveArgs),
+
+    /// Compute torsor bounds from GD&T controls
+    /// Auto-calculates torsor_bounds from gdt array and geometry_class
+    ComputeBounds(ComputeBoundsArgs),
 }
 
 /// Feature type filter for list command
@@ -242,6 +246,24 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
+#[derive(clap::Args, Debug)]
+pub struct ComputeBoundsArgs {
+    /// Feature ID or short ID (FEAT@N)
+    pub id: String,
+
+    /// Optional actual size for MMC/LMC bonus calculation
+    #[arg(long)]
+    pub actual_size: Option<f64>,
+
+    /// Update the feature file with computed bounds
+    #[arg(long, short = 'u')]
+    pub update: bool,
+
+    /// Suppress output (only show errors)
+    #[arg(long, short = 'q')]
+    pub quiet: bool,
+}
+
 /// Directories where features are stored
 const FEATURE_DIRS: &[&str] = &["tolerances/features"];
 
@@ -262,6 +284,7 @@ pub fn run(cmd: FeatCommands, global: &GlobalOpts) -> Result<()> {
         FeatCommands::Edit(args) => run_edit(args),
         FeatCommands::Delete(args) => run_delete(args),
         FeatCommands::Archive(args) => run_archive(args),
+        FeatCommands::ComputeBounds(args) => run_compute_bounds(args, global),
     }
 }
 
@@ -1001,4 +1024,126 @@ fn run_delete(args: DeleteArgs) -> Result<()> {
 
 fn run_archive(args: ArchiveArgs) -> Result<()> {
     crate::cli::commands::utils::run_delete(&args.id, FEATURE_DIRS, args.force, true, args.quiet)
+}
+
+fn run_compute_bounds(args: ComputeBoundsArgs, global: &GlobalOpts) -> Result<()> {
+    use crate::core::gdt_torsor::compute_torsor_bounds;
+
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let short_ids = ShortIdIndex::load(&project);
+
+    // Resolve short ID if needed
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
+
+    // Find the feature file
+    let feat_dir = project.root().join("tolerances/features");
+    let mut found_path = None;
+
+    if feat_dir.exists() {
+        for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            let path = entry.path();
+
+            if path.extension().is_some_and(|e| e == "yaml") {
+                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if filename.contains(&resolved_id) || filename.starts_with(&resolved_id) {
+                    found_path = Some(path);
+                    break;
+                }
+            }
+        }
+    }
+
+    let path =
+        found_path.ok_or_else(|| miette::miette!("No feature found matching '{}'", args.id))?;
+
+    // Read and parse feature
+    let content = fs::read_to_string(&path).into_diagnostic()?;
+    let mut feat: Feature = serde_yml::from_str(&content).into_diagnostic()?;
+
+    // Check prerequisites
+    if feat.gdt.is_empty() && feat.dimensions.is_empty() {
+        return Err(miette::miette!(
+            "Feature has no GD&T controls or dimensions to compute bounds from"
+        ));
+    }
+
+    // Compute bounds
+    let result = compute_torsor_bounds(&feat, args.actual_size);
+
+    // Handle output
+    let short_id = short_ids
+        .get_short_id(&feat.id.to_string())
+        .unwrap_or_else(|| format!("FEAT@?"));
+
+    if !args.quiet {
+        match global.output {
+            OutputFormat::Json => {
+                let json = serde_json::to_string_pretty(&result.bounds).into_diagnostic()?;
+                println!("{}", json);
+            }
+            OutputFormat::Yaml => {
+                let yaml = serde_yml::to_string(&result.bounds).into_diagnostic()?;
+                print!("{}", yaml);
+            }
+            _ => {
+                println!("{} Computed torsor bounds for {}", style("✓").green(), style(&short_id).cyan());
+                println!();
+
+                // Display bounds
+                if let Some([min, max]) = result.bounds.u {
+                    println!("  u: [{:.6}, {:.6}]", min, max);
+                }
+                if let Some([min, max]) = result.bounds.v {
+                    println!("  v: [{:.6}, {:.6}]", min, max);
+                }
+                if let Some([min, max]) = result.bounds.w {
+                    println!("  w: [{:.6}, {:.6}]", min, max);
+                }
+                if let Some([min, max]) = result.bounds.alpha {
+                    println!("  α: [{:.6}, {:.6}] rad", min, max);
+                }
+                if let Some([min, max]) = result.bounds.beta {
+                    println!("  β: [{:.6}, {:.6}] rad", min, max);
+                }
+                if let Some([min, max]) = result.bounds.gamma {
+                    println!("  γ: [{:.6}, {:.6}] rad", min, max);
+                }
+
+                if result.has_bonus {
+                    println!();
+                    println!("  {} Includes bonus tolerance (MMC/LMC)", style("ℹ").blue());
+                }
+
+                // Show warnings
+                for warning in &result.warnings {
+                    println!("  {} {}", style("!").yellow(), warning);
+                }
+            }
+        }
+    }
+
+    // Update file if requested
+    if args.update {
+        feat.torsor_bounds = Some(result.bounds);
+
+        let updated_yaml = serde_yml::to_string(&feat).into_diagnostic()?;
+        fs::write(&path, updated_yaml).into_diagnostic()?;
+
+        if !args.quiet {
+            println!();
+            println!("{} Updated {}", style("✓").green(), style(path.display()).dim());
+        }
+    } else if !args.quiet && !matches!(global.output, OutputFormat::Json | OutputFormat::Yaml) {
+        println!();
+        println!(
+            "  {} Use {} to save to file",
+            style("→").dim(),
+            style("--update").yellow()
+        );
+    }
+
+    Ok(())
 }

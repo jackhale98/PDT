@@ -192,6 +192,56 @@ tdt asm bom ASM@1 --recursive
 tdt asm bom ASM@1 -f csv
 ```
 
+### Calculate BOM cost
+
+Calculate total cost for an assembly, optionally including NRE/tooling:
+
+```bash
+# Basic cost calculation
+tdt asm cost ASM@1
+
+# Cost at production quantity (uses price breaks from selected quotes)
+tdt asm cost ASM@1 --qty 1000
+
+# Show cost breakdown by component
+tdt asm cost ASM@1 --breakdown
+
+# Include NRE/tooling amortized over production run
+tdt asm cost ASM@1 --qty 500 --amortize 2000 --breakdown
+
+# Exclude NRE/tooling from calculation
+tdt asm cost ASM@1 --no-nre
+
+# Disable expired quote warnings
+tdt asm cost ASM@1 --warn-expired=false
+```
+
+**Cost Calculation Logic:**
+
+1. For each component in the BOM:
+   - If `selected_quote` is set: use `quote.price_for_qty(bom_qty × production_qty)`
+   - Else if `unit_cost` is set: use that value
+   - Otherwise: $0.00 (warning shown)
+
+2. When `--amortize N` is specified:
+   - NRE costs from selected quotes are summed
+   - NRE per unit = Total NRE ÷ N
+   - Effective unit cost = Piece cost + NRE per unit
+
+3. Warnings are shown for:
+   - Components with available quotes but no `selected_quote` set
+   - Quotes that have expired (past `valid_until` date)
+
+**Setting a Selected Quote:**
+
+```bash
+# Set a quote as the selected price source for a component
+tdt cmp set-quote CMP@1 QUOT@1
+
+# Clear the selected quote
+tdt cmp clear-quote CMP@1
+```
+
 ### Edit an assembly
 
 ```bash

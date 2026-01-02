@@ -3,6 +3,7 @@
 pub mod cache;
 pub mod config;
 pub mod entity;
+pub mod gdt_torsor;
 pub mod git;
 pub mod identity;
 pub mod links;
@@ -32,3 +33,7 @@ pub use suspect::{
 };
 pub use team::{Role, TeamMember, TeamRoster};
 pub use workflow::{WorkflowConfig, WorkflowEngine, WorkflowError};
+
+pub use gdt_torsor::{
+    bounds_approx_equal, check_stale_bounds, compute_torsor_bounds, GdtTorsorResult,
+};

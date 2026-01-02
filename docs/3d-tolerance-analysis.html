@@ -500,6 +500,7 @@
             <li><a href="#concepts">Key Concepts</a></li>
             <li><a href="#setup">1. Project Setup</a></li>
             <li><a href="#geometry">2. Define Geometry</a></li>
+            <li><a href="#torsor-bounds">Auto-Compute Bounds</a></li>
             <li><a href="#datums">3. Set Up Datums</a></li>
             <li><a href="#stackup">4. Create Stackup</a></li>
             <li><a href="#analyze">5. Run 3D Analysis</a></li>
@@ -938,6 +939,116 @@ geometry_3d:
             </table>
           </section>
 
+          <section id="torsor-bounds" class="tutorial-section">
+            <h2>Auto-Compute Torsor Bounds from GD&T</h2>
+            <p>TDT can automatically compute <code>torsor_bounds</code> from your GD&T controls and geometry class, eliminating manual calculation:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Show computed bounds for a feature</span>
+<span class="cmd">tdt feat compute-bounds</span> FEAT@1
+
+<span class="comment"># Compute and update the feature file</span>
+<span class="cmd">tdt feat compute-bounds</span> FEAT@1 <span class="flag">--update</span>
+
+<span class="comment"># Include MMC/LMC bonus calculation</span>
+<span class="cmd">tdt feat compute-bounds</span> FEAT@1 <span class="flag">--actual-size</span> <span class="number">10.02</span></code></pre>
+            </div>
+
+            <h3>How GD&T Maps to Torsor DOFs</h3>
+            <p>The conversion follows ASME Y14.5 principles:</p>
+
+            <table class="info-table">
+              <thead>
+                <tr><th>GD&T Symbol</th><th>Geometry</th><th>Affected DOF</th><th>Formula</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>position</code></td>
+                  <td>cylinder</td>
+                  <td>u, v</td>
+                  <td>±(tolerance / 2)</td>
+                </tr>
+                <tr>
+                  <td><code>position</code></td>
+                  <td>sphere/point</td>
+                  <td>u, v, w</td>
+                  <td>±(tolerance / 2)</td>
+                </tr>
+                <tr>
+                  <td><code>perpendicularity</code></td>
+                  <td>cylinder</td>
+                  <td>α, β</td>
+                  <td>±(tolerance / length)</td>
+                </tr>
+                <tr>
+                  <td><code>flatness</code></td>
+                  <td>plane</td>
+                  <td>w</td>
+                  <td>±(tolerance / 2)</td>
+                </tr>
+                <tr>
+                  <td><code>concentricity</code></td>
+                  <td>cylinder</td>
+                  <td>u, v</td>
+                  <td>±(tolerance / 2)</td>
+                </tr>
+                <tr>
+                  <td><code>runout</code></td>
+                  <td>cylinder</td>
+                  <td>u, v, α, β</td>
+                  <td>radial + angular</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Example: Feature with GD&T</h3>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml</span></div>
+              <pre><code>title: Mounting Hole
+feature_type: internal
+geometry_class: cylinder
+geometry_3d:
+  origin: [50.0, 25.0, 0.0]
+  axis: [0.0, 0.0, 1.0]
+  length: 15.0
+
+gdt:
+  - symbol: position
+    value: 0.25
+    datum_refs: ["A", "B", "C"]
+    material_condition: mmc
+  - symbol: perpendicularity
+    value: 0.10
+    datum_refs: ["A"]
+    material_condition: rfs
+
+<span class="comment"># Auto-computed by: tdt feat compute-bounds FEAT@1 --update</span>
+torsor_bounds:
+  u: [-0.125, 0.125]       <span class="comment"># position / 2</span>
+  v: [-0.125, 0.125]       <span class="comment"># position / 2</span>
+  alpha: [-0.00667, 0.00667]  <span class="comment"># perpendicularity / length</span>
+  beta: [-0.00667, 0.00667]   <span class="comment"># perpendicularity / length</span></code></pre>
+            </div>
+
+            <h3>Validation Integration</h3>
+            <p>The <code>tdt validate</code> command automatically detects stale torsor bounds:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Check for stale bounds (warns if stored ≠ computed)</span>
+<span class="cmd">tdt validate</span>
+
+<span class="comment"># Automatically fix stale bounds</span>
+<span class="cmd">tdt validate</span> <span class="flag">--fix</span></code></pre>
+            </div>
+
+            <div class="info-box">
+              <strong>Tip: GD&T Workflow</strong>
+              <p>Enter your GD&T controls as shown on the drawing, then run <code>tdt feat compute-bounds --update</code> to auto-populate torsor bounds. The validate command will warn you if bounds become stale after GD&T changes.</p>
+            </div>
+          </section>
+
           <section id="datums" class="tutorial-section">
             <h2>3. Set Up Datums</h2>
             <p>Datum features establish the reference frame for GD&T controls. Add <code>datum_label</code> to features that serve as datums:</p>
@@ -1082,6 +1193,19 @@ functional_direction: [1.0, 0.0, 0.0]</code></pre>
 
           <section id="reference" class="tutorial-section">
             <h2>Reference</h2>
+
+            <h3>CLI Commands for 3D Analysis</h3>
+            <table class="info-table">
+              <thead>
+                <tr><th>Command</th><th>Description</th></tr>
+              </thead>
+              <tbody>
+                <tr><td><code>tdt tol analyze TOL@1 --3d</code></td><td>Run 3D SDT analysis on a stackup</td></tr>
+                <tr><td><code>tdt feat compute-bounds FEAT@1</code></td><td>Auto-compute torsor bounds from GD&T</td></tr>
+                <tr><td><code>tdt feat compute-bounds FEAT@1 --update</code></td><td>Compute and save to file</td></tr>
+                <tr><td><code>tdt validate --fix</code></td><td>Auto-fix stale torsor bounds</td></tr>
+              </tbody>
+            </table>
 
             <h3>CLI Flags for 3D Analysis</h3>
             <table class="info-table">

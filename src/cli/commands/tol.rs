@@ -2344,6 +2344,8 @@ fn run_3d_analysis(
     // Build 3D contributors from stackup contributors
     let mut contributors_3d: Vec<ChainContributor3D> = Vec::new();
     let mut missing_geometry = Vec::new();
+    let mut using_gdt_bounds = Vec::new();
+    let mut using_derived_bounds = Vec::new();
 
     for contrib in &stackup.contributors {
         // Get feature if linked
@@ -2382,9 +2384,24 @@ fn run_3d_analysis(
             sdt::get_constrained_dof(geometry_class.clone())
         };
 
-        // Build torsor bounds from tolerances, applying only to relevant DOFs
-        let half_tol = (contrib.plus_tol + contrib.minus_tol) / 2.0;
-        let bounds = build_torsor_bounds_for_dofs(half_tol, &tolerance_dofs);
+        // Use feature's pre-computed torsor_bounds (from GD&T) if available,
+        // otherwise derive bounds from dimensional tolerance
+        let (bounds, bounds_source) = if let Some(tb) = feat_opt
+            .and_then(|f| f.torsor_bounds.clone())
+            .filter(|b| b.has_any_bounds())
+        {
+            (tb, "gdt")
+        } else {
+            let half_tol = (contrib.plus_tol + contrib.minus_tol) / 2.0;
+            (build_torsor_bounds_for_dofs(half_tol, &tolerance_dofs), "derived")
+        };
+
+        // Track bounds source for reporting
+        if bounds_source == "gdt" {
+            using_gdt_bounds.push(contrib.name.clone());
+        } else {
+            using_derived_bounds.push(contrib.name.clone());
+        }
 
         // Map distribution type
         let distribution = contrib.distribution.clone();
@@ -2398,6 +2415,22 @@ fn run_3d_analysis(
             distribution,
             sigma_level: stackup.sigma_level,
         });
+    }
+
+    // Report bounds sources
+    if !using_gdt_bounds.is_empty() {
+        eprintln!(
+            "{} Using GD&T torsor_bounds: {}",
+            style("✓").green(),
+            using_gdt_bounds.join(", ")
+        );
+    }
+    if !using_derived_bounds.is_empty() {
+        eprintln!(
+            "{} Using derived bounds (no torsor_bounds): {}",
+            style("ℹ").blue(),
+            using_derived_bounds.join(", ")
+        );
     }
 
     // Warn about missing geometry

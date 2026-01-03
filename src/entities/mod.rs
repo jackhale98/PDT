@@ -46,7 +46,7 @@ pub use capa::Capa;
 pub use component::{Component, ComponentSupplier};
 pub use control::Control;
 pub use dev::Dev;
-pub use feature::Feature;
+pub use feature::{DimensionRef, Feature};
 pub use hazard::Hazard;
 pub use lot::Lot;
 pub use mate::Mate;

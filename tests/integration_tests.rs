@@ -7351,6 +7351,121 @@ gdt:
 }
 
 #[test]
+fn test_feat_set_length_from_another_feature() {
+    let tmp = setup_test_project();
+
+    // Create component
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "cmp",
+            "new",
+            "--title",
+            "Housing",
+            "--part-number",
+            "HSG-001",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    // Create source feature with dimension
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Bore Depth",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Modify source feature to have a specific "depth" dimension
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+    let source_path = entries[0].path();
+
+    let content = std::fs::read_to_string(&source_path).unwrap();
+    // Replace the default "diameter" dimension with "depth"
+    let content = content.replace("- name: diameter", "- name: depth");
+    let content = content.replace("nominal: 10.0", "nominal: 25.5");
+    std::fs::write(&source_path, &content).unwrap();
+
+    // Create target feature
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Cavity",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Set length on target feature from source feature's depth dimension
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "set-length", "FEAT@2", "--from", "FEAT@1:depth"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Set"))
+        .stdout(predicate::str::contains("25.5"));
+
+    // Verify target feature now has length_ref set
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+
+    // Find the target feature (the second one created)
+    let mut target_found = false;
+    for entry in &entries {
+        let content = std::fs::read_to_string(entry.path()).unwrap();
+        if content.contains("Cavity") {
+            assert!(content.contains("length_ref:"), "Should have length_ref");
+            assert!(content.contains(":depth"), "Should reference depth dimension");
+            assert!(content.contains("length: 25.5"), "Should have length value");
+            target_found = true;
+            break;
+        }
+    }
+    assert!(target_found, "Target feature not found");
+}
+
+#[test]
 fn test_validate_detects_stale_torsor_bounds() {
     let tmp = setup_test_project();
 
@@ -7511,5 +7626,259 @@ gdt:
     assert!(
         content.contains("-0.15") || content.contains("0.15"),
         "Bounds should be 0.30/2 = 0.15"
+    );
+}
+
+// ============================================================================
+// Feature length_ref Tests
+// ============================================================================
+
+#[test]
+fn test_validate_detects_stale_length_ref() {
+    let tmp = setup_test_project();
+
+    // Create a component first
+    create_test_component(&tmp, "PN-LREF", "Length Ref Test");
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    // Create the source feature with a dimension
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Wall Thickness",
+            "--feature-type",
+            "external",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Create the referencing feature
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Bore Depth",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // List to get short IDs
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    // Manually add dimension to first feature and length_ref to second
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+
+    // Add dimension "depth" to first feature (Wall Thickness)
+    let wall_path = entries
+        .iter()
+        .find(|e| {
+            let content = std::fs::read_to_string(e.path()).unwrap_or_default();
+            content.contains("Wall Thickness")
+        })
+        .unwrap()
+        .path();
+    let wall_content = std::fs::read_to_string(&wall_path).unwrap();
+    // Replace the default diameter dimension with our depth dimension
+    let wall_updated = wall_content.replace(
+        "- name: diameter",
+        "- name: depth",
+    ).replace(
+        "nominal: 10.0",
+        "nominal: 25.0",
+    );
+    std::fs::write(&wall_path, wall_updated).unwrap();
+
+
+    // Get the ID of the first feature for the reference
+    let wall_id = wall_path
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .replace(".tdt.yaml", "");
+
+    // Add length_ref to second feature (Bore Depth) with stale cached value
+    let bore_path = entries
+        .iter()
+        .find(|e| {
+            let content = std::fs::read_to_string(e.path()).unwrap_or_default();
+            content.contains("Bore Depth")
+        })
+        .unwrap()
+        .path();
+    let bore_content = std::fs::read_to_string(&bore_path).unwrap();
+    // Add geometry_class and geometry_3d after feature_type line
+    let bore_updated = bore_content.replace(
+        "feature_type: internal",
+        &format!(
+            r#"feature_type: internal
+geometry_class: cylinder
+geometry_3d:
+  origin: [0, 0, 0]
+  axis: [0, 0, 1]
+  length: 20.0
+  length_ref: "{}:depth""#,
+            wall_id
+        ),
+    );
+    std::fs::write(&bore_path, bore_updated).unwrap();
+
+    // Validate should detect stale length (20.0 != 25.0)
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("length_ref stale"));
+}
+
+#[test]
+fn test_validate_fix_updates_length_ref() {
+    let tmp = setup_test_project();
+
+    // Create a component first
+    create_test_component(&tmp, "PN-LFIX", "Length Fix Test");
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["cmp", "list"])
+        .output()
+        .unwrap();
+
+    // Create source feature
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Source Dim",
+            "--feature-type",
+            "external",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    // Create referencing feature
+    tdt()
+        .current_dir(tmp.path())
+        .args([
+            "feat",
+            "new",
+            "--component",
+            "CMP@1",
+            "--title",
+            "Referencing Feat",
+            "--feature-type",
+            "internal",
+            "--no-edit",
+        ])
+        .assert()
+        .success();
+
+    tdt()
+        .current_dir(tmp.path())
+        .args(["feat", "list"])
+        .output()
+        .unwrap();
+
+    let feat_dir = tmp.path().join("tolerances/features");
+    let entries: Vec<_> = std::fs::read_dir(&feat_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .collect();
+
+    // Add dimension to source - replace default diameter with thickness
+    let source_path = entries
+        .iter()
+        .find(|e| {
+            let content = std::fs::read_to_string(e.path()).unwrap_or_default();
+            content.contains("Source Dim")
+        })
+        .unwrap()
+        .path();
+    let source_content = std::fs::read_to_string(&source_path).unwrap();
+    let source_updated = source_content.replace(
+        "- name: diameter",
+        "- name: thickness",
+    ).replace(
+        "nominal: 10.0",
+        "nominal: 15.5",
+    );
+    std::fs::write(&source_path, source_updated).unwrap();
+
+    let source_id = source_path
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .replace(".tdt.yaml", "");
+
+    // Add stale length_ref to referencing feature
+    let ref_path = entries
+        .iter()
+        .find(|e| {
+            let content = std::fs::read_to_string(e.path()).unwrap_or_default();
+            content.contains("Referencing Feat")
+        })
+        .unwrap()
+        .path();
+    let ref_content = std::fs::read_to_string(&ref_path).unwrap();
+    let ref_updated = ref_content.replace(
+        "feature_type: internal",
+        &format!(
+            r#"feature_type: internal
+geometry_class: cylinder
+geometry_3d:
+  origin: [0, 0, 0]
+  axis: [0, 0, 1]
+  length: 10.0
+  length_ref: "{}:thickness""#,
+            source_id
+        ),
+    );
+    std::fs::write(&ref_path, ref_updated).unwrap();
+
+    // Validate with --fix should update the length
+    tdt()
+        .current_dir(tmp.path())
+        .args(["validate", "--fix"])
+        .assert()
+        .success();
+
+    // Verify the file now has correct length
+    let content = std::fs::read_to_string(&ref_path).unwrap();
+    assert!(
+        content.contains("15.5"),
+        "File should have updated length (15.5) after validate --fix"
     );
 }

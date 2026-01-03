@@ -896,8 +896,20 @@ gdt:
                   <td>Feature length (for angular tolerances)</td>
                   <td>25.0</td>
                 </tr>
+                <tr>
+                  <td><code>geometry_3d.length_ref</code></td>
+                  <td>Optional: reference another feature's dimension</td>
+                  <td>"FEAT-01ABC:depth"</td>
+                </tr>
               </tbody>
             </table>
+
+            <div class="info-box">
+              <strong>Tip: Reference Dimensions</strong>
+              <p>Use <code>length_ref</code> to link a feature's length to another feature's dimension. This ensures values stay in sync. Format: <code>"FEATURE_ID:dimension_name"</code>.</p>
+              <p><strong>CLI command:</strong> <code>tdt feat set-length FEAT@2 --from FEAT@1:depth</code> sets the length and reference automatically.</p>
+              <p>Run <code>tdt validate</code> to check for stale values, or <code>tdt validate --fix</code> to update them.</p>
+            </div>
 
             <h3>Geometry Examples</h3>
 
@@ -1007,6 +1019,22 @@ datum_label: A</code></pre>
    <span style="color: var(--text-primary); font-weight: bold">Functional Deviation</span> (projected onto [1,0,0]):
      Worst Case: 0.018
      RSS 3σ: 0.0102</div>
+
+            <h3>How Bounds Are Used</h3>
+            <p>The 3D analysis uses torsor bounds to determine geometric deviation for each contributor:</p>
+            <ul>
+              <li><strong>GD&T torsor_bounds</strong> - If a feature has <code>torsor_bounds</code> (computed from GD&T via <code>compute-bounds</code>), these are used directly</li>
+              <li><strong>Derived bounds</strong> - If no torsor_bounds exist, bounds are derived from the contributor's dimensional tolerance</li>
+            </ul>
+            <p>The analysis output shows which source was used:</p>
+            <div class="output-block">
+<span style="color: var(--success)">✓</span> Using GD&T torsor_bounds: Bore, Shaft Journal
+<span style="color: var(--info)">ℹ</span> Using derived bounds (no torsor_bounds): Spacer Thickness</div>
+
+            <div class="info-box">
+              <strong>Best Practice</strong>
+              <p>For accurate 3D analysis, always define GD&T controls on your features and run <code>tdt feat compute-bounds --update</code> to generate proper torsor bounds. This ensures your analysis uses the actual geometric tolerances from your drawing rather than approximations from dimensional tolerance.</p>
+            </div>
 
             <h3>Analysis Options</h3>
             <table class="info-table">

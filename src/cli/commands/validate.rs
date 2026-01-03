@@ -272,7 +272,7 @@ pub fn run(args: ValidateArgs) -> Result<()> {
                         &feature_loader,
                     )?,
                     EntityPrefix::Feat => {
-                        check_feature_values(&content, path, args.fix, &mut stats)?
+                        check_feature_values(&content, path, args.fix, &mut stats, &feature_loader, cache.as_ref())?
                     }
                     _ => vec![],
                 };
@@ -867,15 +867,21 @@ fn check_stackup_values(
 
 /// Check and optionally fix calculated values in FEAT entities
 /// This includes checking if torsor_bounds are stale compared to GD&T controls
+/// and if length_ref values are stale compared to referenced dimensions
 fn check_feature_values(
     content: &str,
     path: &PathBuf,
     fix: bool,
     stats: &mut ValidationStats,
+    feature_loader: &FeatureLoader,
+    cache: Option<&EntityCache>,
 ) -> Result<Vec<String>> {
     use crate::core::gdt_torsor::{check_stale_bounds, compute_torsor_bounds};
+    use crate::entities::feature::DimensionRef;
 
     let mut issues = Vec::new();
+    let mut needs_length_fix = false;
+    let mut expected_length: Option<f64> = None;
 
     // Parse the feature
     let feat: Feature = match serde_yml::from_str(content) {
@@ -883,13 +889,69 @@ fn check_feature_values(
         Err(_) => return Ok(issues), // Already reported by schema validation
     };
 
-    // Skip if no GD&T controls or dimensions (nothing to compute)
-    if feat.gdt.is_empty() && feat.dimensions.is_empty() {
-        return Ok(issues);
+    // Check length_ref if present
+    if let Some(ref geometry_3d) = feat.geometry_3d {
+        if let Some(ref length_ref_str) = geometry_3d.length_ref {
+            if let Some(dim_ref) = DimensionRef::parse(length_ref_str) {
+                // Resolve feature ID (handle short IDs like FEAT@1)
+                let resolved_id = if dim_ref.feature_id.contains('@') {
+                    // Short ID - resolve via cache
+                    cache
+                        .and_then(|c| c.resolve_short_id(&dim_ref.feature_id))
+                        .unwrap_or_else(|| dim_ref.feature_id.clone())
+                } else {
+                    dim_ref.feature_id.clone()
+                };
+
+                // Look up the target feature
+                if let Some(target_feat) = feature_loader.get_feature(&resolved_id) {
+                    // Get the dimension value
+                    if let Some(dim_value) = target_feat.get_dimension_value(&dim_ref.dimension_name) {
+                        expected_length = Some(dim_value);
+                        // Check if cached length matches
+                        match geometry_3d.length {
+                            Some(cached_len) if (cached_len - dim_value).abs() > 1e-6 => {
+                                issues.push(format!(
+                                    "length_ref stale: cached {} but {} has {}={:.6}",
+                                    cached_len, length_ref_str, dim_ref.dimension_name, dim_value
+                                ));
+                                needs_length_fix = true;
+                            }
+                            None => {
+                                issues.push(format!(
+                                    "length_ref set but length not cached (should be {:.6} from {})",
+                                    dim_value, length_ref_str
+                                ));
+                                needs_length_fix = true;
+                            }
+                            _ => {} // Length matches, all good
+                        }
+                    } else {
+                        issues.push(format!(
+                            "length_ref references unknown dimension '{}' in {}",
+                            dim_ref.dimension_name, resolved_id
+                        ));
+                    }
+                } else {
+                    issues.push(format!(
+                        "length_ref references unknown feature '{}'",
+                        dim_ref.feature_id
+                    ));
+                }
+            } else {
+                issues.push(format!(
+                    "Invalid length_ref format '{}' - expected 'FEAT@1:dimension_name'",
+                    length_ref_str
+                ));
+            }
+        }
     }
 
+    // Skip torsor bounds check if no GD&T controls or dimensions (nothing to compute)
+    let check_torsor = !feat.gdt.is_empty() || !feat.dimensions.is_empty();
+
     // Skip if no geometry_class defined (can't compute bounds without knowing geometry type)
-    if feat.geometry_class.is_none() {
+    if check_torsor && feat.geometry_class.is_none() {
         // Only warn if there ARE GD&T controls that could be used
         if !feat.gdt.is_empty() {
             issues.push(
@@ -897,21 +959,25 @@ fn check_feature_values(
                     .to_string(),
             );
         }
-        return Ok(issues);
     }
 
-    // Compute expected bounds
-    let result = compute_torsor_bounds(&feat, None);
+    // Compute expected torsor bounds if we have geometry_class
+    let torsor_result = if check_torsor && feat.geometry_class.is_some() {
+        let result = compute_torsor_bounds(&feat, None);
 
-    // Check if stored bounds match computed bounds
-    if let Some(stale_msg) = check_stale_bounds(&feat.torsor_bounds, &result.bounds, 1e-6) {
-        issues.push(stale_msg);
-    }
+        // Check if stored bounds match computed bounds
+        if let Some(stale_msg) = check_stale_bounds(&feat.torsor_bounds, &result.bounds, 1e-6) {
+            issues.push(stale_msg);
+        }
 
-    // Add any warnings from computation
-    for warning in result.warnings {
-        issues.push(warning);
-    }
+        // Add any warnings from computation
+        for warning in &result.warnings {
+            issues.push(warning.clone());
+        }
+        Some(result)
+    } else {
+        None
+    };
 
     // Fix if requested and there are issues
     if fix && !issues.is_empty() {
@@ -919,8 +985,17 @@ fn check_feature_values(
         let mut feat: Feature = serde_yml::from_str(content)
             .map_err(|e| miette::miette!("Failed to re-parse YAML: {}", e))?;
 
-        // Update torsor_bounds with computed values
-        feat.torsor_bounds = Some(result.bounds);
+        // Update torsor_bounds with computed values if available
+        if let Some(ref result) = torsor_result {
+            feat.torsor_bounds = Some(result.bounds.clone());
+        }
+
+        // Update length from length_ref if stale
+        if needs_length_fix {
+            if let Some(ref mut geometry_3d) = feat.geometry_3d {
+                geometry_3d.length = expected_length;
+            }
+        }
 
         // Write back
         let updated_content = serde_yml::to_string(&feat)

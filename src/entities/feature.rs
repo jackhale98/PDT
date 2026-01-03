@@ -256,6 +256,12 @@ pub struct Geometry3D {
     /// Optional length for axial features (cylinders, cones)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub length: Option<f64>,
+
+    /// Optional reference to another feature's dimension for length
+    /// Format: "FEAT@1:dimension_name" or "FEAT-xxx:dimension_name"
+    /// When set, length is cached and validated against the referenced dimension
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub length_ref: Option<String>,
 }
 
 impl Default for Geometry3D {
@@ -264,7 +270,42 @@ impl Default for Geometry3D {
             origin: [0.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0], // Default Z-up
             length: None,
+            length_ref: None,
         }
+    }
+}
+
+/// Parsed dimension reference
+#[derive(Debug, Clone, PartialEq)]
+pub struct DimensionRef {
+    /// Feature identifier (short ID like "FEAT@1" or full ID)
+    pub feature_id: String,
+    /// Dimension name to reference
+    pub dimension_name: String,
+}
+
+impl DimensionRef {
+    /// Parse a dimension reference string like "FEAT@1:depth" or "FEAT-01ABC:diameter"
+    pub fn parse(s: &str) -> Option<Self> {
+        let parts: Vec<&str> = s.splitn(2, ':').collect();
+        if parts.len() != 2 {
+            return None;
+        }
+        let feature_id = parts[0].trim().to_string();
+        let dimension_name = parts[1].trim().to_string();
+        if feature_id.is_empty() || dimension_name.is_empty() {
+            return None;
+        }
+        Some(DimensionRef {
+            feature_id,
+            dimension_name,
+        })
+    }
+}
+
+impl std::fmt::Display for DimensionRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.feature_id, self.dimension_name)
     }
 }
 
@@ -300,6 +341,32 @@ pub struct TorsorBounds {
     /// Rotation about local Z [min, max] in radians
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gamma: Option<[f64; 2]>,
+}
+
+impl TorsorBounds {
+    /// Check if any DOF has bounds defined
+    pub fn has_any_bounds(&self) -> bool {
+        self.u.is_some()
+            || self.v.is_some()
+            || self.w.is_some()
+            || self.alpha.is_some()
+            || self.beta.is_some()
+            || self.gamma.is_some()
+    }
+
+    /// Check if all bounds are zero (no variation allowed)
+    pub fn is_all_zero(&self) -> bool {
+        let is_zero = |opt: &Option<[f64; 2]>| match opt {
+            Some([min, max]) => (*min == 0.0) && (*max == 0.0),
+            None => true,
+        };
+        is_zero(&self.u)
+            && is_zero(&self.v)
+            && is_zero(&self.w)
+            && is_zero(&self.alpha)
+            && is_zero(&self.beta)
+            && is_zero(&self.gamma)
+    }
 }
 
 /// Drawing reference
@@ -510,6 +577,16 @@ impl Feature {
     /// Get the primary dimension (first one, typically the main characteristic)
     pub fn primary_dimension(&self) -> Option<&Dimension> {
         self.dimensions.first()
+    }
+
+    /// Get a dimension by name
+    pub fn get_dimension(&self, name: &str) -> Option<&Dimension> {
+        self.dimensions.iter().find(|d| d.name == name)
+    }
+
+    /// Get the nominal value of a dimension by name
+    pub fn get_dimension_value(&self, name: &str) -> Option<f64> {
+        self.get_dimension(name).map(|d| d.nominal)
     }
 
     /// Check if this feature has any GD&T controls

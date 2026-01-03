@@ -89,6 +89,25 @@ This is critical for mate calculations - when validating mates, TDT uses the `in
 | `origin` | array[number] | Origin point [x, y, z] in component coordinate system |
 | `axis` | array[number] | Axis direction [dx, dy, dz] - unit vector for feature orientation |
 | `length` | number | Optional length for axial features (cylinders, cones) |
+| `length_ref` | string | Optional reference to another feature's dimension (see below) |
+
+**length_ref - Referencing Other Dimensions:**
+
+Instead of hardcoding the length value, you can reference another feature's dimension. This ensures the length stays in sync and can be validated:
+
+```yaml
+geometry_3d:
+  origin: [0, 0, 0]
+  axis: [0, 0, 1]
+  length: 25.0                        # Cached value
+  length_ref: "FEAT-01ABC...:depth"   # Source: feature's "depth" dimension
+```
+
+Format: `"FEATURE_ID:dimension_name"` where:
+- `FEATURE_ID` is the full feature ID (e.g., `FEAT-01ABC...`)
+- `dimension_name` is the name of the dimension to reference (e.g., `depth`, `thickness`)
+
+The `tdt validate` command checks if `length` matches the referenced dimension and warns if stale. Use `--fix` to auto-update.
 
 ### TorsorBounds Object (Auto-calculated)
 
@@ -408,6 +427,63 @@ The `tdt validate` command automatically checks for stale torsor bounds:
 tdt validate
 
 # Automatically fix stale bounds
+tdt validate --fix
+```
+
+**Usage in 3D Analysis:**
+
+When running `tdt tol analyze --3d`, the analysis uses each feature's `torsor_bounds` if available:
+
+- If `torsor_bounds` exists (from `compute-bounds`), those bounds are used directly for 6-DOF analysis
+- If no `torsor_bounds`, bounds are derived from the contributor's dimensional tolerance (less accurate)
+
+The analysis reports which bounds source is used for each contributor:
+
+```
+✓ Using GD&T torsor_bounds: Bore, Shaft Journal
+ℹ Using derived bounds (no torsor_bounds): Spacer
+```
+
+**Best practice:** Always populate `torsor_bounds` via `compute-bounds --update` for features with GD&T controls to ensure accurate 3D analysis.
+
+### Setting Geometry Length from Another Feature
+
+Use `tdt feat set-length` to automatically set a feature's 3D geometry length from another feature's dimension:
+
+```bash
+# Set length from another feature's dimension
+tdt feat set-length FEAT@2 --from FEAT@1:depth
+
+# Using full IDs
+tdt feat set-length FEAT-01ABC... --from FEAT-01DEF...:thickness
+
+# Quiet mode (suppress output)
+tdt feat set-length FEAT@2 --from FEAT@1:depth -q
+```
+
+**What it does:**
+
+1. Parses the source reference (`FEAT@N:dimension_name`)
+2. Resolves short IDs to full feature IDs
+3. Reads the source feature and looks up the specified dimension
+4. Updates the target feature's `geometry_3d.length` and `geometry_3d.length_ref`
+5. Creates `geometry_3d` block if it doesn't exist (with default origin and axis)
+
+**When to use:**
+
+- When defining mating interfaces where one feature's depth matches another's length
+- For maintaining consistent dimensions across related features
+- To enable automatic validation of dimension relationships
+
+**Validation:**
+
+After setting a length reference, `tdt validate` will check if the cached value matches the source:
+
+```bash
+# Warns if length differs from referenced dimension
+tdt validate
+
+# Automatically updates stale length values
 tdt validate --fix
 ```
 

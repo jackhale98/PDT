@@ -605,6 +605,23 @@ where [r]× is the skew-symmetric matrix of position vector r
 - Features must have `geometry_class` specified
 - Stackup must have `functional_direction` for result projection
 
+**Torsor Bounds Source**:
+
+For each contributor, the 3D analysis uses torsor bounds from one of two sources:
+
+1. **GD&T torsor_bounds** (preferred) - If the linked feature has `torsor_bounds` populated (from `tdt feat compute-bounds --update`), those bounds are used directly. This provides accurate 6-DOF bounds computed from the actual GD&T controls.
+
+2. **Derived bounds** (fallback) - If no `torsor_bounds` exist, bounds are approximated from the contributor's dimensional tolerance (`plus_tol`, `minus_tol`).
+
+The analysis output reports which source was used:
+
+```
+✓ Using GD&T torsor_bounds: Bore, Shaft
+ℹ Using derived bounds (no torsor_bounds): Spacer
+```
+
+**Best practice**: Run `tdt feat compute-bounds --update` on all features with GD&T controls before 3D analysis.
+
 ### Monte Carlo Simulation
 
 Runs thousands of random samples with configurable distributions:

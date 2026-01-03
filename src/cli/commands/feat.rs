@@ -16,7 +16,7 @@ use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::CachedFeature;
 use crate::core::Config;
-use crate::entities::feature::{Feature, FeatureType};
+use crate::entities::feature::{DimensionRef, Feature, FeatureType};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
 
@@ -43,6 +43,9 @@ pub enum FeatCommands {
     /// Compute torsor bounds from GD&T controls
     /// Auto-calculates torsor_bounds from gdt array and geometry_class
     ComputeBounds(ComputeBoundsArgs),
+
+    /// Set a feature's 3D geometry length from another feature's dimension
+    SetLength(SetLengthArgs),
 }
 
 /// Feature type filter for list command
@@ -264,6 +267,20 @@ pub struct ComputeBoundsArgs {
     pub quiet: bool,
 }
 
+#[derive(clap::Args, Debug)]
+pub struct SetLengthArgs {
+    /// Target feature ID or short ID (FEAT@N)
+    pub id: String,
+
+    /// Source dimension reference (FEAT@N:dimension_name or FEAT-xxx:dimension_name)
+    #[arg(long)]
+    pub from: String,
+
+    /// Suppress output
+    #[arg(long, short = 'q')]
+    pub quiet: bool,
+}
+
 /// Directories where features are stored
 const FEATURE_DIRS: &[&str] = &["tolerances/features"];
 
@@ -285,6 +302,7 @@ pub fn run(cmd: FeatCommands, global: &GlobalOpts) -> Result<()> {
         FeatCommands::Delete(args) => run_delete(args),
         FeatCommands::Archive(args) => run_archive(args),
         FeatCommands::ComputeBounds(args) => run_compute_bounds(args, global),
+        FeatCommands::SetLength(args) => run_set_length(args),
     }
 }
 
@@ -1142,6 +1160,111 @@ fn run_compute_bounds(args: ComputeBoundsArgs, global: &GlobalOpts) -> Result<()
             "  {} Use {} to save to file",
             style("→").dim(),
             style("--update").yellow()
+        );
+    }
+
+    Ok(())
+}
+
+fn run_set_length(args: SetLengthArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let short_ids = ShortIdIndex::load(&project);
+
+    // Parse the source reference (FEAT@N:dimension_name or FEAT-xxx:dimension_name)
+    let dim_ref = DimensionRef::parse(&args.from).ok_or_else(|| {
+        miette::miette!(
+            "Invalid dimension reference '{}'. Expected format: FEAT@N:dimension_name or FEAT-xxx:dimension_name",
+            args.from
+        )
+    })?;
+
+    // Resolve both feature IDs
+    let target_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
+    let source_id = short_ids
+        .resolve(&dim_ref.feature_id)
+        .unwrap_or_else(|| dim_ref.feature_id.clone());
+
+    // Find feature files
+    let feat_dir = project.root().join("tolerances/features");
+
+    let find_feature_path = |id: &str| -> Option<std::path::PathBuf> {
+        if !feat_dir.exists() {
+            return None;
+        }
+        for entry in fs::read_dir(&feat_dir).ok()? {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            if path.extension().is_some_and(|e| e == "yaml") {
+                let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+                if filename.contains(id) || filename.starts_with(id) {
+                    return Some(path);
+                }
+            }
+        }
+        None
+    };
+
+    // Load source feature to get dimension value
+    let source_path = find_feature_path(&source_id)
+        .ok_or_else(|| miette::miette!("Source feature '{}' not found", dim_ref.feature_id))?;
+    let source_content = fs::read_to_string(&source_path).into_diagnostic()?;
+    let source_feat: Feature = serde_yml::from_str(&source_content).into_diagnostic()?;
+
+    // Get dimension value from source
+    let dimension_value = source_feat.get_dimension_value(&dim_ref.dimension_name).ok_or_else(|| {
+        miette::miette!(
+            "Dimension '{}' not found in feature '{}'. Available dimensions: {}",
+            dim_ref.dimension_name,
+            dim_ref.feature_id,
+            source_feat
+                .dimensions
+                .iter()
+                .map(|d| d.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })?;
+
+    // Load and update target feature
+    let target_path = find_feature_path(&target_id)
+        .ok_or_else(|| miette::miette!("Target feature '{}' not found", args.id))?;
+    let target_content = fs::read_to_string(&target_path).into_diagnostic()?;
+    let mut target_feat: Feature = serde_yml::from_str(&target_content).into_diagnostic()?;
+
+    // Ensure geometry_3d exists
+    if target_feat.geometry_3d.is_none() {
+        target_feat.geometry_3d = Some(crate::entities::feature::Geometry3D {
+            origin: [0.0, 0.0, 0.0],
+            axis: [0.0, 0.0, 1.0],
+            length: Some(dimension_value),
+            length_ref: Some(format!("{}:{}", source_feat.id, dim_ref.dimension_name)),
+        });
+    } else if let Some(ref mut geom) = target_feat.geometry_3d {
+        geom.length = Some(dimension_value);
+        geom.length_ref = Some(format!("{}:{}", source_feat.id, dim_ref.dimension_name));
+    }
+
+    // Write updated feature
+    let updated_yaml = serde_yml::to_string(&target_feat).into_diagnostic()?;
+    fs::write(&target_path, updated_yaml).into_diagnostic()?;
+
+    if !args.quiet {
+        let target_short = short_ids
+            .get_short_id(&target_feat.id.to_string())
+            .unwrap_or_else(|| args.id.clone());
+        let source_short = short_ids
+            .get_short_id(&source_feat.id.to_string())
+            .unwrap_or_else(|| dim_ref.feature_id.clone());
+
+        println!(
+            "{} Set {} geometry length to {} (from {}:{})",
+            style("✓").green(),
+            style(&target_short).cyan(),
+            style(format!("{:.4}", dimension_value)).yellow(),
+            style(&source_short).cyan(),
+            style(&dim_ref.dimension_name).white()
         );
     }
 

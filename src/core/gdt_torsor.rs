@@ -581,6 +581,7 @@ mod tests {
             origin: [0.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             length: Some(20.0),
+            length_ref: None,
         });
         feat.gdt.push(GdtControl {
             symbol: GdtSymbol::Perpendicularity,
@@ -674,6 +675,7 @@ mod tests {
             origin: [0.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             length: Some(50.0),
+            length_ref: None,
         });
         feat.gdt.push(GdtControl {
             symbol: GdtSymbol::Runout,
@@ -702,6 +704,7 @@ mod tests {
             origin: [50.0, 25.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             length: Some(15.0),
+            length_ref: None,
         });
         feat.dimensions.push(Dimension {
             name: "diameter".to_string(),

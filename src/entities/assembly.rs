@@ -25,6 +25,18 @@ pub struct BomItem {
     pub notes: Option<String>,
 }
 
+/// Manufacturing configuration for product routing
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ManufacturingConfig {
+    /// Ordered list of PROC IDs defining manufacturing routing
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub routing: Vec<String>,
+
+    /// Default work cell/location
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_cell: Option<String>,
+}
+
 /// Document reference
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Document {
@@ -100,6 +112,10 @@ pub struct Assembly {
     #[serde(default)]
     pub documents: Vec<Document>,
 
+    /// Manufacturing configuration including routing
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manufacturing: Option<ManufacturingConfig>,
+
     /// Classification tags
     #[serde(default)]
     pub tags: Vec<String>,
@@ -171,6 +187,7 @@ impl Default for Assembly {
             asil: None,
             dal: None,
             documents: Vec::new(),
+            manufacturing: None,
             tags: Vec::new(),
             status: Status::default(),
             links: AssemblyLinks::default(),

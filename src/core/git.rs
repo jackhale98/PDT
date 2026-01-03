@@ -621,6 +621,139 @@ impl Git {
             .map(|o| o.success)
             .unwrap_or(false)
     }
+
+    /// Get the current HEAD commit SHA
+    pub fn head_sha(&self) -> Result<String, GitError> {
+        let output = self.run(&["rev-parse", "HEAD"])?;
+        if output.success {
+            Ok(output.stdout)
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Merge a branch into the current branch
+    pub fn merge_branch(&self, branch: &str, message: &str) -> Result<String, GitError> {
+        if !self.branch_exists(branch) {
+            return Err(GitError::BranchNotFound {
+                branch: branch.to_string(),
+            });
+        }
+
+        let output = self.run(&["merge", "--no-ff", "-m", message, branch])?;
+        if output.success {
+            self.head_sha()
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Merge a branch into the current branch with GPG signing
+    pub fn merge_branch_signed(&self, branch: &str, message: &str) -> Result<String, GitError> {
+        if !self.branch_exists(branch) {
+            return Err(GitError::BranchNotFound {
+                branch: branch.to_string(),
+            });
+        }
+
+        let output = self.run(&["merge", "--no-ff", "-S", "-m", message, branch])?;
+        if output.success {
+            self.head_sha()
+        } else {
+            // Provide helpful error if GPG signing fails
+            if output.stderr.contains("gpg") || output.stderr.contains("signing") {
+                return Err(GitError::CommandFailed {
+                    message: format!(
+                        "Failed to sign merge commit. Configure GPG signing with:\n\
+                         git config --global user.signingkey <YOUR_KEY_ID>\n\
+                         Original error: {}",
+                        output.stderr
+                    ),
+                });
+            }
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Delete a local branch
+    pub fn delete_branch(&self, name: &str) -> Result<(), GitError> {
+        if !self.branch_exists(name) {
+            return Err(GitError::BranchNotFound {
+                branch: name.to_string(),
+            });
+        }
+
+        // Check if we're on this branch - can't delete current branch
+        if self.current_branch().ok().as_deref() == Some(name) {
+            return Err(GitError::CommandFailed {
+                message: format!("Cannot delete the currently checked out branch: {}", name),
+            });
+        }
+
+        let output = self.run(&["branch", "-d", name])?;
+        if output.success {
+            Ok(())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Force delete a local branch (use with caution)
+    pub fn delete_branch_force(&self, name: &str) -> Result<(), GitError> {
+        if !self.branch_exists(name) {
+            return Err(GitError::BranchNotFound {
+                branch: name.to_string(),
+            });
+        }
+
+        // Check if we're on this branch - can't delete current branch
+        if self.current_branch().ok().as_deref() == Some(name) {
+            return Err(GitError::CommandFailed {
+                message: format!("Cannot delete the currently checked out branch: {}", name),
+            });
+        }
+
+        let output = self.run(&["branch", "-D", name])?;
+        if output.success {
+            Ok(())
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Get the commit SHA of a specific reference (branch, tag, or commit)
+    pub fn rev_parse(&self, reference: &str) -> Result<String, GitError> {
+        let output = self.run(&["rev-parse", reference])?;
+        if output.success {
+            Ok(output.stdout)
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
+
+    /// Get the short commit SHA (first 7 characters)
+    pub fn head_sha_short(&self) -> Result<String, GitError> {
+        let output = self.run(&["rev-parse", "--short", "HEAD"])?;
+        if output.success {
+            Ok(output.stdout)
+        } else {
+            Err(GitError::CommandFailed {
+                message: output.stderr,
+            })
+        }
+    }
 }
 
 #[cfg(test)]

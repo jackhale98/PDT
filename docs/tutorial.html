@@ -1410,6 +1410,43 @@
               <pre><code><span class="cmd">tdt link add</span> PROC@1 CMP@1 --link-type produces
 <span class="cmd">tdt link add</span> PROC@1 RISK@2 --link-type risks</code></pre>
             </div>
+
+            <h3>Define Manufacturing Routing</h3>
+
+            <p>Set up the sequence of manufacturing processes for a product:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Define routing on the assembly</span>
+<span class="cmd">tdt asm routing set</span> ASM@1 PROC@1 PROC@2 PROC@3
+
+<span class="comment"># Or add processes one at a time</span>
+<span class="cmd">tdt asm routing add</span> ASM@1 PROC@1
+<span class="cmd">tdt asm routing add</span> ASM@1 PROC@2
+
+<span class="comment"># View current routing</span>
+<span class="cmd">tdt asm routing list</span> ASM@1</code></pre>
+            </div>
+
+            <h3>Production Lots with DHR Workflow</h3>
+
+            <p>Create production lots from routing with automated git branch workflow:</p>
+
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="comment"># Create lot from product routing</span>
+<span class="cmd">tdt lot new</span> --product ASM@1 --from-routing --title <span class="string">"Lot 2024-001"</span> \
+  --lot-number <span class="string">"2024-001"</span> --quantity 25 --branch
+
+<span class="comment"># Complete steps with operator signature</span>
+<span class="cmd">tdt lot step</span> LOT@1 --process 0 --status completed --sign
+
+<span class="comment"># View work instructions for a step</span>
+<span class="cmd">tdt lot step</span> LOT@1 --process 1 --show-wi
+
+<span class="comment"># Complete lot (merges branch to main)</span>
+<span class="cmd">tdt lot complete</span> LOT@1 --sign</code></pre>
+            </div>
           </section>
 
           <!-- Section 10: Controls -->

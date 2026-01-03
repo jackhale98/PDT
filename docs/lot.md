@@ -35,6 +35,8 @@ LOTs track production batches through manufacturing, serving as Device History R
 | `completion_date` | date | Production completion date |
 | `materials_used` | array[MaterialUsed] | Materials consumed (traceability) |
 | `execution` | array[ExecutionStep] | Process execution records |
+| `git_branch` | string | Git branch for this lot (if using branch workflow) |
+| `branch_merged` | boolean | Whether lot branch has been merged to main |
 | `notes` | string | Markdown notes |
 | `tags` | array[string] | Tags for filtering |
 | `entity_revision` | integer | Entity revision number (default: 1) |
@@ -61,11 +63,40 @@ LOTs track production batches through manufacturing, serving as Device History R
 | Field | Type | Description |
 |-------|------|-------------|
 | `process` | EntityId | Process entity being executed |
-| `execution_status` | enum | `pending`, `in_progress`, `completed`, `skipped` |
+| `process_revision` | integer | PROC revision at time of execution (for traceability) |
+| `status` | enum | `pending`, `in_progress`, `completed`, `skipped` |
+| `started_date` | date | When step was started |
 | `completed_date` | date | When step was completed |
 | `operator` | string | Person who performed the step |
+| `operator_email` | string | Operator's email for signature verification |
+| `work_instructions_used` | array[WorkInstructionRef] | Work instructions followed during step |
+| `signature_verified` | boolean | Whether step was digitally signed (DHR compliance) |
+| `signing_key` | string | GPG/SSH key ID used for signing |
+| `commit_sha` | string | Git commit SHA for this step completion |
 | `notes` | string | Execution notes |
 | `data` | object | Optional measurement/process data |
+| `approval_status` | enum | `not_required`, `pending`, `approved`, `rejected` |
+| `approvals` | array[StepApproval] | Approval records for PR-based workflows |
+| `pr_number` | integer | GitHub/GitLab PR number (if using PR workflow) |
+
+### WorkInstructionRef Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | EntityId | Work instruction entity ID |
+| `revision` | integer | WI revision used during execution |
+
+### StepApproval Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `approver` | string | Name of approver |
+| `email` | string | Approver's email |
+| `role` | string | Approver's role (e.g., "quality", "engineering") |
+| `timestamp` | datetime | When approval was recorded |
+| `comment` | string | Approval comment |
+| `signature_verified` | boolean | Whether approval was signed |
+| `signing_key` | string | GPG/SSH key ID for approval signature |
 
 ### Execution Status
 
@@ -156,6 +187,15 @@ tdt lot new --title "Production Lot 2024-001" --lot-number "2024-001"
 # Create with product and quantity
 tdt lot new --title "Widget Batch" --product ASM@1 --quantity 100
 
+# Create from product's manufacturing routing (auto-populates execution steps)
+tdt lot new --title "Widget Batch" --product ASM@1 --from-routing --quantity 100
+
+# Create with git branch for traceability
+tdt lot new --title "Lot 2024-001" --product ASM@1 --from-routing --branch
+
+# Disable auto-branch even if config enables it
+tdt lot new --title "Quick Lot" --product ASM@1 --no-branch
+
 # Create and immediately edit
 tdt lot new --title "New Lot" --edit
 
@@ -215,11 +255,26 @@ tdt lot edit LOT@1
 # Mark a step as completed
 tdt lot step LOT@1 --process PROC@1 --status completed
 
-# Add operator and notes
+# Add operator and notes (operator defaults to config.author if not specified)
 tdt lot step LOT@1 --process PROC@2 --status completed --operator "J. Smith" --notes "Passed inspection"
+
+# Show work instructions before completing step
+tdt lot step LOT@1 --process PROC@1 --show-wi
+
+# Record which work instructions were used
+tdt lot step LOT@1 --process PROC@1 --status completed --wi-used WORK@1,WORK@2
+
+# Sign step completion (required for processes with require_signature: true)
+tdt lot step LOT@1 --process PROC@1 --status completed --sign
+
+# Skip git commit for this step
+tdt lot step LOT@1 --process PROC@1 --status completed --no-commit
 
 # Mark step as skipped
 tdt lot step LOT@1 --process PROC@3 --status skipped --notes "Not required for this configuration"
+
+# Interactive mode
+tdt lot step LOT@1 -i
 ```
 
 ### Complete a LOT
@@ -233,6 +288,12 @@ tdt lot complete LOT@1 --notes "All inspections passed"
 
 # Skip confirmation
 tdt lot complete LOT@1 -y
+
+# Sign the completion (and merge commit if using branch workflow)
+tdt lot complete LOT@1 --sign
+
+# Skip merging the lot branch to main
+tdt lot complete LOT@1 --no-merge
 ```
 
 ### Delete or archive a LOT
@@ -271,7 +332,25 @@ tdt lot archive LOT@1
 
 ## Git-Based Traceability
 
-For regulated environments (FDA 21 CFR 820, ISO 13485), use git for audit trail:
+For regulated environments (FDA 21 CFR 820, ISO 13485), TDT provides an automated git workflow:
+
+### Automated Branch Workflow
+
+```bash
+# Enable branch workflow in config
+tdt config set manufacturing.lot_branch_enabled true
+
+# Create lot with auto-branch (creates branch: lot/2024-001)
+tdt lot new --title "Lot 2024-001" --product ASM@1 --from-routing --branch
+
+# Complete steps (auto-commits to lot branch)
+tdt lot step LOT@1 --process 0 --status completed --sign
+
+# Complete lot (auto-merges to main)
+tdt lot complete LOT@1 --sign
+```
+
+### Manual Workflow
 
 ```bash
 # Branch per lot
@@ -295,11 +374,26 @@ git commit -m "LOT@1: Production complete"
 git checkout main && git merge lot/2024-001
 ```
 
-Git provides:
+### Configuration
+
+Enable in `.tdt/config.yaml`:
+
+```yaml
+manufacturing:
+  lot_branch_enabled: true    # Auto-create branch per lot
+  base_branch: main           # Branch to create lots from
+  branch_pattern: "lot/{lot_number}"  # Branch naming
+  create_tags: true           # Create tags at lifecycle events
+  sign_commits: false         # Require signed commits
+```
+
+### Git Provides
+
 - **Immutable history** - Audit trail cannot be altered
 - **Author + timestamp** - Operator records for each change
 - **Signed commits** - Electronic signatures (21 CFR Part 11)
 - **Pull request review** - Approval workflow
+- **Branch isolation** - Each lot's changes isolated until completion
 
 ## Best Practices
 

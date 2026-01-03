@@ -38,6 +38,8 @@ Processes define manufacturing operations - the engineering specification of *wh
 | `capability` | ProcessCapability | Process capability data (Cpk, Ppk) |
 | `operator_skill` | enum | Required skill level |
 | `safety` | ProcessSafety | Safety requirements |
+| `require_signature` | boolean | Require operator signature when completing (DHR compliance) |
+| `step_approval` | StepApprovalConfig | PR-based approval configuration |
 | `tags` | array[string] | Tags for filtering |
 | `entity_revision` | integer | Entity revision number (default: 1) |
 
@@ -98,6 +100,14 @@ Processes define manufacturing operations - the engineering specification of *wh
 |-------|------|-------------|
 | `ppe` | array[string] | Required PPE items |
 | `hazards` | array[string] | Hazards present |
+
+### StepApprovalConfig Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `require_approval` | boolean | Whether PR approval is required after step completion |
+| `min_approvals` | integer | Minimum number of approvals required (default: 1) |
+| `required_roles` | array[string] | Roles required to approve (e.g., ["quality", "engineering"]) |
 
 ### Links
 
@@ -325,6 +335,42 @@ Process Flow
 
 4 processes in flow
 ```
+
+## DHR Compliance Features
+
+### Operator Signatures
+
+For FDA 21 CFR 820 / ISO 13485 compliance, processes can require operator signatures:
+
+```yaml
+# In process YAML
+require_signature: true
+```
+
+When a process requires signature:
+- Operators must use `--sign` flag when completing the step
+- Step records `signature_verified: true` and captures the signing key
+- Unsigned completion attempts are rejected
+
+### Step Approval Workflow
+
+For critical processes requiring QA or team review:
+
+```yaml
+# In process YAML
+require_signature: true
+step_approval:
+  require_approval: true
+  min_approvals: 1
+  required_roles:
+    - quality
+    - engineering
+```
+
+This enables PR-based approval:
+1. Operator completes step with `tdt lot step LOT@1 --sign`
+2. Submit for approval with `tdt lot submit-step LOT@1`
+3. Reviewer approves with `tdt lot approve LOT@1 --step 1`
 
 ## Process vs Work Instruction
 

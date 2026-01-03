@@ -8,6 +8,7 @@ pub mod git;
 pub mod identity;
 pub mod links;
 pub mod loader;
+pub mod manufacturing;
 pub mod project;
 pub mod provider;
 pub mod sdt;
@@ -33,6 +34,11 @@ pub use suspect::{
 };
 pub use team::{Role, TeamMember, TeamRoster};
 pub use workflow::{WorkflowConfig, WorkflowEngine, WorkflowError};
+
+pub use manufacturing::{
+    create_execution_steps_from_routing, step_min_approvals, step_required_roles,
+    step_requires_approval, step_requires_signature, LotWorkflow, LotWorkflowConfig,
+};
 
 pub use gdt_torsor::{
     bounds_approx_equal, check_stale_bounds, compute_torsor_bounds, GdtTorsorResult,

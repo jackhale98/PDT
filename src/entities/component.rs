@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::entities::assembly::ManufacturingConfig;
 use crate::entities::safety::{Asil, Dal, SwClass};
 
 /// Make or buy decision
@@ -276,6 +277,10 @@ pub struct Component {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub datum_frame: Option<DatumFrame>,
 
+    /// Manufacturing configuration including routing
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub manufacturing: Option<ManufacturingConfig>,
+
     /// Tags for filtering
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
@@ -361,6 +366,7 @@ impl Component {
             documents: Vec::new(),
             coordinate_system: None,
             datum_frame: None,
+            manufacturing: None,
             tags: Vec::new(),
             status: Status::default(),
             links: ComponentLinks::default(),

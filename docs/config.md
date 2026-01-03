@@ -27,6 +27,11 @@ Configuration is loaded from multiple sources (highest priority first):
 | `workflow.auto_commit` | Auto-commit on status changes | `true` |
 | `workflow.auto_merge` | Merge PR automatically on approval | `false` |
 | `workflow.base_branch` | Target branch for PRs | `"main"` |
+| `manufacturing.lot_branch_enabled` | Auto-create git branch per lot | `true` |
+| `manufacturing.base_branch` | Branch to create lot branches from | `"main"` |
+| `manufacturing.branch_pattern` | Lot branch naming pattern | `"lot/{lot_number}"` |
+| `manufacturing.create_tags` | Create tags at lot lifecycle events | `true` |
+| `manufacturing.sign_commits` | Require signed commits for lots | `false` |
 
 ## CLI Commands
 
@@ -152,6 +157,14 @@ workflow:
   auto_commit: true
   auto_merge: false
   base_branch: main
+
+# Manufacturing workflow configuration (optional)
+manufacturing:
+  lot_branch_enabled: true    # Auto-create git branch per lot
+  base_branch: main           # Branch to create lot branches from
+  branch_pattern: "lot/{lot_number}"  # Lot branch naming pattern
+  create_tags: true           # Create tags at lot lifecycle events
+  sign_commits: false         # Require signed commits for lots
 ```
 
 ## Environment Variables

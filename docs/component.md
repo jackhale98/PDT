@@ -37,6 +37,7 @@ Components represent individual parts in your Bill of Materials (BOM). They can 
 | `mass_kg` | number | Mass in kilograms |
 | `unit_cost` | number | Cost per unit |
 | `suppliers` | array[Supplier] | List of approved suppliers |
+| `manufacturing` | ManufacturingConfig | Manufacturing routing and settings (for "make" items) |
 | `documents` | array[Document] | Related documents (drawings, specs) |
 | `coordinate_system` | CoordinateSystem | Component coordinate system for 3D analysis |
 | `datum_frame` | DatumFrame | Datum reference frame (auto-populated from features) |
@@ -63,6 +64,13 @@ Components represent individual parts in your Bill of Materials (BOM). They can 
 | `type` | string | Document type (drawing, spec, datasheet) |
 | `path` | string | Path to document file |
 | `revision` | string | Document revision |
+
+### ManufacturingConfig Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `routing` | array[EntityId] | Ordered list of PROC IDs for manufacturing |
+| `work_cell` | string | Default work cell/location |
 
 ### CoordinateSystem Object (3D Tolerance Analysis)
 
@@ -265,6 +273,32 @@ tdt cmp delete CMP@1 --force
 # Archive instead of delete (moves to .tdt/archive/)
 tdt cmp archive CMP@1
 ```
+
+### Manage manufacturing routing (for "make" items)
+
+Define the sequence of manufacturing processes for a component:
+
+```bash
+# Add a process to the routing
+tdt cmp routing add CMP@1 PROC@1
+
+# Add at specific position (1-indexed)
+tdt cmp routing add CMP@1 PROC@2 --position 1
+
+# Remove a process by position
+tdt cmp routing rm CMP@1 1
+
+# Remove by process ID
+tdt cmp routing rm CMP@1 PROC@1
+
+# List current routing
+tdt cmp routing list CMP@1
+
+# Set complete routing (replaces existing)
+tdt cmp routing set CMP@1 PROC@1 PROC@2 PROC@3
+```
+
+**Note:** Manufacturing routing is typically used for "make" items. For "buy" items, supplier information is more relevant.
 
 ### Analyze component interactions
 

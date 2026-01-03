@@ -16,7 +16,7 @@ use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::project::Project;
 use crate::core::shortid::ShortIdIndex;
 use crate::core::Config;
-use crate::entities::assembly::Assembly;
+use crate::entities::assembly::{Assembly, ManufacturingConfig};
 use crate::entities::component::{Component, ComponentCategory, MakeBuy};
 use crate::schema::template::{TemplateContext, TemplateGenerator};
 use crate::schema::wizard::SchemaWizard;
@@ -46,6 +46,59 @@ pub enum CmpCommands {
 
     /// Clear the selected quote (revert to manual unit_cost)
     ClearQuote(ClearQuoteArgs),
+
+    /// Manage manufacturing routing for component
+    #[command(subcommand)]
+    Routing(RoutingCommands),
+}
+
+/// Routing subcommands for manufacturing
+#[derive(Subcommand, Debug)]
+pub enum RoutingCommands {
+    /// Add a process to the routing
+    Add(RoutingAddArgs),
+    /// Remove a process from the routing
+    Rm(RoutingRmArgs),
+    /// List current routing
+    List(RoutingListArgs),
+    /// Set complete routing (replaces existing)
+    Set(RoutingSetArgs),
+}
+
+#[derive(clap::Args, Debug)]
+pub struct RoutingAddArgs {
+    /// Component ID (CMP-xxx or short ID like CMP@1)
+    pub cmp: String,
+    /// Process ID to add (PROC-xxx or short ID like PROC@1)
+    pub proc: String,
+    /// Position in routing (0-indexed, default: append)
+    #[arg(long)]
+    pub position: Option<usize>,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct RoutingRmArgs {
+    /// Component ID (CMP-xxx or short ID like CMP@1)
+    pub cmp: String,
+    /// Process ID to remove (PROC-xxx or short ID) or position number (1-indexed)
+    pub proc_or_position: String,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct RoutingListArgs {
+    /// Component ID (CMP-xxx or short ID like CMP@1)
+    pub cmp: String,
+    /// Show full PROC IDs (default shows titles)
+    #[arg(long)]
+    pub ids: bool,
+}
+
+#[derive(clap::Args, Debug)]
+pub struct RoutingSetArgs {
+    /// Component ID (CMP-xxx or short ID like CMP@1)
+    pub cmp: String,
+    /// Ordered list of PROC IDs (full or short IDs)
+    pub procs: Vec<String>,
 }
 
 /// Make/buy filter for list command
@@ -356,6 +409,7 @@ pub fn run(cmd: CmpCommands, global: &GlobalOpts) -> Result<()> {
         CmpCommands::Archive(args) => run_archive(args),
         CmpCommands::SetQuote(args) => run_set_quote(args),
         CmpCommands::ClearQuote(args) => run_clear_quote(args),
+        CmpCommands::Routing(cmd) => run_routing(cmd),
     }
 }
 
@@ -1549,4 +1603,326 @@ fn collect_bom_component_ids(
             }
         }
     }
+}
+
+// ============================================================================
+// Routing subcommands
+// ============================================================================
+
+fn run_routing(cmd: RoutingCommands) -> Result<()> {
+    match cmd {
+        RoutingCommands::Add(args) => run_routing_add(args),
+        RoutingCommands::Rm(args) => run_routing_rm(args),
+        RoutingCommands::List(args) => run_routing_list(args),
+        RoutingCommands::Set(args) => run_routing_set(args),
+    }
+}
+
+/// Find a component file by ID and return the loaded component and path
+fn find_component_file(project: &Project, id: &str) -> Result<(Component, std::path::PathBuf)> {
+    let cmp_dir = project.root().join("bom/components");
+
+    if !cmp_dir.exists() {
+        return Err(miette::miette!("No components directory found"));
+    }
+
+    // Search for the component file
+    for entry in walkdir::WalkDir::new(&cmp_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_file())
+        .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+    {
+        if let Ok(content) = fs::read_to_string(entry.path()) {
+            if let Ok(cmp) = serde_yml::from_str::<Component>(&content) {
+                if cmp.id.to_string() == id {
+                    return Ok((cmp, entry.path().to_path_buf()));
+                }
+            }
+        }
+    }
+
+    Err(miette::miette!("Component {} not found", id))
+}
+
+fn run_routing_add(args: RoutingAddArgs) -> Result<()> {
+    use crate::entities::process::Process;
+
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let short_ids = ShortIdIndex::load(&project);
+
+    // Resolve component ID
+    let cmp_id = short_ids
+        .resolve(&args.cmp)
+        .unwrap_or_else(|| args.cmp.clone());
+
+    // Resolve process ID (short ID -> full ID for storage)
+    let proc_id = short_ids
+        .resolve(&args.proc)
+        .unwrap_or_else(|| args.proc.clone());
+
+    // Find and load the component
+    let (mut component, path) = find_component_file(&project, &cmp_id)?;
+
+    // Verify process exists
+    let proc_dir = project.root().join("manufacturing/processes");
+    let mut proc_title = proc_id.clone();
+    if proc_dir.exists() {
+        for entry in fs::read_dir(&proc_dir).into_diagnostic()? {
+            let entry = entry.into_diagnostic()?;
+            let entry_path = entry.path();
+            if entry_path.extension().is_some_and(|e| e == "yaml") {
+                if let Ok(content) = fs::read_to_string(&entry_path) {
+                    if let Ok(proc) = serde_yml::from_str::<Process>(&content) {
+                        if proc.id.to_string() == proc_id {
+                            proc_title = proc.title.clone();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Initialize manufacturing config if not present
+    if component.manufacturing.is_none() {
+        component.manufacturing = Some(ManufacturingConfig::default());
+    }
+
+    // Add at position or append
+    let (position, new_len) = {
+        let mfg = component.manufacturing.as_mut().unwrap();
+
+        // Check if already in routing
+        if mfg.routing.contains(&proc_id) {
+            return Err(miette::miette!(
+                "Process {} is already in the routing",
+                args.proc
+            ));
+        }
+        if let Some(pos) = args.position {
+            if pos > mfg.routing.len() {
+                return Err(miette::miette!(
+                    "Position {} is out of range (routing has {} items)",
+                    pos,
+                    mfg.routing.len()
+                ));
+            }
+            mfg.routing.insert(pos, proc_id.clone());
+            (pos, mfg.routing.len())
+        } else {
+            let pos = mfg.routing.len();
+            mfg.routing.push(proc_id.clone());
+            (pos, mfg.routing.len())
+        }
+    };
+
+    // Save
+    let yaml = serde_yml::to_string(&component).into_diagnostic()?;
+    fs::write(&path, yaml).into_diagnostic()?;
+
+    println!(
+        "{} Added {} to routing at position {}",
+        style("✓").green(),
+        style(&proc_title).cyan(),
+        position + 1
+    );
+    println!(
+        "   Routing now has {} step{}",
+        new_len,
+        if new_len == 1 { "" } else { "s" }
+    );
+
+    Ok(())
+}
+
+fn run_routing_rm(args: RoutingRmArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let short_ids = ShortIdIndex::load(&project);
+
+    // Resolve component ID
+    let cmp_id = short_ids
+        .resolve(&args.cmp)
+        .unwrap_or_else(|| args.cmp.clone());
+
+    // Find and load the component
+    let (mut component, path) = find_component_file(&project, &cmp_id)?;
+
+    // Remove from routing and capture results
+    let (removed, new_len) = {
+        let mfg = component.manufacturing.as_mut().ok_or_else(|| {
+            miette::miette!("Component {} has no manufacturing routing configured", args.cmp)
+        })?;
+
+        if mfg.routing.is_empty() {
+            return Err(miette::miette!("Routing is empty"));
+        }
+
+        // Try to parse as position number first
+        let removed = if let Ok(pos) = args.proc_or_position.parse::<usize>() {
+            if pos == 0 || pos > mfg.routing.len() {
+                return Err(miette::miette!(
+                    "Position {} is out of range (routing has {} items)",
+                    pos,
+                    mfg.routing.len()
+                ));
+            }
+            mfg.routing.remove(pos - 1)
+        } else {
+            // Treat as process ID
+            let proc_id = short_ids
+                .resolve(&args.proc_or_position)
+                .unwrap_or_else(|| args.proc_or_position.clone());
+
+            let pos = mfg
+                .routing
+                .iter()
+                .position(|id| id == &proc_id)
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "Process {} not found in routing",
+                        args.proc_or_position
+                    )
+                })?;
+            mfg.routing.remove(pos)
+        };
+        (removed, mfg.routing.len())
+    };
+
+    // Save
+    let yaml = serde_yml::to_string(&component).into_diagnostic()?;
+    fs::write(&path, yaml).into_diagnostic()?;
+
+    let removed_short = short_ids
+        .get_short_id(&removed)
+        .unwrap_or_else(|| removed.clone());
+    println!(
+        "{} Removed {} from routing",
+        style("✓").green(),
+        style(&removed_short).cyan()
+    );
+    println!(
+        "   Routing now has {} step{}",
+        new_len,
+        if new_len == 1 { "" } else { "s" }
+    );
+
+    Ok(())
+}
+
+fn run_routing_list(args: RoutingListArgs) -> Result<()> {
+    use crate::entities::process::Process;
+
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let short_ids = ShortIdIndex::load(&project);
+
+    // Resolve component ID
+    let cmp_id = short_ids
+        .resolve(&args.cmp)
+        .unwrap_or_else(|| args.cmp.clone());
+
+    // Find and load the component
+    let (component, _path) = find_component_file(&project, &cmp_id)?;
+
+    let mfg = component.manufacturing.as_ref();
+    let routing = mfg.map(|m| m.routing.as_slice()).unwrap_or(&[]);
+
+    if routing.is_empty() {
+        println!("No routing configured for component {}", args.cmp);
+        return Ok(());
+    }
+
+    // Load process titles if not using --ids
+    let mut proc_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    if !args.ids {
+        let proc_dir = project.root().join("manufacturing/processes");
+        if proc_dir.exists() {
+            for entry in walkdir::WalkDir::new(&proc_dir)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_type().is_file())
+                .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
+            {
+                if let Ok(content) = fs::read_to_string(entry.path()) {
+                    if let Ok(proc) = serde_yml::from_str::<Process>(&content) {
+                        proc_map.insert(proc.id.to_string(), proc.title.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    println!(
+        "Manufacturing routing for {} ({} step{}):",
+        style(&args.cmp).cyan(),
+        routing.len(),
+        if routing.len() == 1 { "" } else { "s" }
+    );
+
+    for (i, proc_id) in routing.iter().enumerate() {
+        let display = if args.ids {
+            proc_id.clone()
+        } else {
+            let title = proc_map.get(proc_id).cloned().unwrap_or_default();
+            let short = short_ids.get_short_id(proc_id).unwrap_or_else(|| proc_id.clone());
+            if title.is_empty() {
+                short
+            } else {
+                format!("{} ({})", title, short)
+            }
+        };
+        println!("  {}. {}", i + 1, display);
+    }
+
+    Ok(())
+}
+
+fn run_routing_set(args: RoutingSetArgs) -> Result<()> {
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let short_ids = ShortIdIndex::load(&project);
+
+    // Resolve component ID
+    let cmp_id = short_ids
+        .resolve(&args.cmp)
+        .unwrap_or_else(|| args.cmp.clone());
+
+    // Find and load the component
+    let (mut component, path) = find_component_file(&project, &cmp_id)?;
+
+    // Resolve all process IDs
+    let proc_ids: Vec<String> = args
+        .procs
+        .iter()
+        .map(|p| short_ids.resolve(p).unwrap_or_else(|| p.clone()))
+        .collect();
+
+    // Initialize or update manufacturing config
+    if component.manufacturing.is_none() {
+        component.manufacturing = Some(ManufacturingConfig::default());
+    }
+
+    let old_len = component
+        .manufacturing
+        .as_ref()
+        .map(|m| m.routing.len())
+        .unwrap_or(0);
+
+    component.manufacturing.as_mut().unwrap().routing = proc_ids.clone();
+
+    // Save
+    let yaml = serde_yml::to_string(&component).into_diagnostic()?;
+    fs::write(&path, yaml).into_diagnostic()?;
+
+    println!(
+        "{} Set routing for {} ({} step{})",
+        style("✓").green(),
+        style(&args.cmp).cyan(),
+        proc_ids.len(),
+        if proc_ids.len() == 1 { "" } else { "s" }
+    );
+    if old_len > 0 {
+        println!("   (Replaced {} previous step{})", old_len, if old_len == 1 { "" } else { "s" });
+    }
+
+    Ok(())
 }

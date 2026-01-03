@@ -156,6 +156,26 @@ pub struct ProcessSafety {
     pub hazards: Vec<String>,
 }
 
+/// Step approval configuration (PR-based quality sign-off for lot execution)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct StepApprovalConfig {
+    /// Whether PR approval is required after step completion
+    #[serde(default)]
+    pub require_approval: bool,
+
+    /// Minimum number of approvals required
+    #[serde(default = "default_min_approvals")]
+    pub min_approvals: u32,
+
+    /// Required roles for approval (empty = any team member)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_roles: Vec<String>,
+}
+
+fn default_min_approvals() -> u32 {
+    1
+}
+
 /// Links to other entities
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProcessLinks {
@@ -233,6 +253,14 @@ pub struct Process {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub safety: Option<ProcessSafety>,
 
+    /// Whether operator signature is required when completing steps (DHR compliance)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub require_signature: bool,
+
+    /// PR-based approval configuration for quality sign-off at this step
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step_approval: Option<StepApprovalConfig>,
+
     /// Tags for filtering
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
@@ -306,6 +334,8 @@ impl Process {
             capability: None,
             operator_skill: SkillLevel::default(),
             safety: None,
+            require_signature: false,
+            step_approval: None,
             tags: Vec::new(),
             status: Status::default(),
             links: ProcessLinks::default(),

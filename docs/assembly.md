@@ -33,6 +33,7 @@ Assemblies represent collections of components and sub-assemblies in your Bill o
 | `description` | string | Detailed description |
 | `bom` | array[BomItem] | List of components in this assembly |
 | `subassemblies` | array[string] | IDs of sub-assemblies |
+| `manufacturing` | ManufacturingConfig | Manufacturing routing and settings |
 | `documents` | array[Document] | Related documents |
 | `tags` | array[string] | Tags for filtering |
 | `entity_revision` | integer | Entity revision number (default: 1) |
@@ -53,6 +54,13 @@ Assemblies represent collections of components and sub-assemblies in your Bill o
 | `type` | string | Document type (drawing, spec) |
 | `path` | string | Path to document file |
 | `revision` | string | Document revision |
+
+### ManufacturingConfig Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `routing` | array[EntityId] | Ordered list of PROC IDs for manufacturing |
+| `work_cell` | string | Default work cell/location |
 
 ### Links
 
@@ -263,6 +271,53 @@ tdt asm delete ASM@1 --force
 
 # Archive instead of delete (moves to .tdt/archive/)
 tdt asm archive ASM@1
+```
+
+### Manage manufacturing routing
+
+Define the sequence of manufacturing processes for an assembly:
+
+```bash
+# Add a process to the routing
+tdt asm routing add ASM@1 PROC@1
+
+# Add at specific position (1-indexed)
+tdt asm routing add ASM@1 PROC@2 --position 1
+
+# Remove a process by position
+tdt asm routing rm ASM@1 1
+
+# Remove by process ID
+tdt asm routing rm ASM@1 PROC@1
+
+# List current routing
+tdt asm routing list ASM@1
+
+# List with full IDs
+tdt asm routing list ASM@1 --ids
+
+# Set complete routing (replaces existing)
+tdt asm routing set ASM@1 PROC@1 PROC@2 PROC@3
+```
+
+**Note:** Short IDs (like `PROC@1`) are resolved to full IDs and stored in the YAML file for portability.
+
+#### Example Routing Workflow
+
+```bash
+# Create processes
+tdt proc new --title "CNC Machining" --type machining --no-edit
+tdt proc new --title "Inspection" --type inspection --no-edit
+tdt proc new --title "Final Assembly" --type assembly --no-edit
+
+# Prime short IDs
+tdt proc list
+
+# Define routing on assembly
+tdt asm routing set ASM@1 PROC@1 PROC@2 PROC@3
+
+# Create lot from routing
+tdt lot new --product ASM@1 --from-routing --title "Lot 2024-001"
 ```
 
 ## BOM Structure

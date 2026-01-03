@@ -93,6 +93,33 @@
       },
       "description": "Safety requirements"
     },
+    "require_signature": {
+      "type": "boolean",
+      "default": false,
+      "description": "Require operator signature when completing steps (DHR compliance)"
+    },
+    "step_approval": {
+      "type": "object",
+      "properties": {
+        "require_approval": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether PR-based approval is required after step completion"
+        },
+        "min_approvals": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 1,
+          "description": "Minimum number of approvals required"
+        },
+        "required_roles": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Roles required to approve (e.g., quality, engineering)"
+        }
+      },
+      "description": "PR-based approval configuration for quality sign-off at this step"
+    },
     "tags": {
       "type": "array",
       "items": { "type": "string" },

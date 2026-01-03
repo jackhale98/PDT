@@ -756,6 +756,12 @@ bom: []
 # Sub-assembly references (ASM-... IDs)
 subassemblies: []
 
+# Manufacturing configuration
+# Add processes using: tdt asm routing add ASM@N PROC@N
+# manufacturing:
+#   routing: []   # Ordered list of PROC IDs for manufacturing
+#   work_cell: null
+
 # Associated documents
 documents: []
 # Example:
@@ -1142,6 +1148,12 @@ suppliers: []
 #     lead_time_days: 21
 #     moq: 50
 #     unit_cost: 13.50
+
+# Manufacturing configuration (for make items)
+# Add processes using: tdt cmp routing add CMP@N PROC@N
+# manufacturing:
+#   routing: []   # Ordered list of PROC IDs for manufacturing
+#   work_cell: null
 
 # Associated documents
 documents: []
@@ -1903,6 +1915,15 @@ capability: null
 
 operator_skill: intermediate
 
+# DHR compliance settings
+require_signature: false  # Set true to require operator signature for step completion
+
+# PR-based approval configuration (optional)
+# step_approval:
+#   require_approval: false
+#   min_approvals: 1
+#   required_roles: []  # e.g., ["quality", "engineering"]
+
 # Safety requirements
 safety:
   ppe: []
@@ -2390,6 +2411,10 @@ lot_status: in_progress
 start_date: {start_date}
 completion_date: null
 
+# Git workflow for DHR tracking (set by --branch flag or config)
+git_branch: null
+branch_merged: false
+
 # Materials used in production (for traceability)
 materials_used: []
 # Example:
@@ -2399,13 +2424,16 @@ materials_used: []
 
 # Process execution records
 execution: []
-# Example:
-#   - process: PROC@1
-#     status: pending
-#     completed_date: null
-#     operator: null
-#     notes: null
-#     data: {{}}
+# Execution steps are auto-populated when using --from-routing flag
+# Each step tracks:
+#   - process: PROC ID
+#   - process_revision: revision at execution time
+#   - work_instructions_used: WIs followed
+#   - status: pending/in_progress/completed/skipped
+#   - started_date, completed_date
+#   - operator, operator_email
+#   - signature_verified: true if step was signed
+#   - commit_sha: git commit for this step
 
 notes: |
   # Production notes

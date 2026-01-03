@@ -6,6 +6,33 @@ use std::path::PathBuf;
 use crate::core::workflow::WorkflowConfig;
 use crate::core::Project;
 
+/// Manufacturing workflow configuration
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ManufacturingConfigSection {
+    /// Whether to create git branches for lots
+    #[serde(default)]
+    pub lot_branch_enabled: bool,
+
+    /// Base branch to create lot branches from
+    pub base_branch: Option<String>,
+
+    /// Pattern for lot branch names (e.g., "lot/{lot_number}")
+    pub branch_pattern: Option<String>,
+
+    /// Whether to create tags at lot lifecycle events
+    #[serde(default = "default_create_tags")]
+    pub create_tags: bool,
+
+    /// Whether to sign commits
+    #[serde(default)]
+    pub sign_commits: bool,
+}
+
+fn default_create_tags() -> bool {
+    true
+}
+
 /// TDT configuration with layered hierarchy
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
@@ -24,6 +51,9 @@ pub struct Config {
 
     /// Git workflow configuration (opt-in)
     pub workflow: WorkflowConfig,
+
+    /// Manufacturing workflow configuration
+    pub manufacturing: Option<ManufacturingConfigSection>,
 }
 
 impl Config {
@@ -84,6 +114,10 @@ impl Config {
         // Workflow config: merge if the other has it enabled
         if other.workflow.enabled {
             self.workflow = other.workflow;
+        }
+        // Manufacturing config: merge if present
+        if other.manufacturing.is_some() {
+            self.manufacturing = other.manufacturing;
         }
     }
 
@@ -172,6 +206,7 @@ mod tests {
             pager: Some("less".to_string()),
             default_format: Some("yaml".to_string()),
             workflow: WorkflowConfig::default(),
+            manufacturing: None,
         };
 
         let other = Config {
@@ -180,6 +215,7 @@ mod tests {
             pager: Some("more".to_string()),
             default_format: None, // Should NOT override
             workflow: WorkflowConfig::default(),
+            manufacturing: None,
         };
 
         base.merge(other);
@@ -200,6 +236,7 @@ mod tests {
             pager: None,
             default_format: Some("json".to_string()),
             workflow: WorkflowConfig::default(),
+            manufacturing: None,
         };
 
         base.merge(other);

@@ -73,11 +73,38 @@
             "type": ["string", "null"],
             "description": "Process ID (PROC-xxx)"
           },
+          "process_revision": {
+            "type": ["integer", "null"],
+            "description": "Process entity revision at time of execution"
+          },
+          "work_instructions_used": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Work instruction ID (WORK-xxx)"
+                },
+                "revision": {
+                  "type": ["integer", "null"],
+                  "description": "Revision at time of execution"
+                }
+              },
+              "required": ["id"]
+            },
+            "description": "Work instructions used during this step"
+          },
           "status": {
             "type": "string",
             "enum": ["pending", "in_progress", "completed", "skipped"],
             "default": "pending",
             "description": "Execution status of this step"
+          },
+          "started_date": {
+            "type": ["string", "null"],
+            "format": "date",
+            "description": "Date step was started"
           },
           "completed_date": {
             "type": ["string", "null"],
@@ -88,9 +115,75 @@
             "type": ["string", "null"],
             "description": "Operator who performed this step"
           },
+          "operator_email": {
+            "type": ["string", "null"],
+            "format": "email",
+            "description": "Operator email"
+          },
           "notes": {
             "type": ["string", "null"],
             "description": "Notes about execution"
+          },
+          "signature_verified": {
+            "type": ["boolean", "null"],
+            "description": "Whether operator signature was verified (DHR compliance)"
+          },
+          "signing_key": {
+            "type": ["string", "null"],
+            "description": "Signing key ID (GPG/SSH) used for operator signature"
+          },
+          "commit_sha": {
+            "type": ["string", "null"],
+            "description": "Git commit SHA for this step completion"
+          },
+          "approval_status": {
+            "type": ["string", "null"],
+            "enum": ["not_required", "pending", "approved", "rejected", null],
+            "description": "Approval status for PR-based sign-off"
+          },
+          "approvals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "approver": {
+                  "type": "string",
+                  "description": "Approver name"
+                },
+                "email": {
+                  "type": ["string", "null"],
+                  "format": "email",
+                  "description": "Approver email"
+                },
+                "role": {
+                  "type": ["string", "null"],
+                  "description": "Role of approver (e.g., quality, engineering)"
+                },
+                "timestamp": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Timestamp of approval"
+                },
+                "comment": {
+                  "type": ["string", "null"],
+                  "description": "Comment/reason for approval"
+                },
+                "signature_verified": {
+                  "type": ["boolean", "null"],
+                  "description": "Whether signature was verified"
+                },
+                "signing_key": {
+                  "type": ["string", "null"],
+                  "description": "Signing key ID (GPG/SSH)"
+                }
+              },
+              "required": ["approver", "timestamp"]
+            },
+            "description": "Approval records for this step"
+          },
+          "pr_number": {
+            "type": ["integer", "null"],
+            "description": "GitHub/GitLab PR number for approval workflow"
           },
           "data": {
             "type": "object",
@@ -99,11 +192,20 @@
           }
         }
       },
-      "description": "Process execution records"
+      "description": "Process execution records (DHR compliant)"
     },
     "notes": {
       "type": ["string", "null"],
       "description": "Production notes"
+    },
+    "git_branch": {
+      "type": ["string", "null"],
+      "description": "Git branch name for this lot's DHR workflow"
+    },
+    "branch_merged": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the lot branch has been merged to main"
     },
     "links": {
       "type": "object",

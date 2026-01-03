@@ -108,6 +108,21 @@
       },
       "description": "Associated documents"
     },
+    "manufacturing": {
+      "type": "object",
+      "properties": {
+        "routing": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ordered list of PROC IDs defining manufacturing routing"
+        },
+        "work_cell": {
+          "type": ["string", "null"],
+          "description": "Default work cell/location"
+        }
+      },
+      "description": "Manufacturing configuration including process routing"
+    },
     "tags": {
       "type": "array",
       "items": {
@@ -181,5 +196,5 @@
       "description": "Entity revision number"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

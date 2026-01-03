@@ -87,6 +87,70 @@ impl std::str::FromStr for ExecutionStatus {
     }
 }
 
+/// Approval status for step (PR-based quality sign-off)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+#[derive(Default)]
+pub enum ApprovalStatus {
+    #[default]
+    NotRequired,
+    Pending,
+    Approved,
+    Rejected,
+}
+
+impl std::fmt::Display for ApprovalStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ApprovalStatus::NotRequired => write!(f, "not_required"),
+            ApprovalStatus::Pending => write!(f, "pending"),
+            ApprovalStatus::Approved => write!(f, "approved"),
+            ApprovalStatus::Rejected => write!(f, "rejected"),
+        }
+    }
+}
+
+/// Reference to a work instruction used during step execution
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct WorkInstructionRef {
+    /// Work instruction ID (WORK-xxx)
+    pub id: String,
+
+    /// Revision at time of execution
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision: Option<u32>,
+}
+
+/// Individual approval record for a step
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct StepApproval {
+    /// Approver name
+    pub approver: String,
+
+    /// Approver email
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+
+    /// Role of approver (e.g., "quality", "engineering")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+
+    /// Timestamp of approval
+    pub timestamp: DateTime<Utc>,
+
+    /// Comment/reason for approval
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+
+    /// Whether signature was verified
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature_verified: Option<bool>,
+
+    /// Signing key ID (GPG/SSH)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signing_key: Option<String>,
+}
+
 /// Material used in production (for traceability)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MaterialUsed {
@@ -103,18 +167,30 @@ pub struct MaterialUsed {
     pub quantity: Option<u32>,
 }
 
-/// Execution step record
+/// Execution step record (DHR compliant)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ExecutionStep {
     /// Process ID (PROC-xxx)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub process: Option<String>,
 
+    /// Process entity revision at time of execution
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub process_revision: Option<u32>,
+
+    /// Work instructions used during this step
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub work_instructions_used: Vec<WorkInstructionRef>,
+
     /// Execution status
     #[serde(default)]
     pub status: ExecutionStatus,
 
-    /// Date completed
+    /// Date step was started
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_date: Option<NaiveDate>,
+
+    /// Date step was completed
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_date: Option<NaiveDate>,
 
@@ -122,9 +198,37 @@ pub struct ExecutionStep {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operator: Option<String>,
 
+    /// Operator email
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operator_email: Option<String>,
+
     /// Notes about execution
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+
+    /// Whether operator signature was verified (DHR compliance)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature_verified: Option<bool>,
+
+    /// Signing key ID (GPG/SSH) used for operator signature
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signing_key: Option<String>,
+
+    /// Git commit SHA for this step completion
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_sha: Option<String>,
+
+    /// Approval status for PR-based sign-off
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_status: Option<ApprovalStatus>,
+
+    /// Approval records for this step
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub approvals: Vec<StepApproval>,
+
+    /// GitHub/GitLab PR number for approval workflow
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pr_number: Option<u64>,
 
     /// Measurement/inspection data (key-value pairs)
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
@@ -196,6 +300,14 @@ pub struct Lot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
 
+    /// Git branch name for this lot's DHR workflow
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_branch: Option<String>,
+
+    /// Whether the lot branch has been merged to main
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub branch_merged: bool,
+
     /// Entity links
     #[serde(default)]
     pub links: LotLinks,
@@ -263,6 +375,8 @@ impl Lot {
             materials_used: Vec::new(),
             execution: Vec::new(),
             notes: None,
+            git_branch: None,
+            branch_merged: false,
             links: LotLinks::default(),
             status: Status::Draft,
             created: Utc::now(),

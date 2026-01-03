@@ -7,7 +7,7 @@ use std::path::Path;
 
 use crate::core::git::{Git, GitError};
 use crate::core::Config;
-use crate::entities::lot::{ExecutionStep, ExecutionStatus, Lot, WorkInstructionRef};
+use crate::entities::lot::{ExecutionStatus, ExecutionStep, Lot, WorkInstructionRef};
 use crate::entities::process::Process;
 
 /// Configuration for lot-based manufacturing workflow
@@ -117,7 +117,10 @@ impl<'a> LotWorkflow<'a> {
         if self.config.create_tags {
             let tag_name = format!("{}/start", branch_name);
             let lot_id_str = LotWorkflowConfig::id_short(&lot.id);
-            let message = format!("Lot {} started", lot.lot_number.as_deref().unwrap_or(&lot_id_str));
+            let message = format!(
+                "Lot {} started",
+                lot.lot_number.as_deref().unwrap_or(&lot_id_str)
+            );
             self.git.create_tag(&tag_name, Some(&message))?;
         }
 
@@ -282,7 +285,10 @@ pub fn step_min_approvals(step: &ExecutionStep, processes: &HashMap<String, Proc
 }
 
 /// Get required roles for step approval
-pub fn step_required_roles(step: &ExecutionStep, processes: &HashMap<String, Process>) -> Vec<String> {
+pub fn step_required_roles(
+    step: &ExecutionStep,
+    processes: &HashMap<String, Process>,
+) -> Vec<String> {
     step.process
         .as_ref()
         .and_then(|proc_id| processes.get(proc_id))

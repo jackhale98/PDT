@@ -1454,13 +1454,14 @@ fn run_cost(args: CostArgs) -> Result<()> {
             if let Some(cmp) = component_map.get(&item_id) {
                 // Determine price: selected quote > unit_cost > 0.0
                 let purchase_qty = item.quantity * production_qty;
-                let (unit_price, price_source, nre, is_expired, valid_until) = get_component_price_with_nre(
-                    cmp,
-                    quote_map,
-                    component_quotes,
-                    purchase_qty,
-                    unselected_warnings,
-                );
+                let (unit_price, price_source, nre, is_expired, valid_until) =
+                    get_component_price_with_nre(
+                        cmp,
+                        quote_map,
+                        component_quotes,
+                        purchase_qty,
+                        unselected_warnings,
+                    );
 
                 // Track expired quote warning
                 if is_expired && warn_expired {
@@ -1478,9 +1479,7 @@ fn run_cost(args: CostArgs) -> Result<()> {
 
                 // Track NRE if present
                 if nre > 0.0 {
-                    let already_tracked = nre_items
-                        .iter()
-                        .any(|(_, title, _)| title == &cmp.title);
+                    let already_tracked = nre_items.iter().any(|(_, title, _)| title == &cmp.title);
                     if !already_tracked {
                         nre_items.push((
                             cmp.selected_quote.clone().unwrap_or_default(),
@@ -1551,10 +1550,14 @@ fn run_cost(args: CostArgs) -> Result<()> {
                 if let Some(price) = quote.price_for_qty(purchase_qty) {
                     let nre = quote.total_nre();
                     let is_expired = quote.is_expired();
-                    let valid_until = quote.valid_until
-                        .map(|d| d.to_string())
-                        .unwrap_or_default();
-                    return (price, format!("quote@{}", purchase_qty), nre, is_expired, valid_until);
+                    let valid_until = quote.valid_until.map(|d| d.to_string()).unwrap_or_default();
+                    return (
+                        price,
+                        format!("quote@{}", purchase_qty),
+                        nre,
+                        is_expired,
+                        valid_until,
+                    );
                 }
             }
         }
@@ -1615,7 +1618,9 @@ fn run_cost(args: CostArgs) -> Result<()> {
 
     // Calculate amortized NRE per unit if requested
     let nre_per_unit = if include_nre {
-        args.amortize.map(|qty| total_nre / qty as f64).unwrap_or(0.0)
+        args.amortize
+            .map(|qty| total_nre / qty as f64)
+            .unwrap_or(0.0)
     } else {
         0.0
     };
@@ -1752,7 +1757,11 @@ fn run_cost(args: CostArgs) -> Result<()> {
             );
         }
     } else {
-        println!("{} ${:.2}", style("Total Cost:").green().bold(), total_piece_cost);
+        println!(
+            "{} ${:.2}",
+            style("Total Cost:").green().bold(),
+            total_piece_cost
+        );
     }
 
     // Show warnings about expired quotes
@@ -2198,7 +2207,10 @@ fn run_routing_rm(args: RoutingRmArgs) -> Result<()> {
     // Remove from routing and capture results
     let (removed, new_len) = {
         let mfg = assembly.manufacturing.as_mut().ok_or_else(|| {
-            miette::miette!("Assembly {} has no manufacturing routing configured", args.asm)
+            miette::miette!(
+                "Assembly {} has no manufacturing routing configured",
+                args.asm
+            )
         })?;
 
         if mfg.routing.is_empty() {
@@ -2226,10 +2238,7 @@ fn run_routing_rm(args: RoutingRmArgs) -> Result<()> {
                 .iter()
                 .position(|id| id == &proc_id)
                 .ok_or_else(|| {
-                    miette::miette!(
-                        "Process {} not found in routing",
-                        args.proc_or_position
-                    )
+                    miette::miette!("Process {} not found in routing", args.proc_or_position)
                 })?;
             mfg.routing.remove(pos)
         };

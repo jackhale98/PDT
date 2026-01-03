@@ -578,13 +578,7 @@ fn test_asm_routing_rm() {
 
     tdt()
         .current_dir(tmp.path())
-        .args([
-            "proc",
-            "new",
-            "--title",
-            "CNC Machining",
-            "--no-edit",
-        ])
+        .args(["proc", "new", "--title", "CNC Machining", "--no-edit"])
         .assert()
         .success();
 
@@ -678,7 +672,9 @@ fn test_asm_routing_set() {
     // Set complete routing in one command
     tdt()
         .current_dir(tmp.path())
-        .args(["asm", "routing", "set", "ASM@1", "PROC@1", "PROC@2", "PROC@3"])
+        .args([
+            "asm", "routing", "set", "ASM@1", "PROC@1", "PROC@2", "PROC@3",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Set routing with 3 steps"));
@@ -1034,13 +1030,7 @@ fn test_lot_step_show_wi() {
     // Link work instruction to process
     tdt()
         .current_dir(tmp.path())
-        .args([
-            "link",
-            "add",
-            "PROC@1",
-            "WORK@1",
-            "work_instructions",
-        ])
+        .args(["link", "add", "PROC@1", "WORK@1", "work_instructions"])
         .assert()
         .success();
 
@@ -1103,5 +1093,9 @@ fn test_lot_step_show_wi() {
         .args(["lot", "step", "LOT@1", "--process", "0", "--show-wi"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Setup Procedure").or(predicate::str::contains("WI-")).or(predicate::str::contains("Work Instructions")));
+        .stdout(
+            predicate::str::contains("Setup Procedure")
+                .or(predicate::str::contains("WI-"))
+                .or(predicate::str::contains("Work Instructions")),
+        );
 }

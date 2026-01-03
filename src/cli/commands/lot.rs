@@ -747,7 +747,9 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
 
         // Resolve product ID
         let prod_id = product.as_ref().unwrap();
-        let resolved_prod = short_ids.resolve(prod_id).unwrap_or_else(|| prod_id.clone());
+        let resolved_prod = short_ids
+            .resolve(prod_id)
+            .unwrap_or_else(|| prod_id.clone());
 
         // Try to load as assembly or component
         let routing: Option<Vec<String>> = if resolved_prod.starts_with("ASM-") {
@@ -1267,10 +1269,7 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
     let requires_signature = step_requires_signature(step, &processes);
 
     // Get the current process for WI display
-    let current_process = step
-        .process
-        .as_ref()
-        .and_then(|p| processes.get(p));
+    let current_process = step.process.as_ref().and_then(|p| processes.get(p));
 
     // Show work instructions if requested
     if args.show_wi {
@@ -1438,7 +1437,13 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
             let workflow_config = LotWorkflowConfig::from_config(&config);
             let workflow = LotWorkflow::new(&git, workflow_config);
 
-            match workflow.commit_step_completion(&lot, step_idx, &operator, &[path.as_path()], args.sign) {
+            match workflow.commit_step_completion(
+                &lot,
+                step_idx,
+                &operator,
+                &[path.as_path()],
+                args.sign,
+            ) {
                 Ok(sha) => {
                     commit_sha = Some(sha.clone());
                     // Update the step with commit SHA and re-save
@@ -1505,7 +1510,11 @@ fn run_step(args: StepArgs, global: &GlobalOpts) -> Result<()> {
                 println!("   {} Signed", style("✓").green());
             }
             if let Some(ref sha) = commit_sha {
-                println!("   {} Commit: {}", style("→").dim(), style(&sha[..8]).cyan());
+                println!(
+                    "   {} Commit: {}",
+                    style("→").dim(),
+                    style(&sha[..8]).cyan()
+                );
             }
         }
     }
@@ -1630,7 +1639,9 @@ fn run_complete(args: CompleteArgs, global: &GlobalOpts) -> Result<()> {
         println!();
         println!(
             "{}",
-            style("Error: Steps require signature but are not signed").red().bold()
+            style("Error: Steps require signature but are not signed")
+                .red()
+                .bold()
         );
         for (i, step) in &unsigned_required {
             println!(

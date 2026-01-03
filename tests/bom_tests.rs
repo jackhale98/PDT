@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{setup_test_project, tdt, create_test_component, create_test_supplier};
+use common::{create_test_component, create_test_supplier, setup_test_project, tdt};
 use predicates::prelude::*;
 use std::fs;
 

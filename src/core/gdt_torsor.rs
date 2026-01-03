@@ -10,7 +10,7 @@
 //! - Datum references establish the reference frame
 
 use crate::entities::feature::{
-    Dimension, Feature, GdtControl, GdtSymbol, GeometryClass, Geometry3D, MaterialCondition,
+    Dimension, Feature, GdtControl, GdtSymbol, Geometry3D, GeometryClass, MaterialCondition,
     TorsorBounds,
 };
 
@@ -49,13 +49,8 @@ pub fn compute_torsor_bounds(feature: &Feature, actual_size: Option<f64>) -> Gdt
 
     // Process each GD&T control and accumulate bounds
     for gdt in &feature.gdt {
-        let gdt_bounds = compute_bounds_for_control(
-            gdt,
-            geometry_class,
-            geometry_3d,
-            primary_dim,
-            actual_size,
-        );
+        let gdt_bounds =
+            compute_bounds_for_control(gdt, geometry_class, geometry_3d, primary_dim, actual_size);
 
         // Merge bounds (take worst case - widest bounds)
         bounds = merge_bounds(bounds, gdt_bounds.bounds);
@@ -72,7 +67,8 @@ pub fn compute_torsor_bounds(feature: &Feature, actual_size: Option<f64>) -> Gdt
         if let Some(dim) = primary_dim {
             let dim_bounds = compute_bounds_from_dimension(dim, geometry_class, geometry_3d);
             bounds = merge_bounds(bounds, dim_bounds);
-            warnings.push("Torsor bounds computed from dimensional tolerance (no GD&T)".to_string());
+            warnings
+                .push("Torsor bounds computed from dimensional tolerance (no GD&T)".to_string());
         }
     }
 
@@ -170,7 +166,7 @@ fn compute_bounds_for_control(
             // Perpendicularity affects angular DOFs
             if let Some(geo) = geometry_3d {
                 let length = geo.length.unwrap_or(10.0); // Default to 10mm if not specified
-                // Angular deviation = tolerance / length (small angle approximation)
+                                                         // Angular deviation = tolerance / length (small angle approximation)
                 let angular_bound = effective_tol / length;
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
@@ -393,9 +389,7 @@ fn merge_bounds(a: TorsorBounds, b: TorsorBounds) -> TorsorBounds {
 /// Merge two DOF bounds, taking the wider bounds
 fn merge_dof(a: Option<[f64; 2]>, b: Option<[f64; 2]>) -> Option<[f64; 2]> {
     match (a, b) {
-        (Some([a_min, a_max]), Some([b_min, b_max])) => {
-            Some([a_min.min(b_min), a_max.max(b_max)])
-        }
+        (Some([a_min, a_max]), Some([b_min, b_max])) => Some([a_min.min(b_min), a_max.max(b_max)]),
         (Some(a), None) => Some(a),
         (None, Some(b)) => Some(b),
         (None, None) => None,
@@ -403,7 +397,10 @@ fn merge_dof(a: Option<[f64; 2]>, b: Option<[f64; 2]>) -> Option<[f64; 2]> {
 }
 
 /// Validate that bounds cover expected DOFs for geometry class
-fn validate_bounds_for_geometry(bounds: &TorsorBounds, geometry_class: GeometryClass) -> Vec<String> {
+fn validate_bounds_for_geometry(
+    bounds: &TorsorBounds,
+    geometry_class: GeometryClass,
+) -> Vec<String> {
     let mut warnings = Vec::new();
 
     match geometry_class {
@@ -414,12 +411,14 @@ fn validate_bounds_for_geometry(bounds: &TorsorBounds, geometry_class: GeometryC
         }
         GeometryClass::Plane => {
             if bounds.w.is_none() && bounds.alpha.is_none() && bounds.beta.is_none() {
-                warnings.push("Plane feature has no bounds - expected w, alpha, or beta".to_string());
+                warnings
+                    .push("Plane feature has no bounds - expected w, alpha, or beta".to_string());
             }
         }
         GeometryClass::Sphere | GeometryClass::Point => {
             if bounds.u.is_none() && bounds.v.is_none() && bounds.w.is_none() {
-                warnings.push("Point/Sphere feature missing positional (u, v, w) bounds".to_string());
+                warnings
+                    .push("Point/Sphere feature missing positional (u, v, w) bounds".to_string());
             }
         }
         _ => {}
@@ -488,7 +487,12 @@ mod tests {
     use crate::entities::stackup::Distribution;
 
     fn create_test_feature() -> Feature {
-        Feature::new("CMP-TEST", FeatureType::Internal, "Test Feature", "Test Author")
+        Feature::new(
+            "CMP-TEST",
+            FeatureType::Internal,
+            "Test Feature",
+            "Test Author",
+        )
     }
 
     // ===== Position Tolerance Tests =====
@@ -544,8 +548,16 @@ mod tests {
         assert!(result.has_bonus);
         let [u_min, u_max] = result.bounds.u.unwrap();
         // 0.30 / 2 = 0.15 radius
-        assert!((u_min - (-0.15)).abs() < 1e-10, "u_min should be -0.15, got {}", u_min);
-        assert!((u_max - 0.15).abs() < 1e-10, "u_max should be 0.15, got {}", u_max);
+        assert!(
+            (u_min - (-0.15)).abs() < 1e-10,
+            "u_min should be -0.15, got {}",
+            u_min
+        );
+        assert!(
+            (u_max - 0.15).abs() < 1e-10,
+            "u_max should be 0.15, got {}",
+            u_max
+        );
     }
 
     #[test]
@@ -617,7 +629,10 @@ mod tests {
         let result = compute_torsor_bounds(&feat, None);
 
         assert!(!result.warnings.is_empty());
-        assert!(result.warnings.iter().any(|w| w.contains("geometry_3d.length")));
+        assert!(result
+            .warnings
+            .iter()
+            .any(|w| w.contains("geometry_3d.length")));
     }
 
     // ===== Flatness Tests =====

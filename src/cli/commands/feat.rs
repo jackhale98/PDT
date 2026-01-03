@@ -1107,7 +1107,11 @@ fn run_compute_bounds(args: ComputeBoundsArgs, global: &GlobalOpts) -> Result<()
                 print!("{}", yaml);
             }
             _ => {
-                println!("{} Computed torsor bounds for {}", style("✓").green(), style(&short_id).cyan());
+                println!(
+                    "{} Computed torsor bounds for {}",
+                    style("✓").green(),
+                    style(&short_id).cyan()
+                );
                 println!();
 
                 // Display bounds
@@ -1152,7 +1156,11 @@ fn run_compute_bounds(args: ComputeBoundsArgs, global: &GlobalOpts) -> Result<()
 
         if !args.quiet {
             println!();
-            println!("{} Updated {}", style("✓").green(), style(path.display()).dim());
+            println!(
+                "{} Updated {}",
+                style("✓").green(),
+                style(path.display()).dim()
+            );
         }
     } else if !args.quiet && !matches!(global.output, OutputFormat::Json | OutputFormat::Yaml) {
         println!();
@@ -1213,19 +1221,21 @@ fn run_set_length(args: SetLengthArgs) -> Result<()> {
     let source_feat: Feature = serde_yml::from_str(&source_content).into_diagnostic()?;
 
     // Get dimension value from source
-    let dimension_value = source_feat.get_dimension_value(&dim_ref.dimension_name).ok_or_else(|| {
-        miette::miette!(
-            "Dimension '{}' not found in feature '{}'. Available dimensions: {}",
-            dim_ref.dimension_name,
-            dim_ref.feature_id,
-            source_feat
-                .dimensions
-                .iter()
-                .map(|d| d.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )
-    })?;
+    let dimension_value = source_feat
+        .get_dimension_value(&dim_ref.dimension_name)
+        .ok_or_else(|| {
+            miette::miette!(
+                "Dimension '{}' not found in feature '{}'. Available dimensions: {}",
+                dim_ref.dimension_name,
+                dim_ref.feature_id,
+                source_feat
+                    .dimensions
+                    .iter()
+                    .map(|d| d.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
 
     // Load and update target feature
     let target_path = find_feature_path(&target_id)

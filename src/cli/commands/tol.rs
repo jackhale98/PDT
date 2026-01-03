@@ -944,7 +944,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                             .unwrap_or_else(|| format!("{}", feat_ref.id));
                         let feat_name = feat_ref.name.as_deref().unwrap_or("");
                         if !feat_name.is_empty() {
-                            println!("      Feature: {} ({})", style(&feat_short).yellow(), feat_name);
+                            println!(
+                                "      Feature: {} ({})",
+                                style(&feat_short).yellow(),
+                                feat_name
+                            );
                         } else {
                             println!("      Feature: {}", style(&feat_short).yellow());
                         }
@@ -1381,7 +1385,10 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         if let Some(ref results_3d) = stackup.analysis_results_3d {
             if let Some(ref result_torsor) = results_3d.result_torsor {
                 println!();
-                println!("   {}:", style("3D SDT Analysis (6-DOF Torsor)").bold().cyan());
+                println!(
+                    "   {}:",
+                    style("3D SDT Analysis (6-DOF Torsor)").bold().cyan()
+                );
 
                 // Translation DOFs
                 println!("     Translations (mm):");
@@ -1428,7 +1435,8 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
                 );
 
                 // Capability and yield
-                if let (Some(cp), Some(cpk), Some(yield_pct)) = (func.cp, func.cpk, func.yield_percent)
+                if let (Some(cp), Some(cpk), Some(yield_pct)) =
+                    (func.cp, func.cpk, func.yield_percent)
                 {
                     println!(
                         "     Capability: Cp={:.2}, Cpk={:.2}, Yield={:.2}%",
@@ -2286,8 +2294,7 @@ fn run_3d_analysis(
 ) -> Result<Option<Vec<ChainContributor3D>>> {
     // Load all features from project
     let feat_dir = project.root().join("tolerances/features");
-    let mut features: std::collections::HashMap<String, Feature> =
-        std::collections::HashMap::new();
+    let mut features: std::collections::HashMap<String, Feature> = std::collections::HashMap::new();
 
     if feat_dir.exists() {
         for entry in fs::read_dir(&feat_dir).into_diagnostic()? {
@@ -2308,7 +2315,10 @@ fn run_3d_analysis(
         std::collections::HashMap::new();
     for feat in features.values() {
         if let Some(ref label) = feat.datum_label {
-            let geom_class = feat.geometry_class.clone().unwrap_or(GeometryClass::Complex);
+            let geom_class = feat
+                .geometry_class
+                .clone()
+                .unwrap_or(GeometryClass::Complex);
             let position = feat
                 .geometry_3d
                 .as_ref()
@@ -2393,7 +2403,10 @@ fn run_3d_analysis(
             (tb, "gdt")
         } else {
             let half_tol = (contrib.plus_tol + contrib.minus_tol) / 2.0;
-            (build_torsor_bounds_for_dofs(half_tol, &tolerance_dofs), "derived")
+            (
+                build_torsor_bounds_for_dofs(half_tol, &tolerance_dofs),
+                "derived",
+            )
         };
 
         // Track bounds source for reporting
@@ -2545,10 +2558,9 @@ fn calculate_functional_projection(
     let sigma_u = torsor.u.rss_3sigma / 3.0;
     let sigma_v = torsor.v.rss_3sigma / 3.0;
     let sigma_w = torsor.w.rss_3sigma / 3.0;
-    let sigma_projected = (dx * dx * sigma_u * sigma_u
-        + dy * dy * sigma_v * sigma_v
-        + dz * dz * sigma_w * sigma_w)
-        .sqrt();
+    let sigma_projected =
+        (dx * dx * sigma_u * sigma_u + dy * dy * sigma_v * sigma_v + dz * dz * sigma_w * sigma_w)
+            .sqrt();
     let rss_3sigma = 3.0 * sigma_projected;
 
     // Monte Carlo projection (if available)

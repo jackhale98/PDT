@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{setup_test_project, tdt, create_test_component, create_test_feature};
+use common::{create_test_component, create_test_feature, setup_test_project, tdt};
 use predicates::prelude::*;
 use std::fs;
 
@@ -935,7 +935,10 @@ fn test_feat_set_length_from_another_feature() {
         let content = std::fs::read_to_string(entry.path()).unwrap();
         if content.contains("Cavity") {
             assert!(content.contains("length_ref:"), "Should have length_ref");
-            assert!(content.contains(":depth"), "Should reference depth dimension");
+            assert!(
+                content.contains(":depth"),
+                "Should reference depth dimension"
+            );
             assert!(content.contains("length: 25.5"), "Should have length value");
             target_found = true;
             break;

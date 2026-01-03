@@ -1351,10 +1351,11 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
                 let short_id = short_ids
                     .get_short_id(&quote.id.to_string())
                     .unwrap_or_default();
-                let title_truncated = truncate_str(&quote.title, if show_nre_col { 16 } else { 18 });
-                let supplier_short = short_ids
-                    .get_short_id(&quote.supplier)
-                    .unwrap_or_else(|| truncate_str(&quote.supplier, if show_nre_col { 10 } else { 13 }).to_string());
+                let title_truncated =
+                    truncate_str(&quote.title, if show_nre_col { 16 } else { 18 });
+                let supplier_short = short_ids.get_short_id(&quote.supplier).unwrap_or_else(|| {
+                    truncate_str(&quote.supplier, if show_nre_col { 10 } else { 13 }).to_string()
+                });
                 let base_price = quote.price_for_qty(qty);
                 let unit_price_str = base_price.map_or("-".to_string(), |p| format!("{:.2}", p));
                 let eff_price = effective_unit_price(quote, qty, args.amortize, include_nre);
@@ -1368,9 +1369,19 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
                     .map_or("-".to_string(), |t| format!("{:.0}", t));
 
                 let price_style = if i == 0 {
-                    style(if show_nre_col { eff_price_str.clone() } else { unit_price_str.clone() }).green()
+                    style(if show_nre_col {
+                        eff_price_str.clone()
+                    } else {
+                        unit_price_str.clone()
+                    })
+                    .green()
                 } else {
-                    style(if show_nre_col { eff_price_str.clone() } else { unit_price_str.clone() }).white()
+                    style(if show_nre_col {
+                        eff_price_str.clone()
+                    } else {
+                        unit_price_str.clone()
+                    })
+                    .white()
                 };
 
                 if show_nre_col {
@@ -1500,11 +1511,7 @@ fn run_price(args: PriceArgs, global: &GlobalOpts) -> Result<()> {
                 .get_short_id(&quote.id.to_string())
                 .unwrap_or_else(|| quote.id.to_string());
 
-            println!(
-                "{} {}",
-                style("Quote:").bold(),
-                style(&quote_short).cyan()
-            );
+            println!("{} {}", style("Quote:").bold(), style(&quote_short).cyan());
             println!("{} {}", style("Title:").bold(), &quote.title);
 
             // Show expiration warning if applicable
@@ -1547,11 +1554,7 @@ fn run_price(args: PriceArgs, global: &GlobalOpts) -> Result<()> {
             }
 
             // Show price for specified quantity
-            println!(
-                "{} {}",
-                style("Quantity:").bold(),
-                style(qty).yellow()
-            );
+            println!("{} {}", style("Quantity:").bold(), style(qty).yellow());
 
             if let Some(unit_price) = quote.price_for_qty(qty) {
                 println!(
@@ -1596,10 +1599,7 @@ fn run_price(args: PriceArgs, global: &GlobalOpts) -> Result<()> {
                             style("Amortization:").bold(),
                             style(amort_qty).cyan()
                         );
-                        println!(
-                            "  NRE per unit: ${:.4}",
-                            nre_per_unit
-                        );
+                        println!("  NRE per unit: ${:.4}", nre_per_unit);
                         println!(
                             "  {} ${:.4}",
                             style("Effective Unit Price:").bold().green(),
@@ -1608,16 +1608,9 @@ fn run_price(args: PriceArgs, global: &GlobalOpts) -> Result<()> {
                     }
                 }
             } else {
-                println!(
-                    "{} No price available for qty {}",
-                    style("!").yellow(),
-                    qty
-                );
+                println!("{} No price available for qty {}", style("!").yellow(), qty);
                 if let Some(moq) = quote.moq {
-                    println!(
-                        "   Minimum order quantity is {}",
-                        style(moq).cyan()
-                    );
+                    println!("   Minimum order quantity is {}", style(moq).cyan());
                 }
             }
         }

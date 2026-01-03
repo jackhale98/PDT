@@ -1751,7 +1751,10 @@ fn run_routing_rm(args: RoutingRmArgs) -> Result<()> {
     // Remove from routing and capture results
     let (removed, new_len) = {
         let mfg = component.manufacturing.as_mut().ok_or_else(|| {
-            miette::miette!("Component {} has no manufacturing routing configured", args.cmp)
+            miette::miette!(
+                "Component {} has no manufacturing routing configured",
+                args.cmp
+            )
         })?;
 
         if mfg.routing.is_empty() {
@@ -1779,10 +1782,7 @@ fn run_routing_rm(args: RoutingRmArgs) -> Result<()> {
                 .iter()
                 .position(|id| id == &proc_id)
                 .ok_or_else(|| {
-                    miette::miette!(
-                        "Process {} not found in routing",
-                        args.proc_or_position
-                    )
+                    miette::miette!("Process {} not found in routing", args.proc_or_position)
                 })?;
             mfg.routing.remove(pos)
         };
@@ -1864,7 +1864,9 @@ fn run_routing_list(args: RoutingListArgs) -> Result<()> {
             proc_id.clone()
         } else {
             let title = proc_map.get(proc_id).cloned().unwrap_or_default();
-            let short = short_ids.get_short_id(proc_id).unwrap_or_else(|| proc_id.clone());
+            let short = short_ids
+                .get_short_id(proc_id)
+                .unwrap_or_else(|| proc_id.clone());
             if title.is_empty() {
                 short
             } else {
@@ -1921,7 +1923,11 @@ fn run_routing_set(args: RoutingSetArgs) -> Result<()> {
         if proc_ids.len() == 1 { "" } else { "s" }
     );
     if old_len > 0 {
-        println!("   (Replaced {} previous step{})", old_len, if old_len == 1 { "" } else { "s" });
+        println!(
+            "   (Replaced {} previous step{})",
+            old_len,
+            if old_len == 1 { "" } else { "s" }
+        );
     }
 
     Ok(())

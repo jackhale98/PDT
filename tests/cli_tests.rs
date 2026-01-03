@@ -2,7 +2,9 @@
 
 mod common;
 
-use common::{setup_test_project, tdt, create_test_requirement, create_test_risk, create_test_protocol};
+use common::{
+    create_test_protocol, create_test_requirement, create_test_risk, setup_test_project, tdt,
+};
 use predicates::prelude::*;
 use std::fs;
 use tempfile::TempDir;

@@ -271,9 +271,14 @@ pub fn run(args: ValidateArgs) -> Result<()> {
                         &mut stats,
                         &feature_loader,
                     )?,
-                    EntityPrefix::Feat => {
-                        check_feature_values(&content, path, args.fix, &mut stats, &feature_loader, cache.as_ref())?
-                    }
+                    EntityPrefix::Feat => check_feature_values(
+                        &content,
+                        path,
+                        args.fix,
+                        &mut stats,
+                        &feature_loader,
+                        cache.as_ref(),
+                    )?,
                     _ => vec![],
                 };
 
@@ -906,7 +911,9 @@ fn check_feature_values(
                 // Look up the target feature
                 if let Some(target_feat) = feature_loader.get_feature(&resolved_id) {
                     // Get the dimension value
-                    if let Some(dim_value) = target_feat.get_dimension_value(&dim_ref.dimension_name) {
+                    if let Some(dim_value) =
+                        target_feat.get_dimension_value(&dim_ref.dimension_name)
+                    {
                         expected_length = Some(dim_value);
                         // Check if cached length matches
                         match geometry_3d.length {

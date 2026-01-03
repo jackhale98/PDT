@@ -1,6 +1,6 @@
 [package]
 name = "tessera-design-toolkit"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 description = "Tessera Design Toolkit - A CLI for managing engineering artifacts as plain-text YAML files with full traceability"
 license = "MIT"
@@ -58,7 +58,8 @@ rust-embed = "8"
 rand = "0.9"
 
 # 3D Tolerance Analysis
-nalgebra = { version = "0.33", features = ["serde-serialize"] }
+# Note: Using libm instead of std to avoid wide crate SIMD issues on CI
+nalgebra = { version = "0.34", default-features = false, features = ["libm", "macros", "serde-serialize-no-std", "alloc"] }
 drawille = "0.3"
 
 # Cache

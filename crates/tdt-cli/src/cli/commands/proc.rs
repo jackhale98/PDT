@@ -31,6 +31,14 @@ const PROC_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 20),
 ];
 
+const PROC_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: PROC_COLUMNS,
+        entity_name: "process",
+        entity_prefix: "PROC",
+        empty_message: "No processes found.",
+    };
+
 /// CLI-friendly process type enum
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum CliProcessType {
@@ -391,7 +399,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(entities.iter().map(|e| e.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        return output_cached_processes(&entities, &args, &short_ids, format, &project);
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.key().to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        return crate::cli::entity_cmd::output_cached_list(
+            &entities,
+            &PROC_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            |e| cached_entity_to_row(e, &short_ids),
+            |e| e.file_path.as_path(),
+        );
     }
 
     // Full entity loading path
@@ -889,64 +911,6 @@ fn cached_entity_to_row(entity: &CachedEntity, short_ids: &ShortIdIndex) -> Tabl
         .cell("status", CellValue::Status(entity.status))
         .cell("author", CellValue::Text(entity.author.clone()))
         .cell("created", CellValue::DateTime(entity.created))
-}
-
-/// Output cached processes in the requested format
-fn output_cached_processes(
-    entities: &[CachedEntity],
-    args: &ListArgs,
-    short_ids: &ShortIdIndex,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // Count only
-    if args.count {
-        println!("{}", entities.len());
-        return Ok(());
-    }
-
-    // No results
-    if entities.is_empty() {
-        println!("No processes found.");
-        return Ok(());
-    }
-
-    // The table formatter below can't render file paths; handle -o path here.
-    if format == OutputFormat::Path {
-        for e in entities {
-            let path = if e.file_path.is_absolute() {
-                e.file_path.clone()
-            } else {
-                project.root().join(&e.file_path)
-            };
-            println!("{}", path.display());
-        }
-        return Ok(());
-    }
-
-    // Convert visible columns to keys, optionally including ID
-    let mut visible_columns: Vec<&str> = args.columns.iter().map(|c| c.key()).collect();
-    if args.show_id && !visible_columns.contains(&"id") {
-        visible_columns.insert(0, "id");
-    }
-
-    // Build table rows
-    let rows: Vec<TableRow> = entities
-        .iter()
-        .map(|e| cached_entity_to_row(e, short_ids))
-        .collect();
-
-    // Configure wrapping if requested
-    let config = match args.wrap {
-        Some(width) => TableConfig::with_wrap(width),
-        None => TableConfig::default(),
-    };
-
-    // Output using TableFormatter
-    let formatter = TableFormatter::new(PROC_COLUMNS, "process", "PROC").with_config(config);
-    formatter.output(rows, format, &visible_columns);
-
-    Ok(())
 }
 
 fn run_flow(args: FlowArgs, global: &GlobalOpts) -> Result<()> {

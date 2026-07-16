@@ -240,6 +240,14 @@ const TEST_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 16),
 ];
 
+const TEST_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: TEST_COLUMNS,
+        entity_name: "test",
+        entity_prefix: "TEST",
+        empty_message: "No tests found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by type (verification/validation)
@@ -655,7 +663,23 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(tests.iter().map(|t| t.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        output_cached_tests(&tests, &short_ids, &args, format, &project)
+        {
+            let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+            if args.show_id && !visible.iter().any(|c| c == "id") {
+                visible.insert(0, "id".to_string());
+            }
+            crate::cli::entity_cmd::output_cached_list(
+                &tests,
+                &TEST_LIST_SPEC,
+                &visible,
+                args.wrap,
+                args.count,
+                format,
+                &project,
+                |t| cached_test_to_row(t, &short_ids),
+                |t| t.file_path.as_path(),
+            )
+        }
     }
 }
 
@@ -865,87 +889,6 @@ fn output_tests(
             std::process::exit(2);
         }
     }
-    Ok(())
-}
-
-/// Output cached tests (fast path - no YAML parsing needed)
-fn output_cached_tests(
-    tests: &[CachedTest],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    if tests.is_empty() {
-        println!("No tests found.");
-        println!();
-        println!("Create one with: {}", style("tdt test new").yellow());
-        return Ok(());
-    }
-
-    if args.count {
-        println!("{}", tests.len());
-        return Ok(());
-    }
-
-    match format {
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build column list from args
-            let mut columns: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-
-            // Add Id column if --show-id flag is set
-            if args.show_id && !columns.contains(&"id") {
-                columns.insert(0, "id");
-            }
-
-            // Build rows
-            let rows: Vec<TableRow> = tests
-                .iter()
-                .map(|t| cached_test_to_row(t, short_ids))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for test in tests {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&test.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", test.id);
-                }
-            }
-        }
-        OutputFormat::Path => {
-            for e in tests {
-                let path = if e.file_path.is_absolute() {
-                    e.file_path.clone()
-                } else {
-                    project.root().join(&e.file_path)
-                };
-                println!("{}", path.display());
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
-            // Should never reach here - JSON/YAML use full YAML path
-            unreachable!()
-        }
-    }
-
     Ok(())
 }
 

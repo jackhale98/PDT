@@ -87,6 +87,14 @@ const CTRL_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 20),
 ];
 
+const CTRL_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: CTRL_COLUMNS,
+        entity_name: "control",
+        entity_prefix: "CTRL",
+        empty_message: "No controls found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by control type
@@ -461,7 +469,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             entities.truncate(limit);
         }
 
-        return output_cached_controls(&entities, &short_ids, &args, format, &project);
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        return crate::cli::entity_cmd::output_cached_list(
+            &entities,
+            &CTRL_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            |e| cached_entity_to_row(e, &short_ids),
+            |e| e.file_path.as_path(),
+        );
     }
 
     // Full entity loading via service
@@ -505,66 +527,6 @@ fn control_to_row(ctrl: &Control, short_ids: &ShortIdIndex) -> TableRow {
         .cell("status", CellValue::Status(ctrl.status))
         .cell("author", CellValue::Text(ctrl.author.clone()))
         .cell("created", CellValue::DateTime(ctrl.created))
-}
-
-/// Output cached controls (fast path - no YAML parsing needed)
-fn output_cached_controls(
-    entities: &[tdt_core::core::CachedEntity],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // The table formatter below can't render file paths; handle -o path here.
-    if format == OutputFormat::Path {
-        for e in entities {
-            let path = if e.file_path.is_absolute() {
-                e.file_path.clone()
-            } else {
-                project.root().join(&e.file_path)
-            };
-            println!("{}", path.display());
-        }
-        return Ok(());
-    }
-
-    if entities.is_empty() {
-        println!("No controls found.");
-        return Ok(());
-    }
-
-    if args.count {
-        println!("{}", entities.len());
-        return Ok(());
-    }
-
-    // Build visible columns list
-    let mut visible: Vec<&str> = args
-        .columns
-        .iter()
-        .map(|c| c.to_string().leak() as &str)
-        .collect();
-    if args.show_id && !visible.contains(&"id") {
-        visible.insert(0, "id");
-    }
-
-    // Convert to TableRows
-    let rows: Vec<TableRow> = entities
-        .iter()
-        .map(|entity| cached_entity_to_row(entity, short_ids))
-        .collect();
-
-    // Configure table
-    let config = if let Some(width) = args.wrap {
-        TableConfig::with_wrap(width)
-    } else {
-        TableConfig::default()
-    };
-
-    let formatter = TableFormatter::new(CTRL_COLUMNS, "control", "CTRL").with_config(config);
-    formatter.output(rows, format, &visible);
-
-    Ok(())
 }
 
 /// Convert a CachedEntity to a TableRow for controls

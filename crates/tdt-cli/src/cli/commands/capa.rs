@@ -129,6 +129,14 @@ const CAPA_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 12),
 ];
 
+const CAPA_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: CAPA_COLUMNS,
+        entity_name: "CAPA",
+        entity_prefix: "CAPA",
+        empty_message: "No CAPAs found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by CAPA type
@@ -574,7 +582,18 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(cached_capas.iter().map(|c| c.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        return output_cached_capas(&cached_capas, &args, &short_ids, format, &project);
+        let visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        return crate::cli::entity_cmd::output_cached_list(
+            &cached_capas,
+            &CAPA_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            |c| cached_capa_to_row(c, &short_ids),
+            |c| c.file_path.as_path(),
+        );
     }
 
     // Full entity loading path
@@ -979,79 +998,6 @@ fn run_delete(args: DeleteArgs) -> Result<()> {
 
 fn run_archive(args: ArchiveArgs) -> Result<()> {
     crate::cli::commands::utils::run_delete(&args.id, CAPA_DIRS, args.force, true, args.quiet)
-}
-
-/// Output cached CAPAs in the requested format
-fn output_cached_capas(
-    capas: &[CachedCapa],
-    args: &ListArgs,
-    short_ids: &ShortIdIndex,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // Count only
-    if args.count {
-        println!("{}", capas.len());
-        return Ok(());
-    }
-
-    // No results
-    if capas.is_empty() {
-        println!("No CAPAs found.");
-        return Ok(());
-    }
-
-    match format {
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let columns: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-            let rows: Vec<TableRow> = capas
-                .iter()
-                .map(|c| cached_capa_to_row(c, short_ids))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for capa in capas {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&capa.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", capa.id);
-                }
-            }
-        }
-        OutputFormat::Path => {
-            for e in capas {
-                let path = if e.file_path.is_absolute() {
-                    e.file_path.clone()
-                } else {
-                    project.root().join(&e.file_path)
-                };
-                println!("{}", path.display());
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
-            // Should not reach here - cache bypassed for these formats
-            unreachable!();
-        }
-    }
-
-    Ok(())
 }
 
 /// Convert a full Capa entity to a TableRow

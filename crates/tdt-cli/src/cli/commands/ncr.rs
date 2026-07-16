@@ -214,6 +214,14 @@ const NCR_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 12),
 ];
 
+const NCR_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: NCR_COLUMNS,
+        entity_name: "NCR",
+        entity_prefix: "NCR",
+        empty_message: "No NCRs found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by NCR type
@@ -709,7 +717,18 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(cached_ncrs.iter().map(|n| n.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        return output_cached_ncrs(&cached_ncrs, &args, &short_ids, format, &project);
+        let visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        return crate::cli::entity_cmd::output_cached_list(
+            &cached_ncrs,
+            &NCR_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            |n| cached_ncr_to_row(n, &short_ids),
+            |n| n.file_path.as_path(),
+        );
     }
 
     // Full entity loading path
@@ -1059,82 +1078,6 @@ fn run_delete(args: DeleteArgs) -> Result<()> {
 
 fn run_archive(args: ArchiveArgs) -> Result<()> {
     crate::cli::commands::utils::run_delete(&args.id, NCR_DIRS, args.force, true, args.quiet)
-}
-
-/// Output cached NCRs in the requested format
-fn output_cached_ncrs(
-    ncrs: &[CachedNcr],
-    args: &ListArgs,
-    short_ids: &ShortIdIndex,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // Count only
-    if args.count {
-        println!("{}", ncrs.len());
-        return Ok(());
-    }
-
-    // No results
-    if ncrs.is_empty() {
-        println!("No NCRs found.");
-        return Ok(());
-    }
-
-    match format {
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build column list from args
-            let columns: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-
-            // Build rows
-            let rows: Vec<TableRow> = ncrs
-                .iter()
-                .map(|n| cached_ncr_to_row(n, short_ids))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(NCR_COLUMNS, "NCR", "NCR").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for ncr in ncrs {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&ncr.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", ncr.id);
-                }
-            }
-        }
-        OutputFormat::Path => {
-            for ncr in ncrs {
-                let path = if ncr.file_path.is_absolute() {
-                    ncr.file_path.clone()
-                } else {
-                    project.root().join(&ncr.file_path)
-                };
-                println!("{}", path.display());
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
-            // Should not reach here - cache bypassed for these formats
-            unreachable!();
-        }
-    }
-
-    Ok(())
 }
 
 /// Convert an Ncr to a TableRow

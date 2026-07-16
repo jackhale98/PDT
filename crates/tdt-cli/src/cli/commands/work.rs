@@ -161,6 +161,14 @@ const WORK_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 20),
 ];
 
+const WORK_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: WORK_COLUMNS,
+        entity_name: "work instruction",
+        entity_prefix: "WORK",
+        empty_message: "No work instructions found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by status
@@ -514,7 +522,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             entities.truncate(limit);
         }
 
-        return output_cached_work_instructions(&entities, &short_ids, &args, format, &project);
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        return crate::cli::entity_cmd::output_cached_list(
+            &entities,
+            &WORK_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            |e| cached_entity_to_row(e, &short_ids),
+            |e| e.file_path.as_path(),
+        );
     }
 
     // Full entity loading via service
@@ -562,67 +584,6 @@ fn work_instruction_to_row(work: &WorkInstruction, short_ids: &ShortIdIndex) -> 
         .cell("status", CellValue::Status(work.status))
         .cell("author", CellValue::Text(work.author.clone()))
         .cell("created", CellValue::DateTime(work.created))
-}
-
-/// Output cached work instructions (fast path - no YAML parsing needed)
-fn output_cached_work_instructions(
-    entities: &[tdt_core::core::CachedEntity],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // The table formatter below can't render file paths; handle -o path here.
-    if format == OutputFormat::Path {
-        for e in entities {
-            let path = if e.file_path.is_absolute() {
-                e.file_path.clone()
-            } else {
-                project.root().join(&e.file_path)
-            };
-            println!("{}", path.display());
-        }
-        return Ok(());
-    }
-
-    if entities.is_empty() {
-        println!("No work instructions found.");
-        return Ok(());
-    }
-
-    if args.count {
-        println!("{}", entities.len());
-        return Ok(());
-    }
-
-    // Build visible columns list
-    let mut visible: Vec<&str> = args
-        .columns
-        .iter()
-        .map(|c| c.to_string().leak() as &str)
-        .collect();
-    if args.show_id && !visible.contains(&"id") {
-        visible.insert(0, "id");
-    }
-
-    // Convert to TableRows
-    let rows: Vec<TableRow> = entities
-        .iter()
-        .map(|entity| cached_entity_to_row(entity, short_ids))
-        .collect();
-
-    // Configure table
-    let config = if let Some(width) = args.wrap {
-        TableConfig::with_wrap(width)
-    } else {
-        TableConfig::default()
-    };
-
-    let formatter =
-        TableFormatter::new(WORK_COLUMNS, "work instruction", "WORK").with_config(config);
-    formatter.output(rows, format, &visible);
-
-    Ok(())
 }
 
 /// Convert a CachedEntity to a TableRow for work instructions

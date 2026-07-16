@@ -41,6 +41,90 @@ pub struct EntityConfig {
 }
 
 // =========================================================================
+// Common Cached-List Output
+// =========================================================================
+
+/// Table identity for a cached list: column defs plus the names used in
+/// summaries ("5 process(s) found. Use PROC@N ...").
+pub struct CachedListSpec {
+    /// Column definitions for the table formatter
+    pub columns: &'static [crate::cli::table::ColumnDef],
+    /// Singular entity name for the summary line (e.g. "process")
+    pub entity_name: &'static str,
+    /// Short-ID prefix for the summary line (e.g. "PROC")
+    pub entity_prefix: &'static str,
+    /// Message printed when the list is empty (e.g. "No processes found.")
+    pub empty_message: &'static str,
+}
+
+/// Output a cached entity list in any list-capable format.
+///
+/// This is the single implementation behind every entity's `list` fast path:
+/// count/empty handling, `-o path` (project-joined file paths), `-o id` /
+/// `-o short-id`, and the table formats. JSON/YAML need full entities and
+/// must be routed to the slow path by the caller's `can_use_cache` check.
+///
+/// `to_row` converts one cached row to a `TableRow`; `file_path` extracts its
+/// (possibly project-relative) file path.
+#[allow(clippy::too_many_arguments)]
+pub fn output_cached_list<T>(
+    items: &[T],
+    spec: &CachedListSpec,
+    visible_columns: &[String],
+    wrap: Option<usize>,
+    count_only: bool,
+    format: OutputFormat,
+    project: &Project,
+    to_row: impl Fn(&T) -> crate::cli::table::TableRow,
+    file_path: impl Fn(&T) -> &std::path::Path,
+) -> Result<()> {
+    use crate::cli::table::{TableConfig, TableFormatter};
+
+    if count_only {
+        println!("{}", items.len());
+        return Ok(());
+    }
+    if items.is_empty() {
+        println!("{}", spec.empty_message);
+        return Ok(());
+    }
+
+    match format {
+        OutputFormat::Path => {
+            // The table formatter can't render file paths; cached paths are
+            // project-root-relative, so join them for use from any cwd.
+            for item in items {
+                let path = file_path(item);
+                let path = if path.is_absolute() {
+                    path.to_path_buf()
+                } else {
+                    project.root().join(path)
+                };
+                println!("{}", path.display());
+            }
+            Ok(())
+        }
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => Err(miette::miette!(
+            "internal error: {:?} output requires the full-entity list path; \
+             the cached fast path should have been bypassed",
+            format
+        )),
+        _ => {
+            let visible: Vec<&str> = visible_columns.iter().map(|s| s.as_str()).collect();
+            let config = match wrap {
+                Some(width) => TableConfig::with_wrap(width),
+                None => TableConfig::default(),
+            };
+            let rows: Vec<crate::cli::table::TableRow> = items.iter().map(to_row).collect();
+            TableFormatter::new(spec.columns, spec.entity_name, spec.entity_prefix)
+                .with_config(config)
+                .output(rows, format, &visible);
+            Ok(())
+        }
+    }
+}
+
+// =========================================================================
 // Common Show Implementation
 // =========================================================================
 

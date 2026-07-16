@@ -123,6 +123,14 @@ const FEAT_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 12),
 ];
 
+const FEAT_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: FEAT_COLUMNS,
+        entity_name: "feature",
+        entity_prefix: "FEAT",
+        empty_message: "No features found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by parent component (CMP@N or full ID)
@@ -378,13 +386,22 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             features.truncate(limit);
         }
 
-        return output_cached_features(
+        let mut visible: Vec<String> = if args.show_id {
+            vec!["id".to_string()]
+        } else {
+            vec![]
+        };
+        visible.extend(args.columns.iter().map(|c| c.to_string()));
+        return crate::cli::entity_cmd::output_cached_list(
             &features,
-            &short_ids,
-            &args,
+            &FEAT_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
             format,
-            &component_info,
             &project,
+            |f| cached_feat_to_row(f, &short_ids, &component_info),
+            |f| f.file_path.as_path(),
         );
     }
 
@@ -575,78 +592,6 @@ fn output_features(
         OutputFormat::Auto | OutputFormat::Path => {
             eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
             std::process::exit(2);
-        }
-    }
-
-    Ok(())
-}
-
-/// Output cached features (fast path - no YAML parsing needed)
-fn output_cached_features(
-    features: &[CachedFeature],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    component_info: &std::collections::HashMap<String, (String, String)>,
-    project: &Project,
-) -> Result<()> {
-    if features.is_empty() {
-        println!("No features found.");
-        return Ok(());
-    }
-
-    if args.count {
-        println!("{}", features.len());
-        return Ok(());
-    }
-
-    match format {
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build columns list, adding ID column if --show-id is set
-            let mut columns: Vec<&str> = if args.show_id { vec!["id"] } else { vec![] };
-            columns.extend(args.columns.iter().map(|c| c.to_string().leak() as &str));
-
-            let rows: Vec<TableRow> = features
-                .iter()
-                .map(|f| cached_feat_to_row(f, short_ids, component_info))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter =
-                TableFormatter::new(FEAT_COLUMNS, "feature", "FEAT").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for feat in features {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&feat.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", feat.id);
-                }
-            }
-        }
-        OutputFormat::Path => {
-            for e in features {
-                let path = if e.file_path.is_absolute() {
-                    e.file_path.clone()
-                } else {
-                    project.root().join(&e.file_path)
-                };
-                println!("{}", path.display());
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
-            // Should never reach here
-            unreachable!()
         }
     }
 

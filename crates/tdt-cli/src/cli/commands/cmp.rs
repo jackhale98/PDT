@@ -297,6 +297,14 @@ const CMP_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 12),
 ];
 
+const CMP_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: CMP_COLUMNS,
+        entity_name: "component",
+        entity_prefix: "CMP",
+        empty_message: "No components found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct NewArgs {
     /// Part number (required)
@@ -624,7 +632,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(cached_cmps.iter().map(|c| c.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        output_cached_components(&cached_cmps, &short_ids, &args, output_format, &project)
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_cached_list(
+            &cached_cmps,
+            &CMP_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            output_format,
+            &project,
+            |c| cached_component_to_row(c, &short_ids),
+            |c| c.file_path.as_path(),
+        )
     }
 }
 
@@ -796,56 +818,6 @@ fn component_to_row(cmp: &Component, short_ids: &ShortIdIndex) -> TableRow {
         .cell("status", CellValue::Status(cmp.status))
         .cell("author", CellValue::Text(cmp.author.clone()))
         .cell("created", CellValue::Date(cmp.created))
-}
-
-/// Output components from cached data (fast path - no YAML parsing)
-fn output_cached_components(
-    cmps: &[tdt_core::core::CachedComponent],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // The table formatter below can't render file paths; handle -o path here.
-    if format == OutputFormat::Path {
-        for e in cmps {
-            let path = if e.file_path.is_absolute() {
-                e.file_path.clone()
-            } else {
-                project.root().join(&e.file_path)
-            };
-            println!("{}", path.display());
-        }
-        return Ok(());
-    }
-
-    // Build visible columns list
-    let mut visible: Vec<&str> = args
-        .columns
-        .iter()
-        .map(|c| c.to_string().leak() as &str)
-        .collect();
-    if args.show_id && !visible.contains(&"id") {
-        visible.insert(0, "id");
-    }
-
-    // Convert to TableRows
-    let rows: Vec<TableRow> = cmps
-        .iter()
-        .map(|cmp| cached_component_to_row(cmp, short_ids))
-        .collect();
-
-    // Configure table
-    let config = if let Some(width) = args.wrap {
-        TableConfig::with_wrap(width)
-    } else {
-        TableConfig::default()
-    };
-
-    let formatter = TableFormatter::new(CMP_COLUMNS, "component", "CMP").with_config(config);
-    formatter.output(rows, format, &visible);
-
-    Ok(())
 }
 
 /// Convert a CachedComponent to a TableRow

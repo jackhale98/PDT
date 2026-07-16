@@ -98,6 +98,14 @@ const RSLT_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 12),
 ];
 
+const RSLT_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: RSLT_COLUMNS,
+        entity_name: "result",
+        entity_prefix: "RSLT",
+        empty_message: "No results found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by verdict
@@ -545,7 +553,23 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         // Sort and limit
         sort_cached_results(&mut cached_results, &args);
 
-        return output_cached_results(&cached_results, &short_ids, &args, format, &project);
+        let visible: Vec<String> = args
+            .columns
+            .iter()
+            .filter(|c| !matches!(c, ListColumn::Short))
+            .map(|c| c.to_string())
+            .collect();
+        return crate::cli::entity_cmd::output_cached_list(
+            &cached_results,
+            &RSLT_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            |r| cached_result_to_row(r, &short_ids),
+            |r| r.file_path.as_path(),
+        );
     }
 
     // Full entity loading path
@@ -580,82 +604,6 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     output_results(&results, &mut short_ids, &args, format, &project)
-}
-
-/// Output cached results (fast path - no YAML parsing needed)
-fn output_cached_results(
-    results: &[tdt_core::core::cache::CachedResult],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    if results.is_empty() {
-        println!("No results found.");
-        println!();
-        println!("Create one with: {}", style("tdt rslt new").yellow());
-        return Ok(());
-    }
-
-    if args.count {
-        println!("{}", results.len());
-        return Ok(());
-    }
-
-    match format {
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build column list from args (filter out "short" since it's added automatically)
-            let columns: Vec<&str> = args
-                .columns
-                .iter()
-                .filter(|c| !matches!(c, ListColumn::Short))
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-
-            // Build rows
-            let rows: Vec<TableRow> = results
-                .iter()
-                .map(|r| cached_result_to_row(r, short_ids))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for result in results {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids.get_short_id(&result.id).unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", result.id);
-                }
-            }
-        }
-        OutputFormat::Path => {
-            for e in results {
-                let path = if e.file_path.is_absolute() {
-                    e.file_path.clone()
-                } else {
-                    project.root().join(&e.file_path)
-                };
-                println!("{}", path.display());
-            }
-        }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
-            unreachable!()
-        }
-    }
-
-    Ok(())
 }
 
 /// Convert a TestResult to a TableRow

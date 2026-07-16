@@ -1153,8 +1153,7 @@ where:
               <li><strong>Flatness contributes w translation only</strong> (±t/2) — the substitute-plane tilt within the flatness zone is not modeled.</li>
               <li><strong>Datum modeling is partial.</strong> The 3-2-1 analysis only selects which DOFs receive derived bounds (and only from the first GD&amp;T control); datum feature geometry, datum precedence effects, and MMC datum shift are not modeled.</li>
               <li><strong>1D-only options are ignored in 3D.</strong> Per-contributor <code>direction</code>, <code>mean_shift_k</code> (Bender), and <code>include_gdt</code> do not affect the 3D path; nominal chain closure is assumed rather than checked.</li>
-              <li><strong>3D Monte Carlo is not seedable yet</strong>, unlike the 1D path (<code>--seed</code>), so 3D MC runs are not bit-for-bit reproducible.</li>
-              <li><strong>Staleness detection does not yet cover 3D inputs</strong> (<code>functional_direction</code>, <code>geometry_3d</code>, <code>torsor_bounds</code>) — re-run <code>tdt tol analyze --3d</code> after changing feature geometry.</li>
+              <li><strong>Staleness detection covers stackup-level 3D inputs</strong> (<code>functional_direction</code> is hashed) but not linked feature files — re-run <code>tdt tol analyze --3d</code> after changing a feature's <code>geometry_3d</code> or <code>torsor_bounds</code>.</li>
             </ul>
           </section>
 

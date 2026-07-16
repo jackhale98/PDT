@@ -1238,9 +1238,17 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
     stackup.analysis_results.analyzed_at = Some(chrono::Utc::now());
     stackup.analysis_results.input_hash = Some(stackup.contributor_input_hash());
 
-    // 3D SDT Analysis (if requested)
-    let contributors_3d = if args.three_d {
-        run_3d_analysis(&mut stackup, &project, args.iterations)?
+    // 3D SDT Analysis: requested via --3d, or enabled on the stackup itself
+    // (analysis_3d.enabled: true). The stackup's monte_carlo_iterations is
+    // used when --iterations was left at its default.
+    let config_3d = stackup.analysis_3d.clone();
+    let run_3d = args.three_d || config_3d.as_ref().is_some_and(|c| c.enabled);
+    let contributors_3d = if run_3d {
+        let iterations_3d = match &config_3d {
+            Some(c) if args.iterations == 10000 => c.monte_carlo_iterations,
+            _ => args.iterations,
+        };
+        run_3d_analysis(&mut stackup, &project, iterations_3d, args.seed)?
     } else {
         None
     };
@@ -1975,6 +1983,7 @@ fn run_analyze_all(args: &AnalyzeArgs) -> Result<()> {
 
 fn run_add(args: AddArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let cache = EntityCache::open(&project).map_err(|e| miette::miette!("{}", e))?;
 
     // Resolve stackup short ID
     let short_ids = ShortIdIndex::load(&project);
@@ -2096,32 +2105,9 @@ fn run_add(args: AddArgs) -> Result<()> {
             continue;
         }
 
-        // Try to load component to get component_name for cached info
-        let component_name = {
-            let cmp_dir = project.root().join("bom/components");
-            let mut name = None;
-            if cmp_dir.exists() {
-                for entry in fs::read_dir(&cmp_dir).into_diagnostic()? {
-                    let entry = entry.into_diagnostic()?;
-                    let path = entry.path();
-                    if path.extension().is_some_and(|e| e == "yaml") {
-                        let filename = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
-                        if filename.contains(&feature.component) {
-                            if let Ok(content) = fs::read_to_string(&path) {
-                                if let Ok(cmp) = serde_yml::from_str::<
-                                    tdt_core::entities::component::Component,
-                                >(&content)
-                                {
-                                    name = Some(cmp.title);
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            name
-        };
+        // Component title for cached info: O(1) cache lookup instead of
+        // rescanning bom/components/ once per feature added.
+        let component_name = cache.get_entity(&feature.component).map(|c| c.title);
 
         // Create contributor from feature with cached info
         // Distribution comes from the feature's dimension, not CLI args
@@ -2394,6 +2380,7 @@ fn run_3d_analysis(
     stackup: &mut Stackup,
     project: &Project,
     monte_carlo_iterations: u32,
+    seed: Option<u64>,
 ) -> Result<Option<Vec<ChainContributor3D>>> {
     // Load all features from project
     let feat_dir = project.root().join("tolerances/features");
@@ -2700,7 +2687,7 @@ fn run_3d_analysis(
     }
 
     // Run 3D analysis (always includes Monte Carlo)
-    let result = sdt::analyze_chain_3d(&contributors_3d, true, monte_carlo_iterations);
+    let result = sdt::analyze_chain_3d_seeded(&contributors_3d, true, monte_carlo_iterations, seed);
 
     // Build sensitivity entries
     let sensitivity_3d: Vec<Sensitivity3DEntry> = contributors_3d
@@ -2730,6 +2717,7 @@ fn run_3d_analysis(
         sensitivity_3d,
         jacobian_summary: None,
         analyzed_at: Some(chrono::Utc::now()),
+        mc_seed: result.mc_seed,
     });
 
     Ok(Some(contributors_3d))

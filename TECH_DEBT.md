@@ -46,14 +46,17 @@ the panic cases were fixed).
 
 ## 4. Reserved / unreachable code
 
-- `Analysis3DConfig` (`entities/stackup.rs:435`) — serialized on Stackup,
-  never read by any code path. Docs now mark it "reserved". Wire it up or
-  remove it (removal needs a schema/doc change in the same commit).
+- ~~`Analysis3DConfig` never read~~ — **resolved**: `enabled: true` now
+  triggers 3D analysis without `--3d`, and `monte_carlo_iterations` is used
+  when `--iterations` is left at its default. `method` remains reserved.
 - `LengthToleranceInfo` cross-term path (`core/sdt.rs:386`) — every
   production caller passes `None` (`run_3d_analysis` hardcodes it,
   `feat compute-bounds`/`validate` pass `None`). Only tests exercise it.
   Wire the feature lookup or delete the path.
-- 13 `#[allow(dead_code)]` markers worth a quarterly audit.
+- ~~Blanket `#![allow(dead_code)]` suppressions~~ — **resolved**: the six
+  module-level allows are gone; 17 dead functions/items deleted (incl. the
+  empty `cli/output.rs` module and `MarkdownTable`). Remaining targeted
+  allows carry rationale comments tied to the consolidation.
 - ~~`schemas/` (repo root) duplicate directory~~ — **resolved**: deleted; the
   embedded `crates/tdt-core/schemas/` copies are the single source, browsable
   via `tdt schema show <type>`.
@@ -64,11 +67,10 @@ Measured (debug build, 160 entities): `--help` 4ms, `req list` 10ms,
 `search` 10ms, `trace matrix` 10ms, `status` 10ms — **fast, no action**.
 The exceptions:
 
-- `tdt validate`: 120 ms / 143 MB RSS — all 20 JSON schemas are compiled on
-  every run (`Validator::new` upfront). Compile lazily per entity prefix
-  actually present in the project.
-- `tol add` rescans the entire `bom/components/` directory once per feature
-  added (tol.rs component-name lookup loop). Use the entity cache instead.
+- ~~`tdt validate` upfront schema compilation~~ — **resolved**: lazy per-
+  prefix compilation; 120ms/143MB → 70ms/82MB on the 160-entity project.
+- ~~`tol add` per-feature directory rescan~~ — **resolved**: O(1) entity
+  cache lookup.
 - `link suspect list` reads every entity YAML file; fine at hundreds of
   entities, consider indexing suspect flags in the SQLite cache at thousands.
 - Cache `auto_sync` staleness uses a global max-mtime heuristic — a file
@@ -98,9 +100,10 @@ The exceptions:
 
 - `tdt import --update` errors as "not yet implemented" (previously a silent
   no-op that duplicated every row). Implement ID-matched updates.
-- 3D Monte Carlo has no `--seed` (1D does) — 3D runs aren't reproducible.
-- 3D staleness hash omits `functional_direction`/`geometry_3d`/
-  `torsor_bounds` (documented in the 3D guide's Limitations section).
+- ~~3D Monte Carlo not seedable~~ — **resolved**: `--seed` now drives the
+  3D run too and the seed is persisted in `analysis_results_3d.mc_seed`.
+- 3D staleness hash now covers `functional_direction`; linked feature
+  files (`geometry_3d`/`torsor_bounds`) are still uncovered (documented).
 - 1D RSS `yield`/`margin` use the unshifted mean while Cpk uses the
   Bender-shifted mean (code comments show this is intentional; the pair
   reads inconsistently — consider shifting both under `mean_shift_k > 0`).

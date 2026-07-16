@@ -448,6 +448,10 @@ pub struct Chain3DResult {
 
     /// Variance contribution per contributor per DOF
     pub sensitivity: Vec<[f64; 6]>,
+
+    /// Seed used for the Monte Carlo run (if run). Re-running with the same
+    /// seed and contributor chain reproduces the results bit for bit.
+    pub mc_seed: Option<u64>,
 }
 
 /// Get bounds value as [min, max], defaulting to [0, 0] for free DOF
@@ -700,9 +704,26 @@ fn sample_torsor<R: Rng>(
     result
 }
 
-/// Run Monte Carlo 3D simulation
-pub fn monte_carlo_3d(contributors: &[ChainContributor3D], iterations: u32) -> ResultTorsor {
-    let mut rng = rand::rng();
+/// Run Monte Carlo 3D simulation with a freshly drawn random seed.
+/// The seed is recorded in the result for reproducibility.
+pub fn monte_carlo_3d(contributors: &[ChainContributor3D], iterations: u32) -> (ResultTorsor, u64) {
+    let seed: u64 = rand::Rng::random(&mut rand::rng());
+    (
+        monte_carlo_3d_with_seed(contributors, iterations, seed),
+        seed,
+    )
+}
+
+/// Run Monte Carlo 3D simulation with a caller-provided seed. Same seed +
+/// same contributor chain -> same results, bit for bit (parity with the 1D
+/// path's --seed support).
+pub fn monte_carlo_3d_with_seed(
+    contributors: &[ChainContributor3D],
+    iterations: u32,
+    seed: u64,
+) -> ResultTorsor {
+    use rand::SeedableRng;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
 
     // Collect samples for each DOF
     let mut samples: [Vec<f64>; 6] = Default::default();
@@ -848,6 +869,18 @@ pub fn analyze_chain_3d(
     run_monte_carlo: bool,
     monte_carlo_iterations: u32,
 ) -> Chain3DResult {
+    analyze_chain_3d_seeded(contributors, run_monte_carlo, monte_carlo_iterations, None)
+}
+
+/// Like [`analyze_chain_3d`], with an optional caller-provided Monte Carlo
+/// seed. `None` draws a fresh seed; either way the seed used is recorded in
+/// the result for reproducible re-runs.
+pub fn analyze_chain_3d_seeded(
+    contributors: &[ChainContributor3D],
+    run_monte_carlo: bool,
+    monte_carlo_iterations: u32,
+    seed: Option<u64>,
+) -> Chain3DResult {
     // Worst-case analysis
     let wc_bounds = propagate_worst_case(contributors);
 
@@ -858,12 +891,13 @@ pub fn analyze_chain_3d(
     merge_wc_into_result(&mut rss_stats, &wc_bounds);
 
     // Optional Monte Carlo
-    let mc_stats = if run_monte_carlo && !contributors.is_empty() {
-        let mc = monte_carlo_3d(contributors, monte_carlo_iterations);
+    let (mc_stats, mc_seed) = if run_monte_carlo && !contributors.is_empty() {
+        let seed = seed.unwrap_or_else(|| rand::Rng::random(&mut rand::rng()));
+        let mc = monte_carlo_3d_with_seed(contributors, monte_carlo_iterations, seed);
         merge_mc_into_result(&mut rss_stats, &mc);
-        Some(mc)
+        (Some(mc), Some(seed))
     } else {
-        None
+        (None, None)
     };
 
     Chain3DResult {
@@ -871,6 +905,7 @@ pub fn analyze_chain_3d(
         rss_stats,
         mc_stats,
         sensitivity,
+        mc_seed,
     }
 }
 

@@ -3,8 +3,6 @@
 //! This module consolidates filter types used across entity commands,
 //! eliminating duplication and ensuring consistent behavior.
 
-#![allow(dead_code)]
-
 use clap::ValueEnum;
 
 use tdt_core::core::entity::{Priority, Status};
@@ -31,6 +29,10 @@ pub enum StatusFilter {
     All,
 }
 
+// Exercised by tests; entity commands currently re-implement this matching
+// locally. The entity-command consolidation adopts these as the single
+// implementation — see TECH_DEBT.md item 1.
+#[allow(dead_code)]
 impl StatusFilter {
     /// Check if a Status matches this filter
     pub fn matches(&self, status: &Status) -> bool {
@@ -95,6 +97,8 @@ pub enum PriorityFilter {
     All,
 }
 
+// See note on StatusFilter above.
+#[allow(dead_code)]
 impl PriorityFilter {
     /// Check if a Priority matches this filter
     pub fn matches(&self, priority: &Priority) -> bool {

@@ -601,6 +601,11 @@ pub struct Analysis3DResults {
     /// Analysis timestamp
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub analyzed_at: Option<DateTime<Utc>>,
+
+    /// Seed used for the 3D Monte Carlo run. Re-running `tdt tol analyze
+    /// --3d --seed <N>` with the same chain reproduces results bit for bit.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mc_seed: Option<u64>,
 }
 
 /// Disposition status
@@ -851,6 +856,12 @@ impl Stackup {
         hasher.update(self.sigma_level.to_le_bytes());
         hasher.update(self.mean_shift_k.to_le_bytes());
         hasher.update([u8::from(self.include_gdt)]);
+        if let Some(dir) = self.functional_direction {
+            hasher.update(b"fdir:");
+            for c in dir {
+                hasher.update(c.to_le_bytes());
+            }
+        }
         for c in &self.contributors {
             // Length-prefix the variable-width name so adjacent fields can't
             // alias across record boundaries.

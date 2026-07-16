@@ -5,7 +5,6 @@ pub mod commands;
 pub mod entity_cmd;
 pub mod filters;
 pub mod helpers;
-pub mod output;
 pub mod table;
 pub mod viz;
 

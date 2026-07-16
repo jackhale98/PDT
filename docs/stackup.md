@@ -125,14 +125,11 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 
 ### Analysis3DConfig Object
 
-> **Note:** This object is reserved for future use — the current CLI does not
-> read it. Use `tdt tol analyze --3d --iterations N` to control 3D analysis.
-
 | Field | Type | Description |
 |-------|------|-------------|
-| `enabled` | boolean | Reserved (not currently read) |
-| `method` | string | Reserved (`--3d` always runs both Jacobian and Monte Carlo) |
-| `monte_carlo_iterations` | integer | Reserved (use `--iterations`) |
+| `enabled` | boolean | When `true`, `tdt tol analyze` runs 3D analysis without needing `--3d` |
+| `method` | string | Reserved (analysis always runs both Jacobian and Monte Carlo) |
+| `monte_carlo_iterations` | integer | 3D Monte Carlo iterations, used unless `--iterations` is passed explicitly |
 
 ### TorsorStats Object
 

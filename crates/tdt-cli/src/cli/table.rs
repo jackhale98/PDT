@@ -10,8 +10,6 @@
 //! - CSV, ID, and ShortId formats remain single-line for pipability
 //! - TSV and Md formats support wrapped output
 
-#![allow(dead_code)]
-
 use chrono::{DateTime, Local, Utc};
 use console::style;
 
@@ -44,14 +42,6 @@ impl TableConfig {
         Self {
             wrap_width: Some(width),
             show_summary: true,
-        }
-    }
-
-    /// Create config optimized for piping (no wrapping, no summary)
-    pub fn for_pipe() -> Self {
-        Self {
-            wrap_width: None,
-            show_summary: false,
         }
     }
 }
@@ -156,8 +146,6 @@ pub enum CellValue {
     DateTime(DateTime<Utc>),
     /// Numeric value
     Number(i64),
-    /// Float value with precision
-    Float(f64, usize),
     /// Tags/labels as comma-separated
     Tags(Vec<String>),
     /// Empty/placeholder
@@ -321,9 +309,6 @@ impl CellValue {
             CellValue::Number(n) => {
                 format!("{:>width$}", n, width = width)
             }
-            CellValue::Float(f, precision) => {
-                format!("{:>width$.prec$}", f, width = width, prec = precision)
-            }
             CellValue::Tags(tags) => {
                 let joined = tags.join(", ");
                 format!(
@@ -373,7 +358,6 @@ impl CellValue {
                 local.format("%Y-%m-%dT%H:%M:%S").to_string()
             }
             CellValue::Number(n) => n.to_string(),
-            CellValue::Float(f, precision) => format!("{:.prec$}", f, prec = precision),
             CellValue::Tags(tags) => escape_csv(&tags.join(", ")),
             CellValue::Empty => String::new(),
         }
@@ -400,7 +384,6 @@ impl CellValue {
                 local.format("%Y-%m-%d %H:%M").to_string()
             }
             CellValue::Number(n) => n.to_string(),
-            CellValue::Float(f, precision) => format!("{:.prec$}", f, prec = precision),
             CellValue::Tags(tags) => tags.join(", "),
             CellValue::FitResult(s) => s.clone(),
             CellValue::FitMatch(s) => match s.as_str() {
@@ -461,7 +444,6 @@ impl CellValue {
                 local.format("%Y-%m-%dT%H:%M:%S").to_string()
             }
             CellValue::Number(n) => n.to_string(),
-            CellValue::Float(f, precision) => format!("{:.prec$}", f, prec = precision),
             CellValue::Tags(tags) => tags.join(", "),
             CellValue::Empty => String::new(),
         }
@@ -488,7 +470,6 @@ impl CellValue {
             CellValue::Date(_) => 10,     // "YYYY-MM-DD"
             CellValue::DateTime(_) => 16, // "YYYY-MM-DD HH:MM"
             CellValue::Number(n) => n.to_string().len(),
-            CellValue::Float(f, precision) => format!("{:.prec$}", f, prec = precision).len(),
             CellValue::Tags(tags) => tags.join(", ").len(),
             CellValue::Empty => 1,
         }
@@ -540,7 +521,6 @@ impl TableRow {
 pub struct TableFormatter<'a> {
     columns: &'a [ColumnDef],
     entity_name: &'static str,
-    entity_name_plural: &'static str,
     entity_prefix: &'static str,
     config: TableConfig,
 }
@@ -554,16 +534,9 @@ impl<'a> TableFormatter<'a> {
         Self {
             columns,
             entity_name,
-            entity_name_plural: entity_name, // Default to same name with (es) suffix
             entity_prefix,
             config: TableConfig::default(),
         }
-    }
-
-    /// Set a custom plural name (e.g., "processes" instead of "process(es)")
-    pub fn with_plural(mut self, plural: &'static str) -> Self {
-        self.entity_name_plural = plural;
-        self
     }
 
     /// Configure the formatter with custom settings
@@ -826,21 +799,6 @@ impl<'a> TableFormatter<'a> {
             }
         }
     }
-}
-
-/// Convert a list of column keys to their string representations
-/// for use with TableFormatter::output
-pub fn columns_to_keys<C: std::fmt::Display>(columns: &[C]) -> Vec<&'static str> {
-    columns
-        .iter()
-        .map(|c| {
-            // Leak the string to get a static lifetime
-            // This is acceptable because column names are fixed at compile time
-            // and we only have a small number of them
-            let s = c.to_string();
-            Box::leak(s.into_boxed_str()) as &'static str
-        })
-        .collect()
 }
 
 #[cfg(test)]

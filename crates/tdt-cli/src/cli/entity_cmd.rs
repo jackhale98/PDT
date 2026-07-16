@@ -6,11 +6,9 @@
 //! Note: Some of this infrastructure is not yet adopted - individual entity
 //! commands have their own implementations. Kept for potential future refactoring.
 
-#![allow(dead_code)]
-
 use console::style;
 use miette::{IntoDiagnostic, Result};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -26,6 +24,11 @@ use tdt_core::core::Config;
 // =========================================================================
 
 /// Static configuration for an entity type
+///
+/// `prefix` and `name_plural` are populated by every entity's ENTITY_CONFIG
+/// but not yet read: the entity-command consolidation (TECH_DEBT.md item 1)
+/// builds its generic list/show/delete on exactly these fields.
+#[allow(dead_code)]
 pub struct EntityConfig {
     /// Entity prefix (e.g., EntityPrefix::Sup)
     pub prefix: EntityPrefix,
@@ -40,69 +43,6 @@ pub struct EntityConfig {
 // =========================================================================
 // Common Show Implementation
 // =========================================================================
-
-/// Generic show command that handles YAML/JSON/ID output formats
-///
-/// For pretty output (default), call the entity-specific pretty printer after this.
-pub fn run_show_generic<T>(
-    id: &str,
-    config: &EntityConfig,
-    global: &GlobalOpts,
-) -> Result<Option<(T, PathBuf)>>
-where
-    T: DeserializeOwned + Serialize,
-{
-    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-
-    // Resolve short ID if needed
-    let short_ids = ShortIdIndex::load(&project);
-    let resolved_id = short_ids.resolve(id).unwrap_or_else(|| id.to_string());
-
-    // Find the entity file
-    let path = find_entity_file(&project, &resolved_id, config.dirs)?;
-
-    // Read and parse entity
-    let content = fs::read_to_string(&path).into_diagnostic()?;
-    let entity: T = serde_yml::from_str(&content).into_diagnostic()?;
-
-    match global.output {
-        OutputFormat::Yaml => {
-            print!("{}", content);
-            Ok(None)
-        }
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&entity).into_diagnostic()?;
-            println!("{}", json);
-            Ok(None)
-        }
-        OutputFormat::Id => {
-            // For ID output, we need to extract the ID - caller handles this
-            Ok(Some((entity, path)))
-        }
-        OutputFormat::ShortId => {
-            // For ShortId output, caller handles this
-            Ok(Some((entity, path)))
-        }
-        _ => {
-            // Return entity for pretty printing
-            Ok(Some((entity, path)))
-        }
-    }
-}
-
-/// Print entity ID in the requested format
-pub fn print_entity_id(id: &EntityId, format: OutputFormat, project: &Project) {
-    match format {
-        OutputFormat::ShortId => {
-            let short_ids = ShortIdIndex::load(project);
-            let short_id = short_ids.get_short_id(&id.to_string()).unwrap_or_default();
-            println!("{}", short_id);
-        }
-        _ => {
-            println!("{}", id);
-        }
-    }
-}
 
 // =========================================================================
 // Common Edit Implementation
@@ -335,36 +275,6 @@ pub fn status_filter_to_str(filter: StatusFilter) -> Option<&'static str> {
     }
 }
 
-/// Check if a status string matches the filter
-pub fn status_matches_filter(status: &str, filter: StatusFilter) -> bool {
-    match filter {
-        StatusFilter::Draft => status == "draft",
-        StatusFilter::Review => status == "review",
-        StatusFilter::Approved => status == "approved",
-        StatusFilter::Released => status == "released",
-        StatusFilter::Obsolete => status == "obsolete",
-        StatusFilter::Active => status != "obsolete",
-        StatusFilter::All => true,
-    }
-}
-
-/// Check if a Status enum matches the filter
-pub fn status_enum_matches_filter(
-    status: &tdt_core::core::entity::Status,
-    filter: StatusFilter,
-) -> bool {
-    use tdt_core::core::entity::Status;
-    match filter {
-        StatusFilter::Draft => *status == Status::Draft,
-        StatusFilter::Review => *status == Status::Review,
-        StatusFilter::Approved => *status == Status::Approved,
-        StatusFilter::Released => *status == Status::Released,
-        StatusFilter::Obsolete => *status == Status::Obsolete,
-        StatusFilter::Active => *status != Status::Obsolete,
-        StatusFilter::All => true,
-    }
-}
-
 /// Convert StatusFilter to Option<Status> for EntityFilter
 pub fn status_filter_to_status(filter: StatusFilter) -> Option<tdt_core::core::entity::Status> {
     use tdt_core::core::entity::Status;
@@ -446,22 +356,6 @@ pub fn output_new_entity(
 // =========================================================================
 // Common List Output Helpers
 // =========================================================================
-
-/// Print "No X found" message
-pub fn print_no_results(name_plural: &str) {
-    println!("No {} found.", name_plural);
-}
-
-/// Print list footer with count
-pub fn print_list_footer(count: usize, prefix: EntityPrefix) {
-    println!();
-    println!(
-        "{} {}(es) found. Use {} to reference by short ID.",
-        style(count).cyan(),
-        prefix,
-        style(format!("{}@N", prefix)).cyan()
-    );
-}
 
 // =========================================================================
 // Generic List Implementation

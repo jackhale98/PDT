@@ -3,9 +3,7 @@
 //! This module contains utility functions that are used across multiple
 //! command modules to avoid code duplication.
 
-#![allow(dead_code)]
-
-use chrono::{DateTime, Local, NaiveDate, Utc};
+use chrono::{DateTime, Local, Utc};
 use std::collections::HashSet;
 use std::io::{self, BufRead, IsTerminal};
 use tdt_core::core::cache::EntityCache;
@@ -95,13 +93,6 @@ pub fn read_ids_from_stdin() -> Option<Vec<String>> {
     }
 }
 
-/// Check if stdin has piped input available
-///
-/// Returns `true` if stdin is not a terminal (i.e., data is being piped in).
-pub fn stdin_has_data() -> bool {
-    !io::stdin().is_terminal()
-}
-
 /// Read a single entity ID from stdin if available
 ///
 /// Returns `Some(String)` with the first ID if stdin is piped (not a terminal),
@@ -189,121 +180,12 @@ pub fn resolve_linked_to(
     Some(cache.get_ids_linked_to(&resolved, via))
 }
 
-/// Format a UTC datetime as local time with date and time
-///
-/// Displays in user's local timezone as "YYYY-MM-DD HH:MM"
-pub fn format_datetime_local(dt: &DateTime<Utc>) -> String {
-    let local: DateTime<Local> = dt.with_timezone(&Local);
-    local.format("%Y-%m-%d %H:%M").to_string()
-}
-
 /// Format a UTC datetime as local date only
 ///
 /// Displays in user's local timezone as "YYYY-MM-DD"
 pub fn format_date_local(dt: &DateTime<Utc>) -> String {
     let local: DateTime<Local> = dt.with_timezone(&Local);
     local.format("%Y-%m-%d").to_string()
-}
-
-/// Format a NaiveDate as string
-///
-/// Displays as "YYYY-MM-DD"
-pub fn format_naive_date(date: &NaiveDate) -> String {
-    date.format("%Y-%m-%d").to_string()
-}
-
-/// A builder for creating markdown tables with auto-calculated column widths
-///
-/// # Example
-/// ```
-/// use tdt::cli::helpers::MarkdownTable;
-///
-/// let mut table = MarkdownTable::new(vec!["ID", "Name", "Value"]);
-/// table.add_row(vec!["1", "Alpha", "100"]);
-/// table.add_row(vec!["2", "Beta", "2000"]);
-/// println!("{}", table.render());
-/// ```
-///
-/// Output:
-/// ```text
-/// | ID | Name  | Value |
-/// |----|-------|-------|
-/// | 1  | Alpha | 100   |
-/// | 2  | Beta  | 2000  |
-/// ```
-#[allow(dead_code)]
-pub struct MarkdownTable {
-    headers: Vec<String>,
-    rows: Vec<Vec<String>>,
-}
-
-impl MarkdownTable {
-    /// Create a new table with the given headers
-    pub fn new<S: AsRef<str>>(headers: Vec<S>) -> Self {
-        Self {
-            headers: headers
-                .into_iter()
-                .map(|h| h.as_ref().to_string())
-                .collect(),
-            rows: Vec::new(),
-        }
-    }
-
-    /// Add a row to the table
-    pub fn add_row<S: AsRef<str>>(&mut self, row: Vec<S>) {
-        self.rows
-            .push(row.into_iter().map(|c| c.as_ref().to_string()).collect());
-    }
-
-    /// Check if the table has any rows
-    pub fn is_empty(&self) -> bool {
-        self.rows.is_empty()
-    }
-
-    /// Render the table as a markdown string with auto-calculated column widths
-    pub fn render(&self) -> String {
-        if self.headers.is_empty() {
-            return String::new();
-        }
-
-        // Calculate column widths (minimum is header width)
-        let mut widths: Vec<usize> = self.headers.iter().map(|h| h.len()).collect();
-        for row in &self.rows {
-            for (i, cell) in row.iter().enumerate() {
-                if i < widths.len() {
-                    widths[i] = widths[i].max(cell.len());
-                }
-            }
-        }
-
-        let mut output = String::new();
-
-        // Header row
-        output.push('|');
-        for (i, header) in self.headers.iter().enumerate() {
-            output.push_str(&format!(" {:<width$} |", header, width = widths[i]));
-        }
-        output.push('\n');
-
-        // Separator row
-        output.push('|');
-        for width in &widths {
-            output.push_str(&format!("{:-<width$}|", "", width = width + 2));
-        }
-        output.push('\n');
-
-        // Data rows
-        for row in &self.rows {
-            output.push('|');
-            for (i, cell) in row.iter().enumerate() {
-                let width = widths.get(i).copied().unwrap_or(0);
-                output.push_str(&format!(" {:<width$} |", cell, width = width));
-            }
-            output.push('\n');
-        }
-
-        output
-    }
 }
 
 /// Round a floating-point value to avoid floating-point artifacts

@@ -1,7 +1,5 @@
 //! Shared utilities for CLI commands
 
-#![allow(dead_code)]
-
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
@@ -66,18 +64,6 @@ pub fn format_link_with_title(
     }
 
     display_id
-}
-
-/// Format multiple linked entity IDs with titles
-pub fn format_links_with_titles(
-    entity_ids: &[String],
-    short_ids: &ShortIdIndex,
-    cache: &Option<EntityCache>,
-) -> Vec<String> {
-    entity_ids
-        .iter()
-        .map(|id| format_link_with_title(id, short_ids, cache))
-        .collect()
 }
 
 // =========================================================================

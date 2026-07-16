@@ -26,7 +26,7 @@ pub enum BulkCommands {
 
 #[derive(clap::Args, Debug)]
 pub struct SetStatusArgs {
-    /// New status value (draft, review, approved, obsolete)
+    /// New status value (draft, review, approved, released, obsolete)
     pub status: String,
 
     /// Entity IDs or short IDs to update (also reads from stdin if piped)
@@ -134,7 +134,7 @@ fn run_set_status(mut args: SetStatusArgs) -> Result<()> {
     }
 
     // Validate status value
-    let valid_statuses = ["draft", "review", "approved", "obsolete"];
+    let valid_statuses = ["draft", "review", "approved", "released", "obsolete"];
     if !valid_statuses.contains(&args.status.to_lowercase().as_str()) {
         return Err(miette::miette!(
             "Invalid status '{}'. Valid values: {}",
@@ -701,13 +701,17 @@ fn entity_type_dirs(entity_type: &str) -> Vec<&'static str> {
         "rslt" | "result" => vec!["verification/results", "validation/results"],
         "cmp" | "component" => vec!["bom/components"],
         "asm" | "assembly" => vec!["bom/assemblies"],
-        "sup" | "supplier" => vec!["procurement/suppliers"],
-        "quote" => vec!["procurement/quotes"],
+        "sup" | "supplier" => vec!["bom/suppliers"],
+        "quot" | "quote" => vec!["bom/quotes"],
         "proc" | "process" => vec!["manufacturing/processes"],
         "ctrl" | "control" => vec!["manufacturing/controls"],
         "work" => vec!["manufacturing/work_instructions"],
         "ncr" => vec!["manufacturing/ncrs"],
         "capa" => vec!["manufacturing/capas"],
+        "lot" => vec!["manufacturing/lots"],
+        "dev" | "deviation" => vec!["manufacturing/deviations"],
+        "haz" | "hazard" => vec!["safety/hazards"],
+        "act" | "action" => vec!["actions"],
         "feat" | "feature" => vec!["tolerances/features"],
         "mate" => vec!["tolerances/mates"],
         "tol" | "stackup" => vec!["tolerances/stackups"],
@@ -726,20 +730,45 @@ fn find_entity_file(project: &Project, id: &str) -> Option<PathBuf> {
         "RSLT" => vec!["verification/results", "validation/results"],
         "CMP" => vec!["bom/components"],
         "ASM" => vec!["bom/assemblies"],
-        "SUP" => vec!["procurement/suppliers"],
-        "QUOTE" => vec!["procurement/quotes"],
+        "SUP" => vec!["bom/suppliers"],
+        "QUOT" => vec!["bom/quotes"],
         "PROC" => vec!["manufacturing/processes"],
         "CTRL" => vec!["manufacturing/controls"],
         "WORK" => vec!["manufacturing/work_instructions"],
         "NCR" => vec!["manufacturing/ncrs"],
         "CAPA" => vec!["manufacturing/capas"],
+        "LOT" => vec!["manufacturing/lots"],
+        "DEV" => vec!["manufacturing/deviations"],
+        "HAZ" => vec!["safety/hazards"],
+        "ACT" => vec!["actions"],
         "FEAT" => vec!["tolerances/features"],
         "MATE" => vec!["tolerances/mates"],
         "TOL" => vec!["tolerances/stackups"],
         _ => return None,
     };
 
-    for dir_path in dirs {
+    // First pass: match by canonical filename (<ID>.tdt.yaml)
+    let target_filename = format!("{}.tdt.yaml", id);
+    for dir_path in &dirs {
+        let dir = project.root().join(dir_path);
+        if !dir.exists() {
+            continue;
+        }
+
+        for entry in walkdir::WalkDir::new(&dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+        {
+            if entry.file_name().to_string_lossy() == target_filename {
+                return Some(entry.path().to_path_buf());
+            }
+        }
+    }
+
+    // Fallback: match a top-level `id:` line exactly (anchored to line start so
+    // link entries like `- id: <ID>` in other files never match)
+    for dir_path in &dirs {
         let dir = project.root().join(dir_path);
         if !dir.exists() {
             continue;
@@ -752,9 +781,12 @@ fn find_entity_file(project: &Project, id: &str) -> Option<PathBuf> {
             .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))
         {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
-                if content.contains(&format!("id: {}", id))
-                    || content.contains(&format!("id: \"{}\"", id))
-                {
+                let matches_id = content.lines().any(|line| {
+                    line.strip_prefix("id:").is_some_and(|rest| {
+                        rest.trim().trim_matches('"').trim_matches('\'') == id
+                    })
+                });
+                if matches_id {
                     return Some(entry.path().to_path_buf());
                 }
             }
@@ -800,12 +832,52 @@ fn update_yaml_field(file_path: &PathBuf, field: &str, value: &str) -> Result<()
     Ok(())
 }
 
+/// Strip surrounding quotes from a YAML scalar item
+fn unquote(s: &str) -> &str {
+    let s = s.trim();
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .or_else(|| s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))
+        .unwrap_or(s)
+}
+
+/// Check whether the `tags:` section of the file contains the exact tag
+fn file_has_tag(content: &str, tag: &str) -> bool {
+    let mut in_tags = false;
+    for line in content.lines() {
+        if let Some(rest) = line.strip_prefix("tags:") {
+            // Inline list form: tags: [a, b, c]
+            let rest = rest.trim();
+            if let Some(inner) = rest.strip_prefix('[').and_then(|r| r.strip_suffix(']')) {
+                if inner.split(',').any(|item| unquote(item) == tag) {
+                    return true;
+                }
+            }
+            in_tags = true;
+            continue;
+        }
+        if in_tags {
+            let trimmed = line.trim();
+            if let Some(item) = trimmed.strip_prefix("- ") {
+                if line.starts_with("  ") && unquote(item) == tag {
+                    return true;
+                }
+            }
+            if !line.starts_with("  ") && !line.is_empty() {
+                // End of tags section
+                in_tags = false;
+            }
+        }
+    }
+    false
+}
+
 fn add_tag_to_file(file_path: &PathBuf, tag: &str) -> Result<bool> {
     let content = std::fs::read_to_string(file_path)
         .map_err(|e| miette::miette!("Failed to read file: {}", e))?;
 
-    // Check if tag already exists
-    if content.contains(&format!("- {}", tag)) || content.contains(&format!("\"{}\"", tag)) {
+    // Check if tag already exists (exact match within the tags section only)
+    if file_has_tag(&content, tag) {
         return Ok(false);
     }
 
@@ -870,22 +942,43 @@ fn remove_tag_from_file(file_path: &PathBuf, tag: &str) -> Result<bool> {
     let content = std::fs::read_to_string(file_path)
         .map_err(|e| miette::miette!("Failed to read file: {}", e))?;
 
-    let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-    let original_len = lines.len();
+    // Only remove list items within the `tags:` section, so identical list
+    // values elsewhere in the file (e.g. approval.required_roles) are untouched.
+    let mut kept: Vec<&str> = Vec::new();
+    let mut in_tags = false;
+    let mut removed = false;
 
-    // Find and remove the tag line
-    lines.retain(|line| {
-        let trimmed = line.trim();
-        !(trimmed == format!("- {}", tag)
-            || trimmed == format!("- \"{}\"", tag)
-            || trimmed == format!("- '{}'", tag))
-    });
+    for line in content.lines() {
+        if line.starts_with("tags:") {
+            in_tags = true;
+            kept.push(line);
+            continue;
+        }
 
-    if lines.len() == original_len {
+        if in_tags {
+            if !line.starts_with("  ") && !line.is_empty() {
+                // End of tags section
+                in_tags = false;
+            } else {
+                let trimmed = line.trim();
+                if trimmed == format!("- {}", tag)
+                    || trimmed == format!("- \"{}\"", tag)
+                    || trimmed == format!("- '{}'", tag)
+                {
+                    removed = true;
+                    continue;
+                }
+            }
+        }
+
+        kept.push(line);
+    }
+
+    if !removed {
         return Ok(false);
     }
 
-    let new_content = lines.join("\n") + "\n";
+    let new_content = kept.join("\n") + "\n";
     std::fs::write(file_path, new_content)
         .map_err(|e| miette::miette!("Failed to write file: {}", e))?;
 

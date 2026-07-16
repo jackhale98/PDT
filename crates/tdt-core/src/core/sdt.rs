@@ -317,10 +317,14 @@ pub fn get_tolerance_dofs(
 /// Build a Jacobian matrix for a contributor at position r
 ///
 /// The Jacobian transforms a local torsor to its contribution at the assembly origin.
+/// The displacement of a point P under a small screw (δT, δR) defined at the
+/// feature location r is δP = δT + δR × (P − r). Evaluated at the assembly
+/// origin (P = O = 0), this gives δP = δT − δR × r, i.e. u_out = u − ω × r.
+///
 /// For a feature at position r = [rx, ry, rz]:
 ///
 /// ```text
-/// J = | I₃   [r]× |
+/// J = | I₃  −[r]× |
 ///     | 0₃    I₃  |
 /// ```
 ///
@@ -336,17 +340,18 @@ pub fn build_jacobian(position: [f64; 3]) -> JacobianMatrix {
     // Start with identity
     let mut j = Matrix6::identity();
 
-    // Add skew-symmetric contribution to upper-right 3×3 block
-    // This captures the effect of rotations producing translations at a distance
-    // J[0,4] = rz  (rotation about Y produces translation in X at distance rz)
-    // J[0,5] = -ry (rotation about Z produces translation in X at distance -ry)
+    // Add −[r]× to the upper-right 3×3 block (u_out = u − ω × r).
+    // This captures the effect of rotations producing translations at a distance:
+    // J[0,4] = -rz (rotation about Y at height rz produces -X translation at origin)
+    // J[0,5] = ry  (rotation about Z at offset ry produces +X translation at origin)
+    // J[2,4] = rx  (rotation about Y at offset rx produces +Z translation at origin)
     // etc.
-    j[(0, 4)] = rz;
-    j[(0, 5)] = -ry;
-    j[(1, 3)] = -rz;
-    j[(1, 5)] = rx;
-    j[(2, 3)] = ry;
-    j[(2, 4)] = -rx;
+    j[(0, 4)] = -rz;
+    j[(0, 5)] = ry;
+    j[(1, 3)] = rz;
+    j[(1, 5)] = -rx;
+    j[(2, 3)] = -ry;
+    j[(2, 4)] = rx;
 
     j
 }
@@ -901,14 +906,19 @@ mod tests {
 
     #[test]
     fn test_jacobian_with_offset() {
-        // Test that rotation about Y at position [10, 0, 0] produces translation in Z
+        // Physics: u_out = u − ω × r (δP = δT + δR × (P − r) evaluated at P = O).
+        // Rotation about Y at position [10, 0, 0] produces +Z translation at the origin.
         let j = build_jacobian([10.0, 0.0, 0.0]);
 
-        // J[2,4] should be -rx = -10 (rotation about Y produces -Z translation at X offset)
-        assert!((j[(2, 4)] - (-10.0)).abs() < 1e-10);
+        // J[2,4] should be +rx = 10: β = +0.01 rad at x = 10 gives
+        // w = −(ω × r)_z = −(−β·rx) = +0.1 at the assembly origin.
+        assert!((j[(2, 4)] - 10.0).abs() < 1e-10);
+        let beta = 0.01;
+        assert!((j[(2, 4)] * beta - 0.1).abs() < 1e-10);
 
-        // J[1,5] should be rx = 10 (rotation about Z produces Y translation at X offset)
-        assert!((j[(1, 5)] - 10.0).abs() < 1e-10);
+        // J[1,5] should be -rx = -10 (rotation about Z at +X offset produces
+        // -Y translation at the origin: −(ω × r)_y = −γ·rx)
+        assert!((j[(1, 5)] - (-10.0)).abs() < 1e-10);
     }
 
     #[test]
@@ -937,6 +947,37 @@ mod tests {
         // At origin with identity Jacobian, result should match input
         assert!((result.u.unwrap()[0] - (-0.1)).abs() < 1e-10);
         assert!((result.u.unwrap()[1] - 0.1).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_propagate_worst_case_lever_arm_sign() {
+        // Regression for lever-arm sign: an asymmetric rotation bound
+        // beta ∈ [0, +0.01] rad at x = 10 must produce w ∈ [0, +0.1]
+        // at the assembly origin (u_out = u − ω × r).
+        let contrib = ChainContributor3D {
+            name: "Lever".to_string(),
+            feature_id: None,
+            geometry_class: GeometryClass::Cylinder,
+            position: [10.0, 0.0, 0.0],
+            axis: [0.0, 0.0, 1.0],
+            bounds: TorsorBounds {
+                u: None,
+                v: None,
+                w: None,
+                alpha: None,
+                beta: Some([0.0, 0.01]),
+                gamma: None,
+            },
+            distribution: Distribution::Normal,
+            sigma_level: 6.0,
+            length_info: None,
+        };
+
+        let result = propagate_worst_case(&[contrib]);
+
+        let [w_min, w_max] = result.w.unwrap();
+        assert!((w_min - 0.0).abs() < 1e-10, "w_min should be 0.0, got {}", w_min);
+        assert!((w_max - 0.1).abs() < 1e-10, "w_max should be +0.1, got {}", w_max);
     }
 
     #[test]

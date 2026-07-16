@@ -426,10 +426,10 @@ tdt trace from RISK-01HC2
 tdt trace to RISK-01HC2
 
 # Find unlinked risks
-tdt trace orphans --type risk
+tdt trace orphans --entity-type risk
 
 # Risk coverage report
-tdt trace coverage --type risk
+tdt trace matrix --source-type risk
 ```
 
 ## Validation

@@ -265,8 +265,8 @@ tdt ncr list --severity critical
 tdt ncr list --severity major
 
 # Filter by category
-tdt ncr list --category dimensional
-tdt ncr list --category material
+tdt ncr list --type dimensional
+tdt ncr list --type material
 
 # Filter by NCR status
 tdt ncr list --ncr-status open

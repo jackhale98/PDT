@@ -407,16 +407,56 @@ impl<'a> MateService<'a> {
         Ok(mate)
     }
 
-    /// Delete a mate
+    /// Delete a mate. With `force=false`, refuses to delete if any stackup
+    /// references this mate via `links.mates_used`. The error message lists the
+    /// referencing stackup IDs so the caller can decide what to do.
     pub fn delete(&self, id: &str, force: bool) -> ServiceResult<()> {
-        let (path, _) = self.find_mate(id)?;
+        let (path, mate) = self.find_mate(id)?;
 
         if !force {
-            // Could check for references in stackups
+            // Check references against the resolved full ID, not the raw input:
+            // `id` may be a partial ULID or short ID that would never match the
+            // full IDs stored in links.mates_used.
+            let full_id = mate.id.to_string();
+
+            // Generic incoming-link guard (same protection every other entity
+            // type gets from ServiceBase::delete).
+            let links_to = self.cache.get_links_to(&full_id);
+            if !links_to.is_empty() {
+                return Err(ServiceError::HasReferences);
+            }
+
+            let referencing = self.stackups_referencing(&full_id)?;
+            if !referencing.is_empty() {
+                return Err(ServiceError::ValidationFailed(format!(
+                    "mate {} is referenced by {} stackup(s) via links.mates_used: {}. \
+                     Remove the reference(s) first or pass --force.",
+                    full_id,
+                    referencing.len(),
+                    referencing.join(", ")
+                )));
+            }
         }
 
         fs::remove_file(&path)?;
         Ok(())
+    }
+
+    /// Return all stackup IDs that list `mate_id` in `links.mates_used`.
+    /// Reads stackups directly from disk so it works without the cache being
+    /// up to date (mates_used isn't currently indexed by the link cache).
+    fn stackups_referencing(&self, mate_id: &str) -> ServiceResult<Vec<String>> {
+        let stackup_dir = self.project.root().join("tolerances/stackups");
+        if !stackup_dir.exists() {
+            return Ok(Vec::new());
+        }
+        let stackups: Vec<crate::entities::stackup::Stackup> =
+            loader::load_all(&stackup_dir).map_err(ServiceError::from)?;
+        Ok(stackups
+            .into_iter()
+            .filter(|s| s.links.mates_used.iter().any(|m| m == mate_id))
+            .map(|s| s.id.to_string())
+            .collect())
     }
 
     /// Recalculate fit analysis for a mate from its linked features
@@ -761,6 +801,61 @@ mod tests {
         assert_eq!(stats.by_type.interference, 1);
         assert_eq!(stats.by_type.transition, 1);
         assert_eq!(stats.by_fit.not_analyzed, 3);
+    }
+
+    #[test]
+    fn test_delete_mate_blocked_when_referenced_by_stackup() {
+        use crate::entities::stackup::Stackup;
+        use crate::services::stackup::{CreateStackup, StackupService};
+
+        let (_tmp, project, cache) = setup();
+        let mate_service = MateService::new(&project, &cache);
+        let stackup_service = StackupService::new(&project, &cache);
+
+        let mate = mate_service.create(make_create_mate("Mate")).unwrap();
+        let stackup = stackup_service
+            .create(CreateStackup {
+                title: "S".into(),
+                target_name: "Gap".into(),
+                target_nominal: 1.0,
+                target_upper: 1.5,
+                target_lower: 0.5,
+                units: None,
+                critical: false,
+                description: None,
+                sigma_level: None,
+                mean_shift_k: None,
+                include_gdt: false,
+                tags: Vec::new(),
+                author: "Test".into(),
+            })
+            .unwrap();
+
+        // Manually wire the stackup → mate reference (no service helper yet).
+        let stackup_path = project
+            .root()
+            .join("tolerances/stackups")
+            .join(format!("{}.tdt.yaml", stackup.id));
+        let mut s: Stackup = crate::yaml::parse_yaml_file(&stackup_path).unwrap();
+        s.links.mates_used.push(mate.id.to_string());
+        let yaml = serde_yml::to_string(&s).unwrap();
+        std::fs::write(&stackup_path, yaml).unwrap();
+
+        // Without --force, deletion must be refused with a descriptive error.
+        let err = mate_service
+            .delete(&mate.id.to_string(), false)
+            .unwrap_err();
+        match err {
+            ServiceError::ValidationFailed(msg) => {
+                assert!(msg.contains(&stackup.id.to_string()));
+                assert!(msg.contains("mates_used"));
+            }
+            other => panic!("expected ValidationFailed, got {:?}", other),
+        }
+
+        // With force, deletion proceeds.
+        mate_service.delete(&mate.id.to_string(), true).unwrap();
+        assert!(mate_service.get(&mate.id.to_string()).unwrap().is_none());
     }
 
     #[test]

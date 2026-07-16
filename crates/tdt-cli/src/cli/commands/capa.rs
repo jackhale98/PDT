@@ -518,7 +518,10 @@ fn output_capas(
                 }
             }
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -571,7 +574,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(cached_capas.iter().map(|c| c.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        return output_cached_capas(&cached_capas, &args, &short_ids, format);
+        return output_cached_capas(&cached_capas, &args, &short_ids, format, &project);
     }
 
     // Full entity loading path
@@ -696,12 +699,14 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
     let mut ncr_link_added = false;
     if let Some(ref ncr_id) = source_reference {
         // Add NCR to CAPA's links.ncrs
-        if let Ok(_) = crate::cli::entity_cmd::add_inferred_link_to_file(
+        if crate::cli::entity_cmd::add_inferred_link_to_file(
             &file_path,
             EntityPrefix::Capa,
             ncr_id,
             EntityPrefix::Ncr,
-        ) {
+        )
+        .is_ok()
+        {
             ncr_link_added = true;
         }
         // Add CAPA to NCR's links.capa (find NCR file)
@@ -982,6 +987,7 @@ fn output_cached_capas(
     args: &ListArgs,
     short_ids: &ShortIdIndex,
     format: OutputFormat,
+    project: &Project,
 ) -> Result<()> {
     // Count only
     if args.count {
@@ -1029,7 +1035,17 @@ fn output_cached_capas(
                 }
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
+        OutputFormat::Path => {
+            for e in capas {
+                let path = if e.file_path.is_absolute() {
+                    e.file_path.clone()
+                } else {
+                    project.root().join(&e.file_path)
+                };
+                println!("{}", path.display());
+            }
+        }
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
             // Should not reach here - cache bypassed for these formats
             unreachable!();
         }

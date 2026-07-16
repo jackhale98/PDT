@@ -4,13 +4,28 @@
 //! Supports worst-case, RSS (statistical), and Monte Carlo analysis methods.
 
 use chrono::{DateTime, Utc};
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use thiserror::Error;
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::stats::{box_muller, normal_cdf};
 use crate::entities::feature::Feature;
+
+/// Errors raised by stackup analysis when prerequisites aren't met.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum AnalysisError {
+    /// The stackup has no contributors — analysis would be meaningless.
+    #[error("stackup has no contributors; add contributors before running analysis")]
+    NoContributors,
+
+    /// Monte Carlo needs at least 2 iterations to compute sample statistics.
+    #[error("Monte Carlo requires at least 2 iterations (got {0})")]
+    TooFewIterations(u32),
+}
 
 /// Target/gap specification
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -358,6 +373,11 @@ pub struct MonteCarloResult {
     /// Ppk = min(USL-μ, μ-LSL) / (3s)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ppk: Option<f64>,
+
+    /// PRNG seed used for this run. Recorded so the simulation is reproducible.
+    /// Required for regulated-environment audit trails (FDA, ISO 13485).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<u64>,
 }
 
 /// Analysis result classification
@@ -396,6 +416,16 @@ pub struct AnalysisResults {
     /// Monte Carlo simulation
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub monte_carlo: Option<MonteCarloResult>,
+
+    /// Wall-clock time when these results were generated. Together with
+    /// `input_hash` lets a reader detect stale results when contributors change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub analyzed_at: Option<DateTime<Utc>>,
+
+    /// SHA-256 hash of the contributor chain at analysis time. Stable across
+    /// stackups with the same contributors — purely a function of the inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_hash: Option<String>,
 }
 
 // ===== 3D SDT Tolerance Analysis Types =====
@@ -794,27 +824,107 @@ impl Stackup {
         self.contributors.push(contributor);
     }
 
-    /// Run all analyses
-    pub fn analyze(&mut self) {
-        self.analysis_results.worst_case = Some(self.calculate_worst_case());
-        self.analysis_results.rss = Some(self.calculate_rss());
-        self.analysis_results.monte_carlo = Some(self.calculate_monte_carlo(10000));
+    /// Run all analyses. Errors if the stackup has no contributors.
+    pub fn analyze(&mut self) -> Result<(), AnalysisError> {
+        let wc = self.calculate_worst_case()?;
+        let rss = self.calculate_rss()?;
+        let mc = self.calculate_monte_carlo(10000)?;
+        self.analysis_results.worst_case = Some(wc);
+        self.analysis_results.rss = Some(rss);
+        self.analysis_results.monte_carlo = Some(mc);
+        self.analysis_results.analyzed_at = Some(Utc::now());
+        self.analysis_results.input_hash = Some(self.contributor_input_hash());
+        Ok(())
+    }
+
+    /// Stable hash of every input that analysis results depend on: the
+    /// contributor chain plus the target spec limits, sigma level, mean shift,
+    /// and GD&T inclusion flag. Used to detect stale analysis results when any
+    /// of these are mutated after analysis.
+    pub fn contributor_input_hash(&self) -> String {
+        let mut hasher = Sha256::new();
+        // Analysis parameters — results are functions of these, not just of
+        // the contributor chain.
+        hasher.update(self.target.nominal.to_le_bytes());
+        hasher.update(self.target.upper_limit.to_le_bytes());
+        hasher.update(self.target.lower_limit.to_le_bytes());
+        hasher.update(self.sigma_level.to_le_bytes());
+        hasher.update(self.mean_shift_k.to_le_bytes());
+        hasher.update([u8::from(self.include_gdt)]);
+        for c in &self.contributors {
+            // Length-prefix the variable-width name so adjacent fields can't
+            // alias across record boundaries.
+            hasher.update((c.name.len() as u64).to_le_bytes());
+            hasher.update(c.name.as_bytes());
+            hasher.update(c.nominal.to_le_bytes());
+            hasher.update(c.plus_tol.to_le_bytes());
+            hasher.update(c.minus_tol.to_le_bytes());
+            let dir_byte: u8 = match c.direction {
+                Direction::Positive => 0,
+                Direction::Negative => 1,
+            };
+            hasher.update([dir_byte]);
+            let dist_byte: u8 = match c.distribution {
+                Distribution::Normal => 0,
+                Distribution::Uniform => 1,
+                Distribution::Triangular => 2,
+            };
+            hasher.update([dist_byte]);
+            if let Some(ref f) = c.feature {
+                hasher.update(b"feat:");
+                hasher.update(f.id.to_string().as_bytes());
+            }
+            if let Some(ref g) = c.gdt_position {
+                hasher.update(b"gdt:");
+                hasher.update(g.position_tolerance.to_le_bytes());
+                if let Some(s) = g.actual_size {
+                    hasher.update(b"size:");
+                    hasher.update(s.to_le_bytes());
+                }
+            }
+        }
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// Whether stored analysis results match the current contributor chain.
+    /// Returns `None` if no analysis has been run; otherwise `Some(true)` if
+    /// fresh and `Some(false)` if stale.
+    pub fn analysis_is_fresh(&self) -> Option<bool> {
+        let stored = self.analysis_results.input_hash.as_ref()?;
+        Some(stored == &self.contributor_input_hash())
     }
 
     /// Calculate worst-case analysis
-    pub fn calculate_worst_case(&self) -> WorstCaseResult {
+    pub fn calculate_worst_case(&self) -> Result<WorstCaseResult, AnalysisError> {
+        if self.contributors.is_empty() {
+            return Err(AnalysisError::NoContributors);
+        }
         let mut min_result = 0.0;
         let mut max_result = 0.0;
 
         for contrib in &self.contributors {
+            // When include_gdt is set, GD&T position tolerance widens each side
+            // by ±(effective / 2) — the same 1D convention used by RSS and
+            // Monte Carlo via total_tolerance_band(). Worst case must be at
+            // least as wide as the statistical methods.
+            let gdt_half = if self.include_gdt {
+                contrib
+                    .gdt_position
+                    .as_ref()
+                    .map_or(0.0, |g| g.effective() / 2.0)
+            } else {
+                0.0
+            };
+            let plus_tol = contrib.plus_tol + gdt_half;
+            let minus_tol = contrib.minus_tol + gdt_half;
             match contrib.direction {
                 Direction::Positive => {
-                    min_result += contrib.nominal - contrib.minus_tol;
-                    max_result += contrib.nominal + contrib.plus_tol;
+                    min_result += contrib.nominal - minus_tol;
+                    max_result += contrib.nominal + plus_tol;
                 }
                 Direction::Negative => {
-                    min_result -= contrib.nominal + contrib.plus_tol;
-                    max_result -= contrib.nominal - contrib.minus_tol;
+                    min_result -= contrib.nominal + plus_tol;
+                    max_result -= contrib.nominal - minus_tol;
                 }
             }
         }
@@ -836,16 +946,19 @@ impl Stackup {
             AnalysisResult::Fail
         };
 
-        WorstCaseResult {
+        Ok(WorstCaseResult {
             min: min_result,
             max: max_result,
             margin,
             result,
-        }
+        })
     }
 
     /// Calculate RSS (Root Sum Square) statistical analysis
-    pub fn calculate_rss(&self) -> RssResult {
+    pub fn calculate_rss(&self) -> Result<RssResult, AnalysisError> {
+        if self.contributors.is_empty() {
+            return Err(AnalysisError::NoContributors);
+        }
         let mut mean = 0.0;
         let mut variance = 0.0;
         let mut individual_variances: Vec<f64> = Vec::with_capacity(self.contributors.len());
@@ -920,33 +1033,32 @@ impl Stackup {
         let lower_margin = cpk_mean - self.target.lower_limit;
         let cpk = if sigma > 0.0 {
             (upper_margin.min(lower_margin)) / (3.0 * sigma)
-        } else {
+        } else if upper_margin.min(lower_margin) >= 0.0 {
+            // Zero variance, mean inside spec — infinitely capable.
             f64::INFINITY
+        } else {
+            // Zero variance, mean outside spec — Cpk diverges to -∞, NOT +∞.
+            f64::NEG_INFINITY
         };
 
         // Calculate yield using normal distribution CDF (based on original mean)
         // Φ(z) = probability that a standard normal random variable is ≤ z
-        let yield_upper_margin = self.target.upper_limit - mean;
-        let yield_lower_margin = mean - self.target.lower_limit;
-        let z_upper = if sigma > 0.0 {
-            yield_upper_margin / sigma
+        let yield_percent = if sigma > 0.0 {
+            let z_upper = (self.target.upper_limit - mean) / sigma;
+            let z_lower = -(mean - self.target.lower_limit) / sigma;
+            (normal_cdf(z_upper) - normal_cdf(z_lower)) * 100.0
+        } else if mean >= self.target.lower_limit && mean <= self.target.upper_limit {
+            // Zero variance: every sample lands exactly at the mean.
+            100.0
         } else {
-            f64::INFINITY
+            0.0
         };
-        let z_lower = if sigma > 0.0 {
-            -yield_lower_margin / sigma
-        } else {
-            f64::NEG_INFINITY
-        };
-
-        // Yield = Φ(z_upper) - Φ(z_lower)
-        let yield_percent = (normal_cdf(z_upper) - normal_cdf(z_lower)) * 100.0;
 
         // Margin at 3σ
         let margin = (self.target.upper_limit - (mean + sigma_3))
             .min((mean - sigma_3) - self.target.lower_limit);
 
-        RssResult {
+        Ok(RssResult {
             mean,
             sigma_3,
             margin,
@@ -955,21 +1067,80 @@ impl Stackup {
             yield_percent,
             sensitivity,
             shifted_mean,
+        })
+    }
+
+    /// Run Monte Carlo simulation with a freshly drawn random seed (recorded
+    /// in the result for reproducibility).
+    pub fn calculate_monte_carlo(
+        &self,
+        iterations: u32,
+    ) -> Result<MonteCarloResult, AnalysisError> {
+        if self.contributors.is_empty() {
+            return Err(AnalysisError::NoContributors);
         }
+        if iterations < 2 {
+            return Err(AnalysisError::TooFewIterations(iterations));
+        }
+        let seed: u64 = rand::rng().random();
+        let (result, _samples) = self.run_monte_carlo_with_seed_inner(iterations, seed);
+        Ok(result)
     }
 
-    /// Run Monte Carlo simulation
-    pub fn calculate_monte_carlo(&self, iterations: u32) -> MonteCarloResult {
-        let (result, _samples) = self.calculate_monte_carlo_with_samples(iterations);
-        result
+    /// Run Monte Carlo simulation with a caller-provided seed. Same seed +
+    /// same contributor chain → same results, bit for bit.
+    pub fn calculate_monte_carlo_with_seed(
+        &self,
+        iterations: u32,
+        seed: u64,
+    ) -> Result<MonteCarloResult, AnalysisError> {
+        if self.contributors.is_empty() {
+            return Err(AnalysisError::NoContributors);
+        }
+        if iterations < 2 {
+            return Err(AnalysisError::TooFewIterations(iterations));
+        }
+        let (result, _samples) = self.run_monte_carlo_with_seed_inner(iterations, seed);
+        Ok(result)
     }
 
-    /// Run Monte Carlo simulation and return both results and raw samples
+    /// Run Monte Carlo simulation and return both results and raw samples.
+    /// Generates a fresh random seed (recorded in the result).
     pub fn calculate_monte_carlo_with_samples(
         &self,
         iterations: u32,
+    ) -> Result<(MonteCarloResult, Vec<f64>), AnalysisError> {
+        if self.contributors.is_empty() {
+            return Err(AnalysisError::NoContributors);
+        }
+        if iterations < 2 {
+            return Err(AnalysisError::TooFewIterations(iterations));
+        }
+        let seed: u64 = rand::rng().random();
+        Ok(self.run_monte_carlo_with_seed_inner(iterations, seed))
+    }
+
+    /// Run Monte Carlo simulation with samples and a caller-provided seed.
+    pub fn calculate_monte_carlo_with_samples_seeded(
+        &self,
+        iterations: u32,
+        seed: u64,
+    ) -> Result<(MonteCarloResult, Vec<f64>), AnalysisError> {
+        if self.contributors.is_empty() {
+            return Err(AnalysisError::NoContributors);
+        }
+        if iterations < 2 {
+            return Err(AnalysisError::TooFewIterations(iterations));
+        }
+        Ok(self.run_monte_carlo_with_seed_inner(iterations, seed))
+    }
+
+    fn run_monte_carlo_with_seed_inner(
+        &self,
+        iterations: u32,
+        seed: u64,
     ) -> (MonteCarloResult, Vec<f64>) {
-        let mut rng = rand::rng();
+        let mut rng = StdRng::seed_from_u64(seed);
         let mut results: Vec<f64> = Vec::with_capacity(iterations as usize);
 
         for _ in 0..iterations {
@@ -1049,11 +1220,15 @@ impl Stackup {
             .count();
         let yield_percent = (in_spec as f64 / n) * 100.0;
 
-        // Percentiles
-        let p2_5_idx = ((iterations as f64) * 0.025) as usize;
-        let p97_5_idx = ((iterations as f64) * 0.975) as usize;
-        let percentile_2_5 = results.get(p2_5_idx).copied().unwrap_or(min);
-        let percentile_97_5 = results.get(p97_5_idx).copied().unwrap_or(max);
+        // Percentiles. Use floor for the lower bound and ceil for the upper
+        // bound, then clamp to the valid index range so small iteration counts
+        // never panic and never silently fall back to min/max.
+        let last_idx = results.len().saturating_sub(1);
+        let p2_5_idx = ((iterations as f64 * 0.025).floor() as usize).min(last_idx);
+        let p97_5_idx_raw = (iterations as f64 * 0.975).ceil() as usize;
+        let p97_5_idx = p97_5_idx_raw.saturating_sub(1).min(last_idx);
+        let percentile_2_5 = results[p2_5_idx];
+        let percentile_97_5 = results[p97_5_idx];
 
         // Calculate Pp and Ppk using sample std_dev (process performance indices)
         // These differ from Cp/Cpk in that they use actual sample statistics
@@ -1085,6 +1260,7 @@ impl Stackup {
                 percentile_97_5,
                 pp,
                 ppk,
+                seed: Some(seed),
             },
             raw_samples,
         )
@@ -1196,7 +1372,7 @@ mod tests {
 
         // Worst case: min = (10-0.1) - (9+0.1) = 0.8
         //             max = (10+0.1) - (9-0.1) = 1.2
-        let wc = stackup.calculate_worst_case();
+        let wc = stackup.calculate_worst_case().expect("populated stackup");
 
         assert!((wc.min - 0.8).abs() < 1e-10);
         assert!((wc.max - 1.2).abs() < 1e-10);
@@ -1235,7 +1411,7 @@ mod tests {
         // Worst case: min = (10-0.2) - (9+0.2) = 0.6
         //             max = (10+0.2) - (9-0.2) = 1.4
         // Spec: 0.9 to 1.1 => FAIL
-        let wc = stackup.calculate_worst_case();
+        let wc = stackup.calculate_worst_case().expect("populated stackup");
         assert_eq!(wc.result, AnalysisResult::Fail);
     }
 
@@ -1267,7 +1443,7 @@ mod tests {
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // Mean should be 10 - 9 = 1.0
         assert!((rss.mean - 1.0).abs() < 1e-10);
@@ -1303,7 +1479,7 @@ mod tests {
             gdt_position: None,
         });
 
-        let mc = stackup.calculate_monte_carlo(1000);
+        let mc = stackup.calculate_monte_carlo(1000).expect("populated stackup");
 
         // Mean should be close to 1.0
         assert!((mc.mean - 1.0).abs() < 0.1);
@@ -1347,7 +1523,7 @@ mod tests {
             gdt_position: None,
         });
 
-        stackup.analyze();
+        stackup.analyze().expect("populated stackup");
 
         let yaml = serde_yml::to_string(&stackup).unwrap();
         let parsed: Stackup = serde_yml::from_str(&yaml).unwrap();
@@ -1465,9 +1641,9 @@ mod tests {
         });
 
         // Run analysis
-        let wc = stackup.calculate_worst_case();
-        let rss = stackup.calculate_rss();
-        let mc = stackup.calculate_monte_carlo(10000);
+        let wc = stackup.calculate_worst_case().expect("populated stackup");
+        let rss = stackup.calculate_rss().expect("populated stackup");
+        let mc = stackup.calculate_monte_carlo(10000).expect("populated stackup");
 
         // Worst case:
         // min = (10 - 0) - (8 + 0) = 2.0
@@ -1563,7 +1739,7 @@ mod tests {
         );
 
         // Run RSS calculation on deserialized stackup
-        let rss = parsed.calculate_rss();
+        let rss = parsed.calculate_rss().expect("populated stackup");
 
         // Mean should be 10 - 8 = 2.0 (symmetric tolerances, no offset)
         assert!(
@@ -1605,7 +1781,7 @@ mod tests {
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // Equal tolerances should give ~50% each
         assert_eq!(
@@ -1660,7 +1836,7 @@ mod tests {
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // Variance contribution: (0.2/6)² = 0.00111, (0.1/6)² = 0.000278
         // Total = 0.001389, Part A = 80%, Part B = 20%
@@ -1676,17 +1852,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_sensitivity_empty_stackup() {
-        let stackup = Stackup::new("Test", "Gap", 1.0, 2.0, 0.0, "Author");
-        let rss = stackup.calculate_rss();
-
-        // Empty stackup should have empty sensitivity
-        assert!(
-            rss.sensitivity.is_empty(),
-            "Empty stackup should have empty sensitivity"
-        );
-    }
+    // (Empty-stackup behavior is now covered by `test_empty_stackup_rejects_analysis`
+    // in the Phase 6 block — analysis errors out instead of returning a degenerate
+    // result with an empty sensitivity array.)
 
     #[test]
     fn test_sensitivity_single_contributor() {
@@ -1704,7 +1872,7 @@ mod tests {
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // Single contributor should be 100%
         assert_eq!(rss.sensitivity.len(), 1);
@@ -1756,7 +1924,7 @@ mod tests {
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // Check that contributions sum to 100%
         let total: f64 = rss.sensitivity.iter().sum();
@@ -1825,8 +1993,8 @@ mod tests {
             gdt_position: None,
         });
 
-        let rss4 = stackup4.calculate_rss();
-        let rss6 = stackup6.calculate_rss();
+        let rss4 = stackup4.calculate_rss().expect("populated stackup");
+        let rss6 = stackup6.calculate_rss().expect("populated stackup");
 
         // sigma_3 = 3 * std_dev, so the ratio should be 6/4 = 1.5
         // (since σ₄ = tol/4 and σ₆ = tol/6, ratio = 6/4)
@@ -1926,8 +2094,8 @@ author: "Test"
             gdt_position: None,
         });
 
-        let rss_no_shift = stackup_no_shift.calculate_rss();
-        let rss_with_shift = stackup_with_shift.calculate_rss();
+        let rss_no_shift = stackup_no_shift.calculate_rss().expect("populated stackup");
+        let rss_with_shift = stackup_with_shift.calculate_rss().expect("populated stackup");
 
         // Shifted version should have lower Cpk (more conservative)
         assert!(
@@ -1964,7 +2132,7 @@ author: "Test"
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
         let shifted = rss.shifted_mean.expect("Should have shifted_mean");
 
         // Mean is 0.7, closer to LSL(0.0) than USL(2.0)
@@ -2022,7 +2190,7 @@ author: "Test"
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // Cp = (USL - LSL) / (6σ) = 2.0 / 0.6 = 3.33
         assert!(
@@ -2050,7 +2218,7 @@ author: "Test"
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // For centered process, Cp should equal Cpk
         assert!(
@@ -2079,7 +2247,7 @@ author: "Test"
             gdt_position: None,
         });
 
-        let rss = stackup.calculate_rss();
+        let rss = stackup.calculate_rss().expect("populated stackup");
 
         // Cp ignores centering, Cpk accounts for it
         // Off-center process: Cp > Cpk
@@ -2110,7 +2278,7 @@ author: "Test"
             gdt_position: None,
         });
 
-        let mc = stackup.calculate_monte_carlo(10000);
+        let mc = stackup.calculate_monte_carlo(10000).expect("populated stackup");
 
         // Pp and Ppk should be present
         assert!(mc.pp.is_some(), "Monte Carlo should calculate Pp");
@@ -2149,7 +2317,7 @@ author: "Test"
             gdt_position: None,
         });
 
-        let mc = stackup.calculate_monte_carlo(50000);
+        let mc = stackup.calculate_monte_carlo(50000).expect("populated stackup");
 
         let pp = mc.pp.expect("Pp should be present");
         let ppk = mc.ppk.expect("Ppk should be present");
@@ -2161,5 +2329,322 @@ author: "Test"
             pp,
             ppk
         );
+    }
+
+    // ===== Phase 6: Negative-direction asymmetric tolerance regression =====
+
+    /// Locks in the worst-case math for negative-direction contributors with
+    /// asymmetric (unilateral) tolerances. The contribution range of a value
+    /// `v ∈ [nominal - minus_tol, nominal + plus_tol]` flipped negative is
+    /// `[-(nominal + plus_tol), -(nominal - minus_tol)]`.
+    #[test]
+    fn test_worst_case_negative_asymmetric_tolerances() {
+        // Positive: 10 +0.10/-0.05 → range [9.95, 10.10]
+        // Negative: 5  +0.20/-0.10 → range [4.90, 5.20]
+        // Result range = pos − neg
+        //   min = pos.min - neg.max = 9.95  - 5.20 = 4.75
+        //   max = pos.max - neg.min = 10.10 - 4.90 = 5.20
+        let mut stackup = Stackup::new("Asymmetric", "Gap", 5.0, 5.5, 4.5, "Author");
+        stackup.add_contributor(Contributor {
+            name: "Pos".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 10.0,
+            plus_tol: 0.10,
+            minus_tol: 0.05,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        stackup.add_contributor(Contributor {
+            name: "Neg".into(),
+            feature: None,
+            direction: Direction::Negative,
+            nominal: 5.0,
+            plus_tol: 0.20,
+            minus_tol: 0.10,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+
+        let wc = stackup.calculate_worst_case().expect("populated stackup");
+        assert!(
+            (wc.min - 4.75).abs() < 1e-12,
+            "min should be 4.75, got {}",
+            wc.min
+        );
+        assert!(
+            (wc.max - 5.20).abs() < 1e-12,
+            "max should be 5.20, got {}",
+            wc.max
+        );
+    }
+
+    // ===== Phase 6: Empty-stackup rejection =====
+
+    #[test]
+    fn test_empty_stackup_rejects_analysis() {
+        let stackup = Stackup::new("Empty", "Gap", 1.0, 1.5, 0.5, "Author");
+        assert!(matches!(
+            stackup.calculate_worst_case(),
+            Err(AnalysisError::NoContributors)
+        ));
+        assert!(matches!(
+            stackup.calculate_rss(),
+            Err(AnalysisError::NoContributors)
+        ));
+        assert!(matches!(
+            stackup.calculate_monte_carlo(100),
+            Err(AnalysisError::NoContributors)
+        ));
+    }
+
+    // ===== Phase 6: Cpk and yield in zero-variance regimes =====
+
+    #[test]
+    fn test_rss_cpk_zero_variance_in_spec() {
+        // All-zero tolerances: sigma=0. Mean inside spec → Cpk=+inf, yield=100%.
+        let mut stackup = Stackup::new("Tight", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "A".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.0,
+            minus_tol: 0.0,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        let rss = stackup.calculate_rss().expect("populated");
+        assert!(rss.cpk.is_infinite() && rss.cpk > 0.0);
+        assert!((rss.yield_percent - 100.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_rss_cpk_zero_variance_out_of_spec() {
+        // Zero variance, but mean is outside spec → Cpk should be -inf, yield=0%.
+        let mut stackup = Stackup::new("Tight OOS", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "A".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 5.0, // out of [0, 2] spec
+            plus_tol: 0.0,
+            minus_tol: 0.0,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        let rss = stackup.calculate_rss().expect("populated");
+        assert!(
+            rss.cpk.is_infinite() && rss.cpk < 0.0,
+            "Out-of-spec zero-variance Cpk should be -inf, got {}",
+            rss.cpk
+        );
+        assert!(
+            rss.yield_percent.abs() < 1e-9,
+            "Yield must be 0% out of spec, got {}",
+            rss.yield_percent
+        );
+    }
+
+    // ===== Phase 6: Monte Carlo percentile bounds-safety =====
+
+    #[test]
+    fn test_monte_carlo_percentile_bounds_safe_small_n() {
+        // Tiny iteration count must not panic and indices must be in-range.
+        let mut stackup = Stackup::new("Small N", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "A".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        let mc = stackup.calculate_monte_carlo(5).expect("populated");
+        // With 5 samples both percentiles should fall on real samples (≥min, ≤max).
+        assert!(mc.percentile_2_5 >= mc.min && mc.percentile_2_5 <= mc.max);
+        assert!(mc.percentile_97_5 >= mc.min && mc.percentile_97_5 <= mc.max);
+        assert!(mc.percentile_2_5 <= mc.percentile_97_5);
+    }
+
+    // ===== Phase 6: Monte Carlo seed reproducibility =====
+
+    #[test]
+    fn test_monte_carlo_with_seed_is_reproducible() {
+        let mut stackup = Stackup::new("Seeded", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "A".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        let r1 = stackup
+            .calculate_monte_carlo_with_seed(1000, 42)
+            .expect("populated");
+        let r2 = stackup
+            .calculate_monte_carlo_with_seed(1000, 42)
+            .expect("populated");
+        assert_eq!(r1.mean.to_bits(), r2.mean.to_bits());
+        assert_eq!(r1.std_dev.to_bits(), r2.std_dev.to_bits());
+        assert_eq!(r1.percentile_2_5.to_bits(), r2.percentile_2_5.to_bits());
+        assert_eq!(r1.percentile_97_5.to_bits(), r2.percentile_97_5.to_bits());
+        assert_eq!(r1.seed, Some(42));
+    }
+
+    #[test]
+    fn test_monte_carlo_default_records_seed() {
+        // Even when not seeded explicitly, the result must record the seed used
+        // so the run can be reproduced later.
+        let mut stackup = Stackup::new("Recorded", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "A".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        let r = stackup.calculate_monte_carlo(500).expect("populated");
+        let seed = r.seed.expect("default monte carlo must record its seed");
+        // Re-running with the recorded seed reproduces the result.
+        let r2 = stackup
+            .calculate_monte_carlo_with_seed(500, seed)
+            .expect("populated");
+        assert_eq!(r.mean.to_bits(), r2.mean.to_bits());
+    }
+
+    // ===== Phase 6: Analysis provenance (timestamp + input hash) =====
+
+    #[test]
+    fn test_analyze_records_timestamp_and_input_hash() {
+        let mut stackup = Stackup::new("Provenance", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "A".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        stackup.analyze().expect("populated");
+        assert!(stackup.analysis_results.analyzed_at.is_some());
+        let h1 = stackup
+            .analysis_results
+            .input_hash
+            .clone()
+            .expect("hash recorded");
+
+        // Mutating a contributor changes the input hash on next analysis.
+        stackup.contributors[0].nominal = 1.5;
+        stackup.analyze().expect("populated");
+        let h2 = stackup
+            .analysis_results
+            .input_hash
+            .clone()
+            .expect("hash recorded");
+        assert_ne!(h1, h2, "input hash must change when contributors change");
+    }
+
+    #[test]
+    fn test_input_hash_stable_for_same_contributors() {
+        let mut a = Stackup::new("A", "Gap", 1.0, 2.0, 0.0, "Author");
+        let mut b = Stackup::new("B", "Gap", 1.0, 2.0, 0.0, "Other");
+        let c = Contributor {
+            name: "Part".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.05,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        };
+        a.add_contributor(c.clone());
+        b.add_contributor(c);
+        // Hash covers analysis inputs (contributors + target/sigma settings)
+        // but not identity fields like title/author, so two stackups with the
+        // same chain and spec share an input hash.
+        assert_eq!(a.contributor_input_hash(), b.contributor_input_hash());
+
+        // Changing any analysis input — here a spec limit — must change the
+        // hash, otherwise stored results would be reported as fresh after the
+        // spec they were judged against moved.
+        b.target.upper_limit = 1.5;
+        assert_ne!(a.contributor_input_hash(), b.contributor_input_hash());
+    }
+
+    #[test]
+    fn test_worst_case_includes_gdt_when_enabled() {
+        let mut stackup = Stackup::new("WC GDT", "Gap", 10.0, 10.35, 9.85, "Author");
+        stackup.add_contributor(Contributor {
+            name: "Hole position".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: Some(GdtContribution::new(0.4)),
+        });
+
+        // Without GD&T inclusion: plain ±0.1.
+        stackup.include_gdt = false;
+        let wc = stackup.calculate_worst_case().unwrap();
+        assert!((wc.min - 9.9).abs() < 1e-9);
+        assert!((wc.max - 10.1).abs() < 1e-9);
+
+        // With GD&T inclusion, each side widens by effective/2 = 0.2, the same
+        // ±(effective/2) convention RSS and Monte Carlo use — worst case must
+        // bound the statistical methods.
+        stackup.include_gdt = true;
+        let wc = stackup.calculate_worst_case().unwrap();
+        assert!((wc.min - 9.7).abs() < 1e-9);
+        assert!((wc.max - 10.3).abs() < 1e-9);
+        assert_eq!(wc.result, AnalysisResult::Fail);
+    }
+
+    #[test]
+    fn test_monte_carlo_rejects_too_few_iterations() {
+        let mut stackup = Stackup::new("MC", "Gap", 1.0, 2.0, 0.0, "Author");
+        stackup.add_contributor(Contributor {
+            name: "Part".into(),
+            feature: None,
+            direction: Direction::Positive,
+            nominal: 1.0,
+            plus_tol: 0.1,
+            minus_tol: 0.1,
+            distribution: Distribution::Normal,
+            source: None,
+            gdt_position: None,
+        });
+        assert!(matches!(
+            stackup.calculate_monte_carlo(0),
+            Err(AnalysisError::TooFewIterations(0))
+        ));
+        assert!(matches!(
+            stackup.calculate_monte_carlo(1),
+            Err(AnalysisError::TooFewIterations(1))
+        ));
+        assert!(stackup.calculate_monte_carlo(2).is_ok());
     }
 }

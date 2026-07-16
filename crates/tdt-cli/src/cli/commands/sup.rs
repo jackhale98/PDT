@@ -385,7 +385,10 @@ fn output_suppliers(
             let formatter = TableFormatter::new(SUP_COLUMNS, "supplier", "SUP").with_config(config);
             formatter.output(rows, format, &visible);
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -685,6 +688,9 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         &added_links,
         global,
     );
+
+    // Sync cache after creation
+    super::utils::sync_cache(&project);
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {

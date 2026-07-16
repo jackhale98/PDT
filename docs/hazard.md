@@ -295,10 +295,10 @@ tdt trace from HAZ@1
 tdt trace to HAZ@1
 
 # Find unlinked hazards (orphans)
-tdt trace orphans --type haz
+tdt trace orphans --entity-type haz
 
 # Coverage report
-tdt trace coverage --type haz
+tdt trace matrix --source-type haz
 ```
 
 ## Best Practices

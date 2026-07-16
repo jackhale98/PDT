@@ -538,13 +538,7 @@ fn output_dot(dmm: &Dmm, full_ids: bool, row_type: EntityType, col_type: EntityT
     println!("}}");
 }
 
-fn truncate_title(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
-    }
-}
+use crate::cli::helpers::truncate_str as truncate_title;
 
 fn output_json(dmm: &Dmm, row_type: EntityType, col_type: EntityType) {
     let row_entities: Vec<serde_json::Value> = dmm

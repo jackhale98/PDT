@@ -7,6 +7,11 @@ use std::process::Command;
 
 use super::{parse_log_output, CommitLogEntry, Git, GitError, GitOutput};
 
+/// Full commit metadata returned by `Git::commit_metadata`.
+///
+/// Tuple fields: `(full_hash, short_hash, full_message, author, author_email, date, is_signed)`.
+pub type CommitMetadata = (String, String, String, String, Option<String>, String, bool);
+
 impl Git {
     /// Execute a git CLI command and return the output
     fn run_shell(&self, args: &[&str]) -> Result<GitOutput, GitError> {
@@ -273,31 +278,41 @@ impl Git {
     }
 
     /// Verify the signature of a commit
+    ///
+    /// Returns `Ok(Some(signer))` for a good signature, `Ok(None)` for an
+    /// unsigned commit, and `Err` for a bad/unverifiable signature.
     pub fn verify_commit_signature(&self, commit: &str) -> Result<Option<String>, GitError> {
         let output = self.run_shell(&["verify-commit", "--raw", commit])?;
 
         if output.success {
+            // With --raw, GPG emits machine-readable status lines:
+            //   [GNUPG:] GOODSIG <keyid> <signer name>
             for line in output.stderr.lines() {
-                if line.contains("Good signature from") {
-                    if let Some(start) = line.find('"') {
-                        if let Some(end) = line.rfind('"') {
-                            return Ok(Some(line[start + 1..end].to_string()));
-                        }
+                if let Some(rest) = line.strip_prefix("[GNUPG:] GOODSIG ") {
+                    // Everything after the key ID is the signer's name.
+                    if let Some((_keyid, signer)) = rest.split_once(' ') {
+                        return Ok(Some(signer.to_string()));
                     }
-                    return Ok(Some(line.to_string()));
+                    return Ok(Some(rest.to_string()));
                 }
             }
             Ok(Some("verified".to_string()))
+        } else if output.stderr.trim().is_empty() {
+            // `git verify-commit --raw` exits non-zero with EMPTY stderr for
+            // commits that simply aren't signed.
+            Ok(None)
+        } else if output.stderr.contains("BADSIG") || output.stderr.contains("ERRSIG") {
+            Err(GitError::CommandFailed {
+                message: format!("Invalid signature: {}", output.stderr),
+            })
+        } else if output.stderr.contains("no signature found")
+            || output.stderr.contains("unsigned commit")
+        {
+            Ok(None)
         } else {
-            if output.stderr.contains("no signature found")
-                || output.stderr.contains("unsigned commit")
-            {
-                Ok(None)
-            } else {
-                Err(GitError::CommandFailed {
-                    message: format!("Invalid signature: {}", output.stderr),
-                })
-            }
+            Err(GitError::CommandFailed {
+                message: format!("Signature verification failed: {}", output.stderr),
+            })
         }
     }
 
@@ -393,7 +408,7 @@ impl Git {
     pub fn file_log(&self, file_path: &str, limit: u32) -> Result<Vec<CommitLogEntry>, GitError> {
         let output = self.run_shell(&[
             "log",
-            "--format=%H|%h|%s|%an|%ae|%aI|%G?",
+            "--format=%H%x00%h%x00%s%x00%an%x00%ae%x00%aI%x00%G?",
             "--follow",
             &format!("-{}", limit),
             "--",
@@ -474,7 +489,14 @@ impl Git {
             commit_hash,
         ])?;
         if !output.success {
-            return Ok((0, 0));
+            // Don't mask failures (e.g. a bad hash) as "0 insertions, 0 deletions".
+            return Err(GitError::CommandFailed {
+                message: format!(
+                    "diff-tree failed for {}: {}",
+                    commit_hash,
+                    output.stderr.trim()
+                ),
+            });
         }
 
         let mut insertions: u32 = 0;
@@ -498,13 +520,10 @@ impl Git {
 
     /// Get full commit metadata (for commit details view)
     /// Returns (full_hash, short_hash, full_message, author, author_email, date, is_signed)
-    pub fn commit_metadata(
-        &self,
-        commit_hash: &str,
-    ) -> Result<(String, String, String, String, Option<String>, String, bool), GitError> {
+    pub fn commit_metadata(&self, commit_hash: &str) -> Result<CommitMetadata, GitError> {
         let output = self.run_shell(&[
             "show",
-            "--format=%H|%h|%B%n---END_MSG---|%an|%ae|%aI|%G?",
+            "--format=%H%x00%h%x00%B%n---END_MSG---%x00%an%x00%ae%x00%aI%x00%G?",
             "--no-patch",
             commit_hash,
         ])?;
@@ -523,14 +542,16 @@ impl Git {
                     message: "Failed to parse commit output".to_string(),
                 })?;
 
-        let meta_parts: Vec<&str> = meta_part.split('|').collect();
-        let msg_lines: Vec<&str> = msg_part.split('|').collect();
+        // Fields are NUL-separated (%x00) so `|` in messages or author names
+        // can't shift the columns.
+        let meta_parts: Vec<&str> = meta_part.split('\0').collect();
+        let msg_lines: Vec<&str> = msg_part.split('\0').collect();
 
         let full_hash = msg_lines.first().unwrap_or(&"").to_string();
         let short_hash = msg_lines.get(1).unwrap_or(&"").to_string();
         let full_message = msg_lines
             .get(2..)
-            .map(|s| s.join("|"))
+            .map(|s| s.join("\0"))
             .unwrap_or_default()
             .trim()
             .to_string();
@@ -538,7 +559,7 @@ impl Git {
         let author = meta_parts.get(1).unwrap_or(&"").to_string();
         let author_email = meta_parts.get(2).map(|s| s.to_string());
         let date = meta_parts.get(3).unwrap_or(&"").to_string();
-        let is_signed = meta_parts.get(4).map_or(false, |s| *s == "G" || *s == "U");
+        let is_signed = meta_parts.get(4).is_some_and(|s| *s == "G" || *s == "U");
 
         Ok((
             full_hash,
@@ -570,7 +591,9 @@ impl Git {
 
     /// Restore a file from HEAD (discard working tree changes)
     pub fn restore_file(&self, path: &str) -> Result<(), GitError> {
-        let output = self.run_shell(&["restore", path])?;
+        // `--` prevents a filename that looks like an option from being
+        // misinterpreted by git.
+        let output = self.run_shell(&["restore", "--", path])?;
         if output.success {
             Ok(())
         } else {

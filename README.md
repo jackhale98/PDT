@@ -224,7 +224,7 @@ tdt ncr close NCR@1 -d rework --rationale "Re-machined to spec"
 ### Verify a CAPA
 ```bash
 tdt capa list --capa-status implementation  # Find CAPAs ready for verification
-tdt capa verify CAPA@1 --result effective --method "30-day audit"
+tdt capa verify CAPA@1 --result effective --evidence "30-day audit"
 ```
 
 ### Analyze Component Interactions
@@ -565,11 +565,11 @@ tdt quote archive QUOT@1                      # Move to archive
 ### Features (Tolerances)
 
 ```bash
-tdt feat new --component CMP@1 --type hole --title "Mounting Hole"
-tdt feat new --component CMP@1 --type shaft   # Feature requires parent component
+tdt feat new --component CMP@1 --feature-type hole --title "Mounting Hole"
+tdt feat new --component CMP@1 --feature-type shaft   # Feature requires parent component
 tdt feat list                                 # List all features
 tdt feat list --component CMP@1               # Filter by component
-tdt feat list --type hole                     # Filter by type
+tdt feat list --feature-type hole                     # Filter by type
 tdt feat show FEAT@1                          # Show details
 tdt feat edit FEAT@1                          # Open in editor
 tdt feat delete FEAT@1                        # Permanently delete
@@ -581,7 +581,7 @@ tdt feat archive FEAT@1                       # Move to archive
 ```bash
 tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --title "Pin-Hole Fit"
 tdt mate list                                 # List all mates
-tdt mate list --type clearance                # Filter by mate type
+tdt mate list --mate-type clearance                # Filter by mate type
 tdt mate show MATE@1                          # Show details with fit calculation
 tdt mate recalc MATE@1                        # Recalculate fit from features
 tdt mate edit MATE@1                          # Open in editor
@@ -693,7 +693,7 @@ tdt capa edit CAPA@1                          # Open in editor
 tdt capa delete CAPA@1                        # Permanently delete
 tdt capa archive CAPA@1                       # Move to archive
 tdt capa verify CAPA@1 --result effective     # Record effectiveness verification
-tdt capa verify CAPA@1 -r partial --method "Process audit"
+tdt capa verify CAPA@1 -r partial --evidence "Process audit"
 ```
 
 CAPA types: `corrective`, `preventive`
@@ -1319,7 +1319,7 @@ tdt tol analyze TOL@1 --3d
 tdt tol analyze TOL@1 --3d --visualize
 
 # 3D Monte Carlo simulation
-tdt tol analyze TOL@1 --3d --method-3d monte-carlo
+tdt tol analyze TOL@1 --3d --iterations 50000
 ```
 
 ### Test Verdicts

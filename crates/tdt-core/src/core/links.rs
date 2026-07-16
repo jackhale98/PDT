@@ -334,9 +334,8 @@ pub fn is_downstream_link(link_type: &str) -> bool {
         "verifies" | "satisfies" | "mitigates" | "requirement" | "requirements" | "component"
         | "assembly" | "process" | "feature" | "derives_from" | "allocated_from"
         | "from_result" | "capa" | "supplier" | "originates_from" | "caused_by"
-        | "controls_hazard" | "added_by_capa" | "modified_by_capa" | "replaces" | "affects" => {
-            false
-        }
+        | "controls_hazard" | "added_by_capa" | "modified_by_capa" | "replaces" | "affects"
+        | "contained_in" | "parent" => false,
 
         // Everything else is downstream-pointing (target is a child/dependent/product)
         // Includes: verified_by, satisfied_by, mitigated_by, allocated_to,
@@ -460,7 +459,7 @@ fn make_link_entry(target_id: &str, target_title: Option<&str>) -> serde_yml::Va
 /// Extract the entity ID from a link entry (supports both `{id, title}` mappings and bare strings).
 pub fn extract_link_id(entry: &serde_yml::Value) -> Option<&str> {
     if let Some(m) = entry.as_mapping() {
-        m.get(&serde_yml::Value::String("id".to_string()))
+        m.get(serde_yml::Value::String("id".to_string()))
             .and_then(|v| v.as_str())
     } else {
         entry.as_str()
@@ -532,8 +531,13 @@ fn add_link_to_yaml(
         || link_value.as_str().is_some()
         || link_value.as_mapping().is_some()
     {
-        // Single-value link - replace with new entry
-        *link_value = make_link_entry(target_id, target_title);
+        // Single-value link - only replace if pointing at a different target,
+        // to avoid dropping extended metadata (suspect, verified_revision) when
+        // the user re-adds the same link.
+        let current_id = extract_single_link_id(link_value).map(|s| s.to_string());
+        if current_id.as_deref() != Some(target_id) {
+            *link_value = make_link_entry(target_id, target_title);
+        }
     } else {
         return Err(format!(
             "Link type '{}' has unexpected format (not array or single value)",
@@ -786,7 +790,7 @@ fn check_entry_title(
 
     let current_title = entry
         .as_mapping()
-        .and_then(|m| m.get(&serde_yml::Value::String("title".to_string())))
+        .and_then(|m| m.get(serde_yml::Value::String("title".to_string())))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
@@ -804,13 +808,13 @@ fn update_link_entry_title(
     // Handle mapping format {id: ..., title: ...}
     if let Some(m) = entry.as_mapping_mut() {
         if let Some(id) = m
-            .get(&serde_yml::Value::String("id".to_string()))
+            .get(serde_yml::Value::String("id".to_string()))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
         {
             if let Some(title) = titles.get(&id) {
                 let current = m
-                    .get(&serde_yml::Value::String("title".to_string()))
+                    .get(serde_yml::Value::String("title".to_string()))
                     .and_then(|v| v.as_str());
                 if current != Some(title.as_str()) {
                     m.insert(

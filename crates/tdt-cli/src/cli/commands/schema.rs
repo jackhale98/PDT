@@ -76,11 +76,7 @@ fn list_schemas() -> Result<()> {
             let title = schema["title"].as_str().unwrap_or(&name);
             let desc = schema["description"].as_str().unwrap_or("");
             // Truncate description if too long
-            let desc_short = if desc.len() > 40 {
-                format!("{}...", &desc[..37])
-            } else {
-                desc.to_string()
-            };
+            let desc_short = truncate_chars(desc, 40);
             println!("{:<8} {:<20} {}", name, title, desc_short);
         }
     }
@@ -152,11 +148,7 @@ fn show_schema(args: ShowArgs) -> Result<()> {
             };
             let prop_desc = prop["description"].as_str().unwrap_or("");
             // Truncate description
-            let desc_short = if prop_desc.len() > 38 {
-                format!("{}...", &prop_desc[..35])
-            } else {
-                prop_desc.to_string()
-            };
+            let desc_short = truncate_chars(prop_desc, 38);
             println!(
                 "{:<20} {:<12} {:<8} {}",
                 name, prop_type, is_required, desc_short
@@ -186,6 +178,17 @@ fn show_schema(args: ShowArgs) -> Result<()> {
 
     println!("\nUse --raw for full JSON schema");
     Ok(())
+}
+
+/// Truncate a string to max length (in characters) with ellipsis.
+/// Char-based to avoid panicking on multibyte UTF-8 boundaries.
+fn truncate_chars(s: &str, max_len: usize) -> String {
+    if s.chars().count() <= max_len {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
+    }
 }
 
 fn get_type_str(prop: &Value) -> String {

@@ -110,6 +110,10 @@ pub fn print_entity_id(id: &EntityId, format: OutputFormat, project: &Project) {
 
 /// Generic edit command
 pub fn run_edit_generic(id: &str, config: &EntityConfig) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    use tdt_core::core::cache::EntityCache;
+    use tdt_core::core::suspect::{mark_dependents_suspect, SuspectReason};
+
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let cli_config = Config::load();
 
@@ -120,6 +124,15 @@ pub fn run_edit_generic(id: &str, config: &EntityConfig) -> Result<()> {
     // Find the entity file
     let path = find_entity_file(&project, &resolved_id, config.dirs)?;
 
+    // Hash file contents before editing to detect changes
+    let before_hash = fs::read(&path)
+        .map(|bytes| {
+            let mut h = Sha256::new();
+            h.update(&bytes);
+            h.finalize().to_vec()
+        })
+        .ok();
+
     println!(
         "Opening {} in {}...",
         style(path.display()).cyan(),
@@ -128,10 +141,148 @@ pub fn run_edit_generic(id: &str, config: &EntityConfig) -> Result<()> {
 
     cli_config.run_editor(&path).into_diagnostic()?;
 
+    // Compute hash after editing
+    let after_hash = fs::read(&path)
+        .map(|bytes| {
+            let mut h = Sha256::new();
+            h.update(&bytes);
+            h.finalize().to_vec()
+        })
+        .ok();
+
+    let file_changed = match (&before_hash, &after_hash) {
+        (Some(b), Some(a)) => b != a,
+        _ => false,
+    };
+
     // Sync cache after editing (in case user saved changes)
     crate::cli::commands::utils::sync_cache(&project);
 
+    // If the file changed, mark all dependent links as suspect for change-impact review
+    if file_changed {
+        if let Ok(cache) = EntityCache::open(&project) {
+            match mark_dependents_suspect(
+                &project,
+                &cache,
+                &resolved_id,
+                SuspectReason::ContentModified,
+            ) {
+                Ok(marked) if !marked.is_empty() => {
+                    println!();
+                    println!(
+                        "{} {} dependent link(s) marked suspect for review:",
+                        style("⚠").yellow(),
+                        marked.len()
+                    );
+                    for dep in &marked {
+                        let display_id = short_ids
+                            .get_short_id(&dep.source_id)
+                            .unwrap_or_else(|| dep.source_id.clone());
+                        println!(
+                            "   {} {} → {} ({})",
+                            style("•").dim(),
+                            style(&display_id).cyan(),
+                            style(&dep.link_type).yellow(),
+                            dep.reason
+                        );
+                    }
+                    println!("{}", style("Run `tdt link suspect list` to review.").dim());
+                    // Sync again so the suspect markers are visible
+                    crate::cli::commands::utils::sync_cache(&project);
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!(
+                        "{} Failed to mark dependents suspect: {}",
+                        style("!").yellow(),
+                        e
+                    );
+                }
+            }
+
+            // Engineering-impact report: stackups and mates store their
+            // feature references inside `contributors[*].feature` and
+            // `feature_a` / `feature_b` rather than under `links:`, so the
+            // YAML-mutation-based suspect marker above can't reach them.
+            // The cache *does* know they depend on this entity, so list them
+            // explicitly with actionable next steps.
+            report_engineering_impact(&cache, &resolved_id, &short_ids);
+        }
+    }
+
     Ok(())
+}
+
+/// Surface stackups/mates that depend on `target_id` and need re-analysis
+/// after a content change. Complements `mark_dependents_suspect`, which only
+/// covers links physically located under `links:` in the YAML.
+fn report_engineering_impact(
+    cache: &tdt_core::core::cache::EntityCache,
+    target_id: &str,
+    short_ids: &ShortIdIndex,
+) {
+    let depends = cache.get_links_to(target_id);
+
+    let stackups: Vec<&tdt_core::core::cache::CachedLink> = depends
+        .iter()
+        .filter(|d| d.source_id.starts_with("TOL-") && d.link_type.starts_with("contributor["))
+        .collect();
+    let mates: Vec<&tdt_core::core::cache::CachedLink> = depends
+        .iter()
+        .filter(|d| {
+            d.source_id.starts_with("MATE-")
+                && (d.link_type == "feature_a" || d.link_type == "feature_b")
+        })
+        .collect();
+
+    if !stackups.is_empty() {
+        println!();
+        println!(
+            "{} {} stackup(s) reference this entity — analysis may be stale:",
+            style("⚠").yellow(),
+            stackups.len()
+        );
+        for s in &stackups {
+            let id = short_ids
+                .get_short_id(&s.source_id)
+                .unwrap_or_else(|| s.source_id.clone());
+            println!(
+                "   {} {} ({})",
+                style("•").dim(),
+                style(&id).cyan(),
+                style(&s.link_type).dim()
+            );
+        }
+        println!(
+            "{}",
+            style("Run `tdt validate --fix` to sync contributor data, then `tdt tol analyze <id>` to refresh.")
+                .dim()
+        );
+    }
+
+    if !mates.is_empty() {
+        println!();
+        println!(
+            "{} {} mate(s) reference this entity — fit analysis may be stale:",
+            style("⚠").yellow(),
+            mates.len()
+        );
+        for m in &mates {
+            let id = short_ids
+                .get_short_id(&m.source_id)
+                .unwrap_or_else(|| m.source_id.clone());
+            println!(
+                "   {} {} ({})",
+                style("•").dim(),
+                style(&id).cyan(),
+                style(&m.link_type).dim()
+            );
+        }
+        println!(
+            "{}",
+            style("Run `tdt mate recalc <id>` (or `--all`) to refresh fit results.").dim()
+        );
+    }
 }
 
 // =========================================================================

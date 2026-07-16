@@ -134,10 +134,13 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
                     // Component - add to flat list
                     let actual_qty = item.quantity * qty_multiplier;
 
-                    // Get unit price
+                    // Get unit price (quote price for qty, falling back to unit_cost)
                     let unit_price = if let Some(ref quote_id) = cmp.selected_quote {
                         if let Some(quote) = quote_map.get(quote_id) {
-                            quote.price_for_qty(actual_qty).unwrap_or(0.0)
+                            quote
+                                .price_for_qty(actual_qty)
+                                .or(cmp.unit_cost)
+                                .unwrap_or(0.0)
                         } else {
                             cmp.unit_cost.unwrap_or(0.0)
                         }
@@ -306,6 +309,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
             with_mass: bool,
             visited: &mut std::collections::HashSet<String>,
             full_ids: bool,
+            qty_multiplier: u32,
         ) {
             let prefix = "│  ".repeat(indent);
             for (i, item) in bom.iter().enumerate() {
@@ -323,11 +327,17 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
 
                 // Check if it's a component or subassembly
                 if let Some(cmp) = component_map.get(&item_id) {
+                    // Effective quantity accounts for parent subassembly quantities
+                    let actual_qty = item.quantity * qty_multiplier;
+
                     let cost_str = if with_cost {
                         // Priority 1: Use selected quote if set
                         let unit_price = if let Some(ref quote_id) = cmp.selected_quote {
                             if let Some(quote) = quote_map.get(quote_id) {
-                                quote.price_for_qty(item.quantity).unwrap_or(0.0)
+                                quote
+                                    .price_for_qty(actual_qty)
+                                    .or(cmp.unit_cost)
+                                    .unwrap_or(0.0)
                             } else {
                                 cmp.unit_cost.unwrap_or(0.0)
                             }
@@ -337,7 +347,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
                         };
 
                         if unit_price > 0.0 {
-                            let line_cost = unit_price * item.quantity as f64;
+                            let line_cost = unit_price * actual_qty as f64;
                             *total_cost += line_cost;
                             format!(" ${:.2}", line_cost)
                         } else {
@@ -349,7 +359,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
 
                     let mass_str = if with_mass {
                         cmp.mass_kg.map_or("".to_string(), |m| {
-                            let line_mass = m * item.quantity as f64;
+                            let line_mass = m * actual_qty as f64;
                             *total_mass += line_mass;
                             format!(" {:.3}kg", line_mass)
                         })
@@ -389,6 +399,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
                             with_mass,
                             visited,
                             full_ids,
+                            qty_multiplier * item.quantity,
                         );
                         visited.remove(&item_id);
                     }
@@ -417,6 +428,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
             args.with_mass,
             &mut visited,
             args.full_ids,
+            1,
         );
 
         output.push_str("```\n");

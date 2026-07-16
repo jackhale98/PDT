@@ -127,7 +127,7 @@ The `tdt validate` command checks if `length` matches the referenced dimension a
 | `plane` | Planar surface | w, α, β |
 | `cylinder` | Cylindrical feature | u, v, α, β |
 | `sphere` | Spherical feature | u, v, w |
-| `cone` | Conical feature | u, v, α, β |
+| `cone` | Conical feature | u, v, w, α, β |
 | `point` | Point feature | u, v, w |
 | `line` | Linear feature | u, v |
 | `complex` | Complex geometry | None (all free) |
@@ -141,7 +141,7 @@ Tessera's 3D tolerance analysis is designed to work seamlessly with ASME Y14.5 G
 | GD&T Symbol | Geometry Class | Torsor DOF Affected |
 |-------------|----------------|---------------------|
 | **Position** (⊕) | Cylinder | u, v (radial position) |
-| **Position** (⊕) | Plane | u, v, w (planar position) |
+| **Position** (⊕) | Plane | w (normal to plane) |
 | **Perpendicularity** (⟂) | Cylinder | α, β (angular deviation) |
 | **Parallelism** (//) | Plane | α, β (angular deviation) |
 | **Flatness** (⏥) | Plane | w (out-of-plane) |

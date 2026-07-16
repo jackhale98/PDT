@@ -27,9 +27,12 @@ impl Git {
             // Make path relative to repo root
             let rel_path = match path.strip_prefix(&self.repo_root) {
                 Ok(rel) => rel,
-                Err(_) => path.as_ref(),
+                Err(_) => path,
             };
-            let rel_str: BString = rel_path.to_string_lossy().as_ref().into();
+            // Git index entries must use '/' separators; on Windows,
+            // to_string_lossy yields backslashes, which would create
+            // duplicate entries and corrupt tree objects.
+            let rel_str: BString = rel_path.to_string_lossy().replace('\\', "/").into();
 
             let full_path = self.repo_root.join(rel_path);
 
@@ -126,6 +129,8 @@ impl Git {
         let repo = self.open_repo()?;
         let index = repo.index_or_empty().map_err(gix_err)?;
 
+        // Index entries are '/'-separated; normalize Windows-style input.
+        let path = path.replace('\\', "/");
         let path_bstr: &BStr = path.as_bytes().as_ref();
         for entry in index.entries() {
             let entry_path = entry.path_in(index.path_backing());
@@ -155,6 +160,8 @@ impl Git {
         };
 
         for path in paths {
+            // Index entries are '/'-separated; normalize Windows-style input.
+            let path = path.replace('\\', "/");
             let path_bstr: &BStr = path.as_bytes().as_ref();
 
             if let Some(ref tree) = head_tree {

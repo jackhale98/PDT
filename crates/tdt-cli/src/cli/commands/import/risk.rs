@@ -30,10 +30,9 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
     let headers = rdr.headers().into_diagnostic()?.clone();
     let header_map = build_header_map(&headers);
 
+    // Files are written into risks/design or risks/process (matching `tdt risk new`);
+    // the type subdirectory is created just before writing each file.
     let output_dir = project.root().join("risks");
-    if !args.dry_run && !output_dir.exists() {
-        fs::create_dir_all(&output_dir).into_diagnostic()?;
-    }
 
     let mut short_ids = ShortIdIndex::load(project);
 

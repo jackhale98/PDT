@@ -37,6 +37,8 @@ impl EntityCache {
             DELETE FROM capas;
             DELETE FROM assemblies;
             DELETE FROM results;
+            DELETE FROM lots;
+            DELETE FROM deviations;
             DELETE FROM links;
             DELETE FROM bom_items;
             DELETE FROM subassembly_items;
@@ -293,6 +295,8 @@ impl EntityCache {
             "capas",
             "assemblies",
             "results",
+            "lots",
+            "deviations",
         ] {
             self.conn
                 .execute(&format!("DELETE FROM {} WHERE id = ?1", table), params![id])
@@ -414,6 +418,14 @@ impl EntityCache {
                     }
                 } else if let Some(target_id) = value[field].as_str() {
                     links.push((target_id.to_string(), link_type.to_string()));
+                } else if let Some(target_obj) = value[field].as_mapping() {
+                    // Single-value mapping link: `field: {id: XXX-..., title: ...}`
+                    if let Some(target_id) = target_obj
+                        .get(serde_yml::Value::String("id".to_string()))
+                        .and_then(|v| v.as_str())
+                    {
+                        links.push((target_id.to_string(), link_type.to_string()));
+                    }
                 }
                 links
             };
@@ -915,5 +927,69 @@ impl EntityCache {
             )
             .into_diagnostic()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::Project;
+    use tempfile::tempdir;
+
+    fn create_test_project() -> (tempfile::TempDir, Project) {
+        let tmp = tempdir().unwrap();
+        let project = Project::init(tmp.path()).unwrap();
+        (tmp, project)
+    }
+
+    fn write_test_entity(project: &Project, rel_path: &str, content: &str) {
+        let full_path = project.root().join(rel_path);
+        if let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(&full_path, content).unwrap();
+    }
+
+    #[test]
+    fn test_extract_links_single_value_mapping() {
+        let (_tmp, project) = create_test_project();
+
+        // Single-value MAPPING link (`links: {component: {id: ..., title: ...}}`)
+        // as written by `link add`, plus a single-value string link for contrast.
+        write_test_entity(
+            &project,
+            "verification/protocols/TEST-01A.tdt.yaml",
+            r#"
+id: TEST-01A
+title: Test with mapping link
+status: draft
+author: Test
+created: 2024-01-15T10:30:00Z
+links:
+  component:
+    id: CMP-01B
+    title: Some Component
+  assembly: ASM-01C
+"#,
+        );
+
+        let mut cache = EntityCache::open_without_sync(&project).unwrap();
+        cache.rebuild().unwrap();
+
+        let links = cache.get_links_from("TEST-01A");
+        assert!(
+            links
+                .iter()
+                .any(|l| l.target_id == "CMP-01B" && l.link_type == "component"),
+            "Expected single-value mapping link to CMP-01B to be cached, got {:?}",
+            links
+        );
+        assert!(
+            links
+                .iter()
+                .any(|l| l.target_id == "ASM-01C" && l.link_type == "assembly"),
+            "Expected single-value string link to ASM-01C to be cached, got {:?}",
+            links
+        );
     }
 }

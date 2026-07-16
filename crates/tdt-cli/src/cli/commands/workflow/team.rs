@@ -730,13 +730,7 @@ impl SetupSigningArgs {
     }
 }
 
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len - 3])
-    } else {
-        s.to_string()
-    }
-}
+use crate::cli::helpers::truncate_str as truncate;
 
 impl AddKeyArgs {
     pub fn run(&self, _global: &GlobalOpts) -> Result<()> {

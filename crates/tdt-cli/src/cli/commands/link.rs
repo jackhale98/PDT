@@ -78,12 +78,17 @@ pub struct SuspectListArgs {
 pub struct SuspectReviewArgs {
     /// Entity ID to review
     pub id: String,
+
+    /// Show git diff of the target entity since it was last verified.
+    /// Requires the entity file to be tracked in git.
+    #[arg(long)]
+    pub show_diff: bool,
 }
 
 #[derive(clap::Args, Debug)]
 pub struct SuspectClearArgs {
-    /// Source entity ID
-    pub source: String,
+    /// Source entity ID (or omit when using --all-for)
+    pub source: Option<String>,
 
     /// Target entity ID (optional - clear all if not specified)
     pub target: Option<String>,
@@ -95,6 +100,12 @@ pub struct SuspectClearArgs {
     /// Mark as verified at this revision
     #[arg(long)]
     pub verified_revision: Option<u32>,
+
+    /// Clear all suspect links across the project that point at this target entity.
+    /// Useful after reviewing a change-impact set: once you've confirmed every
+    /// dependent of TARGET is still valid, clear them all in one command.
+    #[arg(long)]
+    pub all_for: Option<String>,
 }
 
 #[derive(clap::Args, Debug)]
@@ -319,22 +330,40 @@ fn run_suspect_list(args: SuspectListArgs) -> Result<()> {
             }
         }
 
-        // Read suspect links from file (suspect status is stored in YAML, not cache)
-        if let Ok(suspect_links) = get_suspect_links(&entity.file_path) {
-            if !suspect_links.is_empty() {
-                if !args.count {
-                    for (link_type, target_id, reason) in &suspect_links {
-                        println!(
-                            "  {} {} --[{}]--> {} ({})",
-                            style("!").yellow(),
-                            truncate_id(&entity.id),
-                            style(link_type).cyan(),
-                            truncate_id(target_id),
-                            style(reason.to_string()).dim()
-                        );
+        // Read suspect links from file (suspect status is stored in YAML, not
+        // cache). Cached paths are project-root-relative — join them so this
+        // works from subdirectories, and surface read errors instead of
+        // silently reporting "no suspect links".
+        let file_path = if entity.file_path.is_absolute() {
+            entity.file_path.clone()
+        } else {
+            project.root().join(&entity.file_path)
+        };
+        match get_suspect_links(&file_path) {
+            Ok(suspect_links) => {
+                if !suspect_links.is_empty() {
+                    if !args.count {
+                        for (link_type, target_id, reason) in &suspect_links {
+                            println!(
+                                "  {} {} --[{}]--> {} ({})",
+                                style("!").yellow(),
+                                truncate_id(&entity.id),
+                                style(link_type).cyan(),
+                                truncate_id(target_id),
+                                style(reason.to_string()).dim()
+                            );
+                        }
                     }
+                    total_suspect += suspect_links.len();
                 }
-                total_suspect += suspect_links.len();
+            }
+            Err(e) => {
+                eprintln!(
+                    "{} could not read {}: {}",
+                    style("warning:").yellow(),
+                    file_path.display(),
+                    e
+                );
             }
         }
     }
@@ -369,38 +398,373 @@ fn run_suspect_review(args: SuspectReviewArgs) -> Result<()> {
 
     if suspect_links.is_empty() {
         println!("\n{} No suspect links found.", style("✓").green());
-    } else {
-        println!();
-        for (link_type, target_id, reason) in &suspect_links {
-            println!(
-                "  {} {} → {} ({})",
-                style("!").yellow(),
-                style(link_type).cyan(),
-                truncate_id(target_id),
-                style(reason.to_string()).dim()
-            );
-        }
-        println!();
-        println!(
-            "Run 'tdt link suspect clear {} --to <TARGET>' to clear after review.",
-            args.id
-        );
+        return Ok(());
     }
+
+    println!();
+    for (link_type, target_id, reason) in &suspect_links {
+        println!(
+            "  {} {} → {} ({})",
+            style("!").yellow(),
+            style(link_type).cyan(),
+            truncate_id(target_id),
+            style(reason.to_string()).dim()
+        );
+
+        if args.show_diff {
+            print_target_diff(&project, target_id, &entity.path, link_type);
+        }
+    }
+    println!();
+    println!(
+        "Run 'tdt link suspect clear {} <TARGET>' to clear after review.",
+        args.id
+    );
 
     Ok(())
 }
 
+/// Print a git diff of the target entity since the source's last verified_revision.
+///
+/// This shows the user exactly what changed in the target entity that caused
+/// the link to become suspect, so they can decide whether to update or clear.
+fn print_target_diff(
+    project: &Project,
+    target_id: &str,
+    source_path: &std::path::Path,
+    link_type: &str,
+) {
+    use std::process::Command;
+
+    // Find the target entity's file path via cache
+    let cache = match EntityCache::open(project) {
+        Ok(c) => c,
+        Err(_) => {
+            println!(
+                "    {}",
+                style("(could not open cache to locate target)").dim()
+            );
+            return;
+        }
+    };
+
+    let target_entity = match cache.get_entity(target_id) {
+        Some(e) => e,
+        None => {
+            println!(
+                "    {}",
+                style("(target entity not found - it may have been deleted)").red()
+            );
+            return;
+        }
+    };
+
+    let target_path = if target_entity.file_path.is_absolute() {
+        target_entity.file_path.clone()
+    } else {
+        project.root().join(&target_entity.file_path)
+    };
+
+    // Try to find verified_revision in the source link entry
+    let verified_revision = read_verified_revision(source_path, link_type, target_id);
+
+    // We diff against git history rather than tracking revision-to-commit mapping.
+    // The strategy: show the diff between the last commit that touched the target
+    // file BEFORE the suspect_since timestamp (or HEAD~1 if no timestamp).
+    let suspect_since = read_suspect_since(source_path, link_type, target_id);
+
+    let rel_target = target_path
+        .strip_prefix(project.root())
+        .unwrap_or(&target_path);
+
+    // Build the git revision range
+    let base_rev = if let Some(ts) = suspect_since {
+        // Find the commit that touched this file just BEFORE the suspect_since timestamp
+        let output = Command::new("git")
+            .args([
+                "log",
+                "-1",
+                &format!("--before={}", ts),
+                "--format=%H",
+                "--",
+            ])
+            .arg(rel_target)
+            .current_dir(project.root())
+            .output();
+
+        match output {
+            Ok(out) if out.status.success() => {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if s.is_empty() {
+                    "HEAD~1".to_string()
+                } else {
+                    s
+                }
+            }
+            _ => "HEAD~1".to_string(),
+        }
+    } else {
+        "HEAD~1".to_string()
+    };
+
+    // Diff base against the WORKING TREE (not ..HEAD): suspect flags are set
+    // at edit time, typically before the change is committed, so committed-only
+    // diffs would show nothing in the primary review workflow.
+    let diff_output = Command::new("git")
+        .args(["diff", "--no-color", &base_rev, "--"])
+        .arg(rel_target)
+        .current_dir(project.root())
+        .output();
+
+    match diff_output {
+        Ok(out) if out.status.success() => {
+            let diff = String::from_utf8_lossy(&out.stdout);
+            if diff.trim().is_empty() {
+                println!(
+                    "    {}",
+                    style("(no git changes detected for target)").dim()
+                );
+            } else {
+                if let Some(rev) = verified_revision {
+                    println!(
+                        "    {} (since verified_revision={}):",
+                        style("Target diff").bold(),
+                        rev
+                    );
+                } else {
+                    println!("    {}:", style("Target diff").bold());
+                }
+                for line in diff.lines() {
+                    if line.starts_with("+++") || line.starts_with("---") || line.starts_with("@@")
+                    {
+                        println!("    {}", style(line).dim());
+                    } else if line.starts_with('+') {
+                        println!("    {}", style(line).green());
+                    } else if line.starts_with('-') {
+                        println!("    {}", style(line).red());
+                    } else if line.starts_with("diff ") || line.starts_with("index ") {
+                        // skip
+                    } else {
+                        println!("    {}", line);
+                    }
+                }
+            }
+        }
+        _ => {
+            println!(
+                "    {}",
+                style("(git diff unavailable - file may not be tracked)").dim()
+            );
+        }
+    }
+}
+
+/// Read the verified_revision field for a specific link in an entity file.
+fn read_verified_revision(
+    source_path: &std::path::Path,
+    link_type: &str,
+    target_id: &str,
+) -> Option<u32> {
+    let content = std::fs::read_to_string(source_path).ok()?;
+    let doc: serde_yml::Value = serde_yml::from_str(&content).ok()?;
+    let links = doc.get("links")?.as_mapping()?;
+    let link_value = links.get(serde_yml::Value::String(link_type.to_string()))?;
+
+    let entries: Vec<&serde_yml::Value> = if let Some(seq) = link_value.as_sequence() {
+        seq.iter().collect()
+    } else {
+        vec![link_value]
+    };
+
+    for entry in entries {
+        let map = entry.as_mapping()?;
+        let id = map
+            .get(serde_yml::Value::String("id".to_string()))?
+            .as_str()?;
+        if id == target_id {
+            return map
+                .get(serde_yml::Value::String("verified_revision".to_string()))?
+                .as_u64()
+                .map(|n| n as u32);
+        }
+    }
+    None
+}
+
+/// Read the suspect_since timestamp for a specific link.
+fn read_suspect_since(
+    source_path: &std::path::Path,
+    link_type: &str,
+    target_id: &str,
+) -> Option<String> {
+    let content = std::fs::read_to_string(source_path).ok()?;
+    let doc: serde_yml::Value = serde_yml::from_str(&content).ok()?;
+    let links = doc.get("links")?.as_mapping()?;
+    let link_value = links.get(serde_yml::Value::String(link_type.to_string()))?;
+
+    let entries: Vec<&serde_yml::Value> = if let Some(seq) = link_value.as_sequence() {
+        seq.iter().collect()
+    } else {
+        vec![link_value]
+    };
+
+    for entry in entries {
+        let map = entry.as_mapping()?;
+        let id = map
+            .get(serde_yml::Value::String("id".to_string()))?
+            .as_str()?;
+        if id == target_id {
+            return map
+                .get(serde_yml::Value::String("suspect_since".to_string()))?
+                .as_str()
+                .map(String::from);
+        }
+    }
+    None
+}
+
 fn run_suspect_clear(args: SuspectClearArgs) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
-    let source = find_entity(&project, &args.source)?;
 
-    if let Some(ref target_id) = args.target {
+    // Bulk mode: clear all suspect links across the project pointing at a target,
+    // plus the target's own outgoing suspect links that reciprocate the ones
+    // cleared here. Unrelated pending reviews on the target are left alone.
+    if let Some(ref target_query) = args.all_for {
+        let target = find_entity(&project, target_query)?;
+        let target_id_str = target.id.to_string();
+        let cache = EntityCache::open(&project).map_err(|e| miette::miette!("{}", e))?;
+        let short_ids = ShortIdIndex::load(&project);
+
+        let mut cleared = 0;
+        let mut skipped_not_suspect = 0;
+        let mut cleared_sources: Vec<String> = Vec::new();
+
+        // 1. Clear suspect links FROM other entities TO target
+        for link in cache.get_links_to(&target_id_str) {
+            let source_entity = match cache.get_entity(&link.source_id) {
+                Some(e) => e,
+                None => continue,
+            };
+            let source_path = if source_entity.file_path.is_absolute() {
+                source_entity.file_path.clone()
+            } else {
+                project.root().join(&source_entity.file_path)
+            };
+
+            // Match by target ID, not (type, target): the cache normalizes
+            // some YAML field names (components → contains, parent →
+            // contained_in, ...), so a type comparison would silently skip
+            // suspect links stored under the original field name.
+            let suspect_links = get_suspect_links(&source_path).unwrap_or_default();
+            let yaml_link_type = suspect_links
+                .iter()
+                .find(|(_, tid, _)| tid == &target_id_str)
+                .map(|(lt, _, _)| lt.clone());
+
+            let Some(yaml_link_type) = yaml_link_type else {
+                skipped_not_suspect += 1;
+                continue;
+            };
+
+            clear_link_suspect(
+                &source_path,
+                &yaml_link_type,
+                &target_id_str,
+                args.verified_revision,
+            )
+            .into_diagnostic()?;
+            cleared += 1;
+            cleared_sources.push(link.source_id.clone());
+
+            let short = short_ids
+                .get_short_id(&link.source_id)
+                .unwrap_or_else(|| link.source_id.clone());
+            println!(
+                "  {} {} --[{}]--> {}",
+                style("✓").green(),
+                style(&short).cyan(),
+                style(&link.link_type).cyan(),
+                truncate_id(&target_id_str)
+            );
+        }
+
+        // 2. Clear target's own outgoing suspect links — but ONLY the
+        // reciprocals of links cleared in step 1. The target may have other
+        // outgoing suspect links (pending reviews of changes on their far
+        // ends) that are outside this command's documented scope.
+        let target_suspects = get_suspect_links(&target.path).unwrap_or_default();
+        for (link_type, downstream_id, _) in target_suspects {
+            if !cleared_sources.contains(&downstream_id) {
+                continue;
+            }
+            clear_link_suspect(
+                &target.path,
+                &link_type,
+                &downstream_id,
+                args.verified_revision,
+            )
+            .into_diagnostic()?;
+            cleared += 1;
+
+            let short = short_ids
+                .get_short_id(&downstream_id)
+                .unwrap_or_else(|| downstream_id.clone());
+            println!(
+                "  {} {} --[{}]--> {}",
+                style("✓").green(),
+                style(format_short_id(&target.id)).cyan(),
+                style(&link_type).cyan(),
+                style(&short).cyan()
+            );
+        }
+
+        if cleared == 0 && skipped_not_suspect == 0 {
+            println!(
+                "{} No suspect links involving {}",
+                style("✓").green(),
+                format_short_id(&target.id)
+            );
+        } else {
+            println!();
+            println!(
+                "{} Cleared {} suspect link(s) involving {}{}",
+                style("✓").green(),
+                cleared,
+                format_short_id(&target.id),
+                if skipped_not_suspect > 0 {
+                    format!(" ({} not suspect, skipped)", skipped_not_suspect)
+                } else {
+                    String::new()
+                }
+            );
+        }
+
+        crate::cli::commands::utils::sync_cache(&project);
+        return Ok(());
+    }
+
+    let source_query = args.source.as_ref().ok_or_else(|| {
+        miette::miette!("SOURCE entity required (or use --all-for <TARGET> for bulk clearing)")
+    })?;
+    let source = find_entity(&project, source_query)?;
+
+    if let Some(ref target_query) = args.target {
+        // Resolve the target short ID (e.g., TEST@1) to a full entity. The
+        // target may have been DELETED — that's a legitimate reason for the
+        // link to be suspect — so fall back to the raw ID and clear the
+        // source-side flag anyway (there's no reciprocal to clear then).
+        let resolved_target = find_entity(&project, target_query).ok();
+        let target_id = resolved_target
+            .as_ref()
+            .map(|t| t.id.to_string())
+            .unwrap_or_else(|| target_query.clone());
+
         // Clear specific link
         let link_type = args.link_type.ok_or_else(|| {
             miette::miette!("Link type required when clearing specific target. Use -t <link_type>")
         })?;
 
-        clear_link_suspect(&source.path, &link_type, target_id, args.verified_revision)
+        clear_link_suspect(&source.path, &link_type, &target_id, args.verified_revision)
             .into_diagnostic()?;
 
         println!(
@@ -408,8 +772,26 @@ fn run_suspect_clear(args: SuspectClearArgs) -> Result<()> {
             style("✓").green(),
             format_short_id(&source.id),
             style(&link_type).cyan(),
-            truncate_id(target_id)
+            resolved_target
+                .as_ref()
+                .map(|t| format_short_id(&t.id))
+                .unwrap_or_else(|| target_id.clone())
         );
+
+        // Also clear the reciprocal so both ends agree
+        if let Some(ref target) = resolved_target {
+            if let Some(reciprocal_type) =
+                get_reciprocal_link_type(&link_type, target.id.prefix(), source.id.prefix())
+            {
+                // Best-effort: ignore errors since reciprocal may not exist
+                let _ = clear_link_suspect(
+                    &target.path,
+                    &reciprocal_type,
+                    &source.id.to_string(),
+                    args.verified_revision,
+                );
+            }
+        }
     } else {
         // Clear all suspect links for this entity
         let suspect_links = get_suspect_links(&source.path).into_diagnostic()?;
@@ -429,6 +811,7 @@ fn run_suspect_clear(args: SuspectClearArgs) -> Result<()> {
         );
     }
 
+    crate::cli::commands::utils::sync_cache(&project);
     Ok(())
 }
 
@@ -454,8 +837,13 @@ fn run_suspect_mark(args: SuspectMarkArgs) -> Result<()> {
         _ => SuspectReason::ManuallyMarked,
     };
 
-    mark_link_suspect(&source.path, &link_type, &target.id.to_string(), reason)
-        .into_diagnostic()?;
+    mark_link_suspect(
+        &source.path,
+        &link_type,
+        &target.id.to_string(),
+        reason.clone(),
+    )
+    .into_diagnostic()?;
 
     println!(
         "{} Marked as suspect: {} --[{}]--> {}",
@@ -465,6 +853,36 @@ fn run_suspect_mark(args: SuspectMarkArgs) -> Result<()> {
         format_short_id(&target.id)
     );
 
+    // Mark the reciprocal link symmetrically so both ends agree the link needs review
+    if let Some(reciprocal_type) =
+        get_reciprocal_link_type(&link_type, target.id.prefix(), source.id.prefix())
+    {
+        match mark_link_suspect(
+            &target.path,
+            &reciprocal_type,
+            &source.id.to_string(),
+            reason,
+        ) {
+            Ok(()) => {
+                println!(
+                    "{} Marked reciprocal: {} --[{}]--> {}",
+                    style("✓").green(),
+                    format_short_id(&target.id),
+                    style(&reciprocal_type).cyan(),
+                    format_short_id(&source.id)
+                );
+            }
+            Err(tdt_core::core::suspect::SuspectError::LinkNotFound { .. }) => {
+                // Reciprocal link doesn't exist on target - that's fine, not all
+                // links have reciprocals stored on the other side
+            }
+            Err(e) => {
+                eprintln!("{} Failed to mark reciprocal: {}", style("!").yellow(), e);
+            }
+        }
+    }
+
+    crate::cli::commands::utils::sync_cache(&project);
     Ok(())
 }
 
@@ -722,11 +1140,11 @@ fn truncate_id(id: &str) -> String {
 fn print_link_entry(entry: &serde_yml::Value) {
     if let Some(m) = entry.as_mapping() {
         let id = m
-            .get(&serde_yml::Value::String("id".to_string()))
+            .get(serde_yml::Value::String("id".to_string()))
             .and_then(|v| v.as_str())
             .unwrap_or("???");
         let title = m
-            .get(&serde_yml::Value::String("title".to_string()))
+            .get(serde_yml::Value::String("title".to_string()))
             .and_then(|v| v.as_str());
         if let Some(title) = title {
             println!(
@@ -1001,13 +1419,19 @@ fn find_entity(project: &Project, id_query: &str) -> Result<EntityInfo> {
 
         let lookup_id = full_id.as_deref().unwrap_or(id_query);
 
-        // Try exact match via cache
+        // Try exact match via cache. Cached paths are project-root-relative;
+        // join them so lookups work when running from a subdirectory.
         if let Some(entity) = cache.get_entity(lookup_id) {
             if let Ok(id) = entity.id.parse::<EntityId>() {
+                let path = if entity.file_path.is_absolute() {
+                    entity.file_path
+                } else {
+                    project.root().join(&entity.file_path)
+                };
                 return Ok(EntityInfo {
                     id,
                     title: entity.title,
-                    path: entity.file_path,
+                    path,
                 });
             }
         }
@@ -1350,10 +1774,14 @@ use tdt_core::core::links::{get_reciprocal_link_type, infer_link_type};
 fn find_entity_file(project: &Project, id: &EntityId) -> Result<PathBuf> {
     let id_str = id.to_string();
 
-    // Try cache-first lookup (O(1) via SQLite)
+    // Try cache-first lookup (O(1) via SQLite). Cached paths are
+    // project-root-relative; join so this works from subdirectories.
     if let Ok(cache) = EntityCache::open(project) {
         if let Some(entity) = cache.get_entity(&id_str) {
-            return Ok(entity.file_path);
+            if entity.file_path.is_absolute() {
+                return Ok(entity.file_path);
+            }
+            return Ok(project.root().join(&entity.file_path));
         }
     }
 

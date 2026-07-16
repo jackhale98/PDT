@@ -185,6 +185,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::clone_on_copy)] // clone is exactly what this test exercises
     fn test_status_clone_copy() {
         let status = Status::Draft;
         let cloned = status.clone();
@@ -264,6 +265,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::clone_on_copy)] // clone is exactly what this test exercises
     fn test_priority_clone_copy() {
         let priority = Priority::Critical;
         let cloned = priority.clone();

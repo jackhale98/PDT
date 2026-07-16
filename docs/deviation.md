@@ -197,9 +197,9 @@ tdt dev new --title "Quick Deviation" --no-edit
 tdt dev list
 
 # Filter by deviation status
-tdt dev list --dev-status pending
-tdt dev list --dev-status active
-tdt dev list --dev-status expired
+tdt dev list --status pending
+tdt dev list --status active
+tdt dev list --status expired
 
 # Filter by type
 tdt dev list --dev-type temporary

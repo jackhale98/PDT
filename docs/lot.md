@@ -231,9 +231,9 @@ tdt lot new --title "Batch 2024-002" --no-edit
 tdt lot list
 
 # Filter by lot status
-tdt lot list --lot-status in_progress
-tdt lot list --lot-status completed
-tdt lot list --lot-status on_hold
+tdt lot list --status in_progress
+tdt lot list --status completed
+tdt lot list --status on_hold
 
 # Filter by product
 tdt lot list --product ASM@1
@@ -305,7 +305,7 @@ tdt lot step LOT@1 -i
 tdt lot complete LOT@1
 
 # Complete with notes
-tdt lot complete LOT@1 --notes "All inspections passed"
+tdt lot complete LOT@1
 
 # Skip confirmation
 tdt lot complete LOT@1 -y
@@ -507,7 +507,7 @@ tdt lot step LOT@1 --process PROC@1 --status completed --operator "J.Smith"
 git commit -m "LOT@1: Completed OP-010"
 
 # NCR during production
-tdt ncr new --lot LOT@1 --title "Dimensional issue"
+tdt ncr new --title "Dimensional issue" --link LOT@1
 git commit -m "LOT@1: NCR opened for dimensional issue"
 
 # Complete and merge

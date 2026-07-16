@@ -13,7 +13,9 @@ use tdt_core::core::shortid::ShortIdIndex;
 use tdt_core::core::Config;
 use tdt_core::schema::template::{TemplateContext, TemplateGenerator};
 
-use super::common::{build_header_map, get_field, truncate, ImportArgs, ImportStats};
+use super::common::{
+    build_header_map, get_field, resolve_entity_ref, truncate, ImportArgs, ImportStats,
+};
 
 pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
@@ -61,6 +63,33 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
         // Process - use CSV column or --process flag
         let csv_process = get_field(&record, &header_map, "process");
         let process = csv_process.or_else(|| args.process.clone());
+
+        // Resolve short ID (e.g. PROC@1) to a full validated entity ID
+        let process = match process.filter(|p| !p.is_empty()) {
+            Some(proc_ref) => match resolve_entity_ref(&short_ids, &proc_ref) {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    eprintln!(
+                        "{} Row {}: Invalid process reference '{}': {}",
+                        style("✗").red(),
+                        row_num,
+                        proc_ref,
+                        e
+                    );
+                    stats.errors += 1;
+                    if !args.skip_errors {
+                        return Err(miette::miette!(
+                            "Invalid process reference '{}' at row {}: {}",
+                            proc_ref,
+                            row_num,
+                            e
+                        ));
+                    }
+                    continue;
+                }
+            },
+            None => None,
+        };
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {

@@ -188,7 +188,7 @@ where
             resolved_length.as_ref(),
         );
 
-        // Merge bounds (take worst case - widest bounds)
+        // Merge bounds (simultaneous satisfaction per Y14.5 - tightest zone governs)
         bounds = merge_bounds(bounds, gdt_bounds.bounds);
 
         if gdt_bounds.has_bonus {
@@ -243,11 +243,21 @@ fn compute_bounds_for_control(
     let mut has_bonus = false;
 
     // Calculate effective tolerance (base + bonus if applicable)
+    //
+    // Bonus tolerance is the signed departure from the material condition
+    // toward the opposite limit, clamped to >= 0. A size-nonconforming
+    // feature (beyond MMC/LMC) gets NO bonus.
     let effective_tol = if let (Some(dim), Some(actual)) = (primary_dim, actual_size) {
         match gdt.material_condition {
             MaterialCondition::Mmc => {
                 let mmc = dim.mmc();
-                let bonus = (actual - mmc).abs();
+                // Internal (hole): MMC = min size, bonus as actual grows.
+                // External (shaft): MMC = max size, bonus as actual shrinks.
+                let bonus = if dim.internal {
+                    (actual - mmc).max(0.0)
+                } else {
+                    (mmc - actual).max(0.0)
+                };
                 if bonus > 0.0 {
                     has_bonus = true;
                 }
@@ -255,7 +265,13 @@ fn compute_bounds_for_control(
             }
             MaterialCondition::Lmc => {
                 let lmc = dim.lmc();
-                let bonus = (actual - lmc).abs();
+                // Internal (hole): LMC = max size, bonus as actual shrinks.
+                // External (shaft): LMC = min size, bonus as actual grows.
+                let bonus = if dim.internal {
+                    (lmc - actual).max(0.0)
+                } else {
+                    (actual - lmc).max(0.0)
+                };
                 if bonus > 0.0 {
                     has_bonus = true;
                 }
@@ -287,11 +303,12 @@ fn compute_bounds_for_control(
                     bounds.w = Some([-bound, bound]);
                 }
                 GeometryClass::Plane => {
-                    // Planar feature position: depends on datum setup
-                    // For now, apply to u, v (in-plane)
+                    // Position on a planar feature is a zone of two parallel
+                    // planes (total width t) centered on true position and
+                    // oriented along the feature normal (ASME Y14.5). It
+                    // bounds translation along the normal: w = ±t/2.
                     let bound = effective_tol / 2.0;
-                    bounds.u = Some([-bound, bound]);
-                    bounds.v = Some([-bound, bound]);
+                    bounds.w = Some([-bound, bound]);
                 }
                 GeometryClass::Line => {
                     // Line position: u, v (perpendicular to line)
@@ -560,7 +577,7 @@ fn compute_bounds_from_dimension(
     bounds
 }
 
-/// Merge two TorsorBounds, taking the wider bounds for each DOF
+/// Merge two TorsorBounds, taking the tighter (intersected) bounds for each DOF
 fn merge_bounds(a: TorsorBounds, b: TorsorBounds) -> TorsorBounds {
     TorsorBounds {
         u: merge_dof(a.u, b.u),
@@ -572,10 +589,30 @@ fn merge_bounds(a: TorsorBounds, b: TorsorBounds) -> TorsorBounds {
     }
 }
 
-/// Merge two DOF bounds, taking the wider bounds
+/// Merge two DOF bounds by intersection (tightest-wins).
+///
+/// Per ASME Y14.5, a feature must satisfy ALL applicable tolerance zones
+/// simultaneously, so when multiple controls bound the same DOF the tightest
+/// zone governs: [max of mins, min of maxes].
+///
+/// If the intersection is empty (contradictory controls whose zones do not
+/// overlap), we deterministically fall back to the tighter control's bound
+/// (smaller width; ties resolved in favor of `a`, the accumulated bound).
+/// This keeps the result a valid, conservative interval instead of an
+/// inverted one.
 fn merge_dof(a: Option<[f64; 2]>, b: Option<[f64; 2]>) -> Option<[f64; 2]> {
     match (a, b) {
-        (Some([a_min, a_max]), Some([b_min, b_max])) => Some([a_min.min(b_min), a_max.max(b_max)]),
+        (Some([a_min, a_max]), Some([b_min, b_max])) => {
+            let lo = a_min.max(b_min);
+            let hi = a_max.min(b_max);
+            if lo <= hi {
+                Some([lo, hi])
+            } else if (a_max - a_min) <= (b_max - b_min) {
+                Some([a_min, a_max])
+            } else {
+                Some([b_min, b_max])
+            }
+        }
         (Some(a), None) => Some(a),
         (None, Some(b)) => Some(b),
         (None, None) => None,
@@ -742,6 +779,102 @@ mod tests {
             "u_max should be 0.15, got {}",
             u_max
         );
+    }
+
+    #[test]
+    fn test_mmc_no_bonus_for_nonconforming_size() {
+        // Regression: a hole 10.0 +0.1/-0 measured at 9.9 is BELOW MMC (10.0),
+        // i.e. size-nonconforming. It must get bonus = 0.0, not a phantom
+        // |9.9 - 10.0| = 0.1 bonus.
+        let mut feat = create_test_feature();
+        feat.geometry_class = Some(GeometryClass::Cylinder);
+        feat.dimensions.push(Dimension {
+            name: "diameter".to_string(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.0,
+            units: "mm".to_string(),
+            internal: true, // hole
+            distribution: Distribution::Normal,
+        });
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.25,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Mmc,
+        });
+
+        let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, Some(9.9), None);
+
+        assert!(!result.has_bonus, "nonconforming size must not grant bonus");
+        let [u_min, u_max] = result.bounds.u.unwrap();
+        // Base position 0.25 diameter -> ±0.125, no bonus
+        assert!((u_min - (-0.125)).abs() < 1e-10, "u_min should be -0.125, got {}", u_min);
+        assert!((u_max - 0.125).abs() < 1e-10, "u_max should be 0.125, got {}", u_max);
+    }
+
+    #[test]
+    fn test_lmc_no_bonus_for_nonconforming_size() {
+        // Hole 10.0 +0.1/-0 at LMC modifier: LMC = 10.1. Actual 10.2 is
+        // beyond LMC (nonconforming) -> bonus 0.0. Actual 10.0 -> bonus 0.1.
+        let mut feat = create_test_feature();
+        feat.geometry_class = Some(GeometryClass::Cylinder);
+        feat.dimensions.push(Dimension {
+            name: "diameter".to_string(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.0,
+            units: "mm".to_string(),
+            internal: true,
+            distribution: Distribution::Normal,
+        });
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.25,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Lmc,
+        });
+
+        // Nonconforming (beyond LMC): no bonus
+        let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, Some(10.2), None);
+        assert!(!result.has_bonus);
+        let [u_min, u_max] = result.bounds.u.unwrap();
+        assert!((u_min - (-0.125)).abs() < 1e-10);
+        assert!((u_max - 0.125).abs() < 1e-10);
+
+        // Departure from LMC toward MMC: bonus = 10.1 - 10.0 = 0.1
+        let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, Some(10.0), None);
+        assert!(result.has_bonus);
+        let [u_min, u_max] = result.bounds.u.unwrap();
+        // (0.25 + 0.1) / 2 = 0.175
+        assert!((u_min - (-0.175)).abs() < 1e-10);
+        assert!((u_max - 0.175).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_position_plane_bounds_normal() {
+        // Regression: position on a planar feature is a two-parallel-planes
+        // zone along the feature NORMAL: w = ±t/2. u/v must NOT be bounded
+        // by that control.
+        let mut feat = create_test_feature();
+        feat.geometry_class = Some(GeometryClass::Plane);
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.2,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Rfs,
+        });
+
+        let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, None, None);
+
+        assert!(result.bounds.u.is_none(), "position on plane must not bound u");
+        assert!(result.bounds.v.is_none(), "position on plane must not bound v");
+        let [w_min, w_max] = result.bounds.w.unwrap();
+        assert!((w_min - (-0.1)).abs() < 1e-10, "w_min should be -0.1, got {}", w_min);
+        assert!((w_max - 0.1).abs() < 1e-10, "w_max should be 0.1, got {}", w_max);
     }
 
     #[test]
@@ -1045,7 +1178,7 @@ mod tests {
     // ===== Merge Bounds Tests =====
 
     #[test]
-    fn test_merge_bounds_takes_wider() {
+    fn test_merge_bounds_takes_tighter() {
         let a = TorsorBounds {
             u: Some([-0.1, 0.1]),
             v: Some([-0.05, 0.05]),
@@ -1059,16 +1192,58 @@ mod tests {
 
         let merged = merge_bounds(a, b);
 
-        // u: takes min(-0.1, -0.05) = -0.1, max(0.1, 0.15) = 0.15
+        // u: intersection = [max(-0.1, -0.05), min(0.1, 0.15)] = [-0.05, 0.1]
+        // (simultaneous satisfaction - tightest zone governs)
         let [u_min, u_max] = merged.u.unwrap();
-        assert!((u_min - (-0.1)).abs() < 1e-10);
-        assert!((u_max - 0.15).abs() < 1e-10);
+        assert!((u_min - (-0.05)).abs() < 1e-10);
+        assert!((u_max - 0.1).abs() < 1e-10);
 
         // v: only from a
         assert!(merged.v.is_some());
 
         // w: only from b
         assert!(merged.w.is_some());
+    }
+
+    #[test]
+    fn test_merge_dof_empty_intersection_falls_back_to_tighter() {
+        // Disjoint (contradictory) bounds: fall back to the tighter interval
+        let merged = merge_dof(Some([-0.3, -0.2]), Some([0.1, 0.15]));
+        let [lo, hi] = merged.unwrap();
+        // b has width 0.05 < a's width 0.1, so b wins
+        assert!((lo - 0.1).abs() < 1e-10);
+        assert!((hi - 0.15).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_tightest_wins_position_plus_concentricity() {
+        // Regression: position ⌀0.5 + concentricity 0.08 on a cylinder must
+        // yield u = ±0.04 (tightest zone governs), not the union ±0.25.
+        let mut feat = create_test_feature();
+        feat.geometry_class = Some(GeometryClass::Cylinder);
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.5,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Rfs,
+        });
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Concentricity,
+            value: 0.08,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Rfs,
+        });
+
+        let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, None, None);
+
+        let [u_min, u_max] = result.bounds.u.unwrap();
+        assert!((u_min - (-0.04)).abs() < 1e-10, "u_min should be -0.04, got {}", u_min);
+        assert!((u_max - 0.04).abs() < 1e-10, "u_max should be 0.04, got {}", u_max);
+        let [v_min, v_max] = result.bounds.v.unwrap();
+        assert!((v_min - (-0.04)).abs() < 1e-10);
+        assert!((v_max - 0.04).abs() < 1e-10);
     }
 
     // ===== Validation Tests =====

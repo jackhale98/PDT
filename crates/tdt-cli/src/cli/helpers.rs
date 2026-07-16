@@ -40,10 +40,13 @@ pub fn format_short_id_str(id: &str) -> String {
 ///
 /// Useful for table columns that need fixed-width output.
 pub fn truncate_str(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    // Count and slice by chars, not bytes: byte slicing panics mid-codepoint
+    // on multibyte characters (Ø, ±, µ, ° are common in engineering titles).
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
     }
 }
 

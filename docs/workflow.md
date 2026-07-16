@@ -219,7 +219,7 @@ tdt submit REQ@1 -m "Ready for review"
 tdt req list -s draft -f short-id | tdt submit -
 
 # All draft entities of a type
-tdt submit --type req --status draft
+tdt submit --entity-type req --status draft
 
 # Create as draft PR
 tdt submit REQ@1 --draft
@@ -609,7 +609,7 @@ tdt release REQ@1
 tdt release REQ@1 REQ@2 REQ@3
 
 # All approved requirements
-tdt release --type req
+tdt release --entity-type req
 
 # All approved entities
 tdt release --all

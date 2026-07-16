@@ -13,7 +13,9 @@ use tdt_core::core::shortid::ShortIdIndex;
 use tdt_core::core::Config;
 use tdt_core::schema::template::{TemplateContext, TemplateGenerator};
 
-use super::common::{build_header_map, get_field, truncate, ImportArgs, ImportStats};
+use super::common::{
+    build_header_map, get_field, resolve_entity_ref, truncate, ImportArgs, ImportStats,
+};
 
 pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
@@ -61,6 +63,33 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
         // Assembly - use CSV column or --assembly flag
         let csv_assembly = get_field(&record, &header_map, "assembly");
         let assembly = csv_assembly.or_else(|| args.assembly.clone());
+
+        // Resolve short ID (e.g. ASM@1) to a full validated entity ID
+        let assembly = match assembly.filter(|a| !a.is_empty()) {
+            Some(asm_ref) => match resolve_entity_ref(&short_ids, &asm_ref) {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    eprintln!(
+                        "{} Row {}: Invalid assembly reference '{}': {}",
+                        style("✗").red(),
+                        row_num,
+                        asm_ref,
+                        e
+                    );
+                    stats.errors += 1;
+                    if !args.skip_errors {
+                        return Err(miette::miette!(
+                            "Invalid assembly reference '{}' at row {}: {}",
+                            asm_ref,
+                            row_num,
+                            e
+                        ));
+                    }
+                    continue;
+                }
+            },
+            None => None,
+        };
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         let part_number = get_field(&record, &header_map, "part_number").unwrap_or_default();

@@ -125,11 +125,14 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 
 ### Analysis3DConfig Object
 
+> **Note:** This object is reserved for future use — the current CLI does not
+> read it. Use `tdt tol analyze --3d --iterations N` to control 3D analysis.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `enabled` | boolean | Enable 3D torsor-based analysis |
-| `method` | string | `jacobian_torsor` or `monte_carlo_3d` |
-| `monte_carlo_iterations` | integer | Iterations for Monte Carlo 3D (default: 10000) |
+| `enabled` | boolean | Reserved (not currently read) |
+| `method` | string | Reserved (`--3d` always runs both Jacobian and Monte Carlo) |
+| `monte_carlo_iterations` | integer | Reserved (use `--iterations`) |
 
 ### TorsorStats Object
 
@@ -392,8 +395,9 @@ tdt tol analyze TOL@1 --sigma 4.0
 # Mean shift factor (Bender method for process drift)
 tdt tol analyze TOL@1 --mean-shift 1.5
 
-# Include GD&T position tolerances in calculations
-tdt tol analyze TOL@1 --with-gdt
+# Include GD&T position tolerances (contributors need gdt_position data);
+# --gdt/--no-gdt override the stackup's include_gdt setting for one run
+tdt tol analyze TOL@1 --gdt
 
 # Show sensitivity analysis (% contribution per contributor)
 tdt tol analyze TOL@1 --sensitivity
@@ -404,8 +408,9 @@ tdt tol analyze TOL@1 --3d
 # 3D analysis with braille visualization
 tdt tol analyze TOL@1 --3d --visualize
 
-# 3D Monte Carlo analysis
-tdt tol analyze TOL@1 --3d --method-3d monte-carlo
+# 3D analysis runs both Jacobian (worst-case/RSS) and Monte Carlo;
+# --iterations controls the Monte Carlo sample count:
+tdt tol analyze TOL@1 --3d --iterations 50000
 ```
 
 ### Add features as contributors
@@ -603,7 +608,7 @@ where [r]× is the skew-symmetric matrix of position vector r
 **Requirements**:
 - Features must have `geometry_3d` defined (origin, axis)
 - Features must have `geometry_class` specified
-- Stackup must have `functional_direction` for result projection
+- Result projection uses the stackup's `functional_direction` (defaults to `[1, 0, 0]` when not set)
 
 **Torsor Bounds Source**:
 

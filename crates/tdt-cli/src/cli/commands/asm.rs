@@ -168,9 +168,8 @@ impl ListColumn {
 
 /// Column definitions for TableFormatter
 const ASM_COLUMNS: &[ColumnDef] = &[
-    ColumnDef::new("short", "SHORT", 8),
     ColumnDef::new("id", "ID", 17),
-    ColumnDef::new("part-number", "PART #", 12),
+    ColumnDef::new("part-number", "PART #", 18),
     ColumnDef::new("title", "TITLE", 30),
     ColumnDef::new("status", "STATUS", 10),
     ColumnDef::new("author", "AUTHOR", 15),
@@ -200,7 +199,7 @@ pub struct ListArgs {
     pub recent: bool,
 
     /// Columns to display
-    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::Short, ListColumn::PartNumber, ListColumn::Title, ListColumn::Status])]
+    #[arg(long, value_delimiter = ',', default_values_t = vec![ListColumn::PartNumber, ListColumn::Title, ListColumn::Status])]
     pub columns: Vec<ListColumn>,
 
     /// Sort by column
@@ -629,7 +628,10 @@ fn output_assemblies(
             let formatter = TableFormatter::new(ASM_COLUMNS, "assembly", "ASM").with_config(config);
             formatter.output(rows, format, &columns);
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -638,7 +640,6 @@ fn output_assemblies(
 /// Convert an Assembly to a TableRow
 fn asm_to_row(asm: &Assembly, short_ids: &ShortIdIndex) -> TableRow {
     TableRow::new(asm.id.to_string(), short_ids)
-        .cell("short", CellValue::ShortId(asm.id.to_string()))
         .cell("id", CellValue::Id(asm.id.to_string()))
         .cell("part-number", CellValue::Text(asm.part_number.clone()))
         .cell("title", CellValue::Text(asm.title.clone()))

@@ -214,7 +214,7 @@ tdt validate requirements/inputs/REQ-01HC2JB7SMQX7RS1Y0GFKBHPTD.tdt.yaml
 tdt validate --entity-type req
 
 # Continue after first error
-tdt validate --keep-going
+tdt validate --fail-fast   # stop at the first error (default reports all)
 ```
 
 ### Validation Rules

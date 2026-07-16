@@ -121,6 +121,8 @@ impl EntityCache {
                 DROP TABLE IF EXISTS bom_items;
                 DROP TABLE IF EXISTS subassembly_items;
                 DROP TABLE IF EXISTS results;
+                DROP TABLE IF EXISTS lots;
+                DROP TABLE IF EXISTS deviations;
                 DROP TABLE IF EXISTS links;
                 DROP TABLE IF EXISTS cache_meta;
                 "#,
@@ -800,31 +802,19 @@ impl EntityCache {
 
     /// Find orphan entities (no incoming or outgoing links)
     pub fn find_orphans(&self, prefix: Option<&str>) -> Vec<CachedEntity> {
-        let sql = if let Some(p) = prefix {
-            format!(
-                r#"SELECT e.id, e.prefix, e.title, e.status, e.author, e.created, e.file_path,
-                          e.priority, e.entity_type, e.category, e.tags
-                   FROM entities e
-                   WHERE e.prefix = '{}'
-                   AND NOT EXISTS (SELECT 1 FROM links WHERE source_id = e.id)
-                   AND NOT EXISTS (SELECT 1 FROM links WHERE target_id = e.id)"#,
-                p
-            )
-        } else {
-            r#"SELECT e.id, e.prefix, e.title, e.status, e.author, e.created, e.file_path,
-                      e.priority, e.entity_type, e.category, e.tags
-               FROM entities e
-               WHERE NOT EXISTS (SELECT 1 FROM links WHERE source_id = e.id)
-               AND NOT EXISTS (SELECT 1 FROM links WHERE target_id = e.id)"#
-                .to_string()
-        };
+        let sql = r#"SELECT e.id, e.prefix, e.title, e.status, e.author, e.created, e.file_path,
+                            e.priority, e.entity_type, e.category, e.tags
+                     FROM entities e
+                     WHERE (?1 IS NULL OR e.prefix = ?1)
+                     AND NOT EXISTS (SELECT 1 FROM links WHERE source_id = e.id)
+                     AND NOT EXISTS (SELECT 1 FROM links WHERE target_id = e.id)"#;
 
-        let mut stmt = match self.conn.prepare(&sql) {
+        let mut stmt = match self.conn.prepare(sql) {
             Ok(s) => s,
             Err(_) => return vec![],
         };
 
-        let rows = match stmt.query_map([], |row| {
+        let rows = match stmt.query_map(params![prefix], |row| {
             let tags_str: Option<String> = row.get(10)?;
             let tags = tags_str
                 .map(|s| {
@@ -992,14 +982,19 @@ impl EntityCache {
     }
 }
 
-/// Get file modification time as Unix timestamp
+/// Get file modification time as nanoseconds since Unix epoch.
+///
+/// Nanosecond resolution is important: rapid successive writes (e.g., CLI
+/// commands running in quick succession during tests or scripts) can fall
+/// within the same second, and second-resolution mtime would silently miss
+/// them, causing cache staleness.
 fn get_file_mtime(path: &Path) -> Result<i64> {
     let metadata = fs::metadata(path).into_diagnostic()?;
     let mtime = metadata
         .modified()
         .into_diagnostic()?
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
+        .map(|d| d.as_nanos() as i64)
         .unwrap_or(0);
     Ok(mtime)
 }

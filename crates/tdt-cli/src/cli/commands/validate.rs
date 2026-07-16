@@ -1016,16 +1016,48 @@ fn check_stackup_values(
 
     // Deep mode: re-run tolerance analysis if contributors exist
     if deep && !stackup.contributors.is_empty() {
-        // Always re-run analysis in deep mode, or when dimensions changed
-        stackup.analysis_results.monte_carlo = Some(stackup.calculate_monte_carlo(iterations));
-        stackup.analysis_results.worst_case = Some(stackup.calculate_worst_case());
-        stackup.analysis_results.rss = Some(stackup.calculate_rss());
-        stats.analysis_rerun += 1;
-        any_synced = true; // Force write since analysis results changed
+        // Always re-run analysis in deep mode, or when dimensions changed.
+        // Any analysis error (e.g., contributors went away during processing)
+        // is surfaced as a validation issue rather than panicking.
+        match (
+            stackup.calculate_monte_carlo(iterations),
+            stackup.calculate_worst_case(),
+            stackup.calculate_rss(),
+        ) {
+            (Ok(mc), Ok(wc), Ok(rss)) => {
+                stackup.analysis_results.monte_carlo = Some(mc);
+                stackup.analysis_results.worst_case = Some(wc);
+                stackup.analysis_results.rss = Some(rss);
+                stackup.analysis_results.analyzed_at = Some(chrono::Utc::now());
+                stackup.analysis_results.input_hash = Some(stackup.contributor_input_hash());
+                stats.analysis_rerun += 1;
+                any_synced = true; // Force write since analysis results changed
+            }
+            (a, b, c) => {
+                let msg = a
+                    .err()
+                    .map(|e| e.to_string())
+                    .or_else(|| b.err().map(|e| e.to_string()))
+                    .or_else(|| c.err().map(|e| e.to_string()))
+                    .unwrap_or_else(|| "unknown analysis error".to_string());
+                issues.push(format!("analysis failed during validate --deep: {msg}"));
+            }
+        }
     } else if fix && analysis_needed && !stackup.contributors.is_empty() {
         // Even without --deep, if dimensions changed we should flag it
         issues.push(
             "Contributor dimensions synced - consider running 'tdt validate --fix --deep' or 'tdt tol analyze' to update analysis results"
+                .to_string(),
+        );
+    }
+
+    // Stale-analysis detection: if the contributor chain hash on disk no
+    // longer matches the analysis's stored hash, the numbers can't be
+    // trusted. Surface this as a validate issue so it shows up in CI.
+    if stackup.analysis_is_fresh() == Some(false) {
+        issues.push(
+            "analysis is stale — contributors have changed since the last run; \
+             rerun `tdt tol analyze` to refresh"
                 .to_string(),
         );
     }
@@ -1111,7 +1143,7 @@ fn check_feature_values(
     cache: Option<&EntityCache>,
 ) -> Result<Vec<String>> {
     use tdt_core::core::gdt_torsor::{check_stale_bounds, compute_torsor_bounds};
-    use tdt_core::entities::feature::DimensionRef;
+    use tdt_core::entities::feature::{DimensionRef, MaterialCondition};
 
     let mut issues = Vec::new();
     let mut needs_length_fix = false;
@@ -1197,21 +1229,54 @@ fn check_feature_values(
         }
     }
 
+    // Informational note about unverifiable bonus-inclusive bounds (MMC/LMC).
+    // Kept out of `issues` so it neither triggers --fix nor gets cleared by it.
+    let mut bonus_note: Option<String> = None;
+
     // Compute expected torsor bounds if we have geometry_class
     let torsor_result = if check_torsor && feat.geometry_class.is_some() {
         // Note: Feature lookup not available in this context, use None
         let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, None, None);
 
-        // Check if stored bounds match computed bounds
-        if let Some(stale_msg) = check_stale_bounds(&feat.torsor_bounds, &result.bounds, 1e-6) {
-            issues.push(stale_msg);
-        }
+        // Features with MMC/LMC material modifiers may have stored bounds that
+        // legitimately include measured-size bonus tolerance. Recomputing here
+        // with no actual size cannot reproduce that bonus, so a mismatch is
+        // NOT evidence of staleness - skip the stale comparison and never let
+        // --fix overwrite (which would strip the bonus).
+        let has_material_modifier = feat.gdt.iter().any(|g| {
+            matches!(
+                g.material_condition,
+                MaterialCondition::Mmc | MaterialCondition::Lmc
+            )
+        });
 
-        // Add any warnings from computation
-        for warning in &result.warnings {
-            issues.push(warning.clone());
+        if has_material_modifier {
+            if check_stale_bounds(&feat.torsor_bounds, &result.bounds, 1e-6).is_some() {
+                bonus_note = Some(
+                    "note: torsor_bounds differ from size-independent computation, but feature has MMC/LMC modifiers so bounds may include measured-size bonus; cannot verify without --actual-size (not auto-fixed)"
+                        .to_string(),
+                );
+            }
+
+            // Add any warnings from computation
+            for warning in &result.warnings {
+                issues.push(warning.clone());
+            }
+
+            // Return None so --fix does not overwrite bonus-inclusive bounds
+            None
+        } else {
+            // Check if stored bounds match computed bounds
+            if let Some(stale_msg) = check_stale_bounds(&feat.torsor_bounds, &result.bounds, 1e-6) {
+                issues.push(stale_msg);
+            }
+
+            // Add any warnings from computation
+            for warning in &result.warnings {
+                issues.push(warning.clone());
+            }
+            Some(result)
         }
-        Some(result)
     } else {
         None
     };
@@ -1242,6 +1307,12 @@ fn check_feature_values(
 
         stats.files_fixed += 1;
         issues.clear(); // Clear issues since we fixed them
+    }
+
+    // Surface the informational MMC/LMC note regardless of --fix (it is
+    // never auto-fixable without an actual measured size).
+    if let Some(note) = bonus_note {
+        issues.push(note);
     }
 
     Ok(issues)

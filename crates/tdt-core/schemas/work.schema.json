@@ -133,6 +133,102 @@
               "number",
               "null"
             ]
+          },
+          "approval": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "requires_signoff": {
+                "type": "boolean",
+                "description": "Require sign-off after this step"
+              },
+              "min_approvals": {
+                "type": "integer",
+                "default": 1,
+                "description": "Minimum number of approvals required"
+              },
+              "required_roles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Roles that can approve (engineering, quality, management, admin)"
+              },
+              "required_approvers": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Specific team members who must approve"
+              },
+              "require_signature": {
+                "type": "boolean",
+                "description": "Require digital signature (21 CFR Part 11)"
+              },
+              "quality_hold_point": {
+                "type": "boolean",
+                "description": "Quality hold point - production stops until approved"
+              }
+            },
+            "description": "Approval requirements for this step (electronic router)"
+          },
+          "data_fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "label"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "Field key/name"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "Human-readable label"
+                },
+                "data_type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "boolean",
+                    "select"
+                  ],
+                  "default": "text"
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "units": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Units for numeric fields"
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Allowed values for select type"
+                }
+              }
+            },
+            "description": "Data fields to collect at this step"
+          },
+          "equipment": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Equipment/tools required for this step (serial numbers collected at execution)"
           }
         }
       },
@@ -187,6 +283,9 @@
         "process": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -194,6 +293,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -210,6 +329,9 @@
         "component": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -217,6 +339,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -233,6 +375,9 @@
         "assembly": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -240,6 +385,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -256,38 +421,92 @@
         "controls": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "IDs of related control plan items"
         },
         "risks": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "IDs of risks addressed by following this instruction"
         }

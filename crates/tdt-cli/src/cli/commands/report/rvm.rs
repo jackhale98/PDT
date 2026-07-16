@@ -80,8 +80,10 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     let mut verified_count = 0; // Has linked tests that passed
     let mut partial_count = 0; // Has linked tests but not all passed
     let mut unverified_count = 0; // No linked tests
-    let mut passed_count = 0;
-    let mut failed_count = 0;
+    // Distinct tests that passed/failed (a test verifying several requirements
+    // must only be counted once)
+    let mut passed_tests: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut failed_tests: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for req in &requirements {
         let req_short = if args.full_ids {
@@ -151,11 +153,11 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
                             };
                             let (verdict_str, passed) = match result.verdict {
                                 Verdict::Pass => {
-                                    passed_count += 1;
+                                    passed_tests.insert(test_id_str.clone());
                                     ("✓ Pass".to_string(), true)
                                 }
                                 Verdict::Fail => {
-                                    failed_count += 1;
+                                    failed_tests.insert(test_id_str.clone());
                                     all_passed = false;
                                     ("✗ Fail".to_string(), false)
                                 }
@@ -259,8 +261,8 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     ]);
     summary.push_record(["Partial (some tests fail)", &partial_count.to_string(), "-"]);
     summary.push_record(["Unverified", &unverified_count.to_string(), "-"]);
-    summary.push_record(["Tests Passed", &passed_count.to_string(), "-"]);
-    summary.push_record(["Tests Failed", &failed_count.to_string(), "-"]);
+    summary.push_record(["Tests Passed", &passed_tests.len().to_string(), "-"]);
+    summary.push_record(["Tests Failed", &failed_tests.len().to_string(), "-"]);
     output.push_str(&summary.build().with(Style::markdown()).to_string());
 
     // Coverage by Priority

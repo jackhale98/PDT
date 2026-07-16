@@ -29,7 +29,9 @@ fn test_risk_new_creates_file() {
         .success()
         .stdout(predicate::str::contains("Created risk"));
 
-    let files: Vec<_> = fs::read_dir(tmp.path().join("risks"))
+    // Risks are written to the type-specific subdirectory — the same path
+    // `risk new` reports to the user.
+    let files: Vec<_> = fs::read_dir(tmp.path().join("risks/design"))
         .unwrap()
         .filter_map(|e| e.ok())
         .filter(|e| e.path().to_string_lossy().ends_with(".tdt.yaml"))

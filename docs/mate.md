@@ -208,7 +208,7 @@ entity_revision: 1
 tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --title "Pin-Hole Fit"
 
 # Specify mate type
-tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --type clearance
+tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --mate-type clearance
 
 # Create with interactive wizard
 tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 -i
@@ -226,9 +226,9 @@ tdt mate new --feature-a FEAT@1 --feature-b FEAT@2 --title "New Mate" --edit
 tdt mate list
 
 # Filter by mate type
-tdt mate list --type clearance
-tdt mate list --type interference
-tdt mate list --type transition
+tdt mate list --mate-type clearance
+tdt mate list --mate-type interference
+tdt mate list --mate-type transition
 
 # Filter by status
 tdt mate list --status approved

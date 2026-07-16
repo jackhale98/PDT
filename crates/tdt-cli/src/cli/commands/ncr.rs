@@ -654,7 +654,10 @@ fn output_ncrs(
                 }
             }
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -706,7 +709,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(cached_ncrs.iter().map(|n| n.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        return output_cached_ncrs(&cached_ncrs, &args, &short_ids, format);
+        return output_cached_ncrs(&cached_ncrs, &args, &short_ids, format, &project);
     }
 
     // Full entity loading path
@@ -1064,6 +1067,7 @@ fn output_cached_ncrs(
     args: &ListArgs,
     short_ids: &ShortIdIndex,
     format: OutputFormat,
+    project: &Project,
 ) -> Result<()> {
     // Count only
     if args.count {
@@ -1114,7 +1118,17 @@ fn output_cached_ncrs(
                 }
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
+        OutputFormat::Path => {
+            for ncr in ncrs {
+                let path = if ncr.file_path.is_absolute() {
+                    ncr.file_path.clone()
+                } else {
+                    project.root().join(&ncr.file_path)
+                };
+                println!("{}", path.display());
+            }
+        }
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
             // Should not reach here - cache bypassed for these formats
             unreachable!();
         }

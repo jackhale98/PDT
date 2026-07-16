@@ -419,10 +419,10 @@ tdt validate verification/protocols/TEST-01HC2JB7SMQX7RS1Y0GFKBHPTF.tdt.yaml
 
 ```bash
 # Show verification coverage
-tdt trace coverage
+tdt trace matrix --rvm
 
 # Show uncovered requirements
-tdt trace coverage --uncovered
+tdt report rvm   # requirements without passing tests are listed as gaps
 
 # Trace what a test verifies
 tdt trace from TEST-01HC2

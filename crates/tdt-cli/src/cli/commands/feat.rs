@@ -378,7 +378,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             features.truncate(limit);
         }
 
-        return output_cached_features(&features, &short_ids, &args, format, &component_info);
+        return output_cached_features(&features, &short_ids, &args, format, &component_info, &project);
     }
 
     // Full entity loading path
@@ -565,7 +565,10 @@ fn output_features(
                 }
             }
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -578,6 +581,7 @@ fn output_cached_features(
     args: &ListArgs,
     format: OutputFormat,
     component_info: &std::collections::HashMap<String, (String, String)>,
+    project: &Project,
 ) -> Result<()> {
     if features.is_empty() {
         println!("No features found.");
@@ -623,7 +627,17 @@ fn output_cached_features(
                 }
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
+        OutputFormat::Path => {
+            for e in features {
+                let path = if e.file_path.is_absolute() {
+                    e.file_path.clone()
+                } else {
+                    project.root().join(&e.file_path)
+                };
+                println!("{}", path.display());
+            }
+        }
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
             // Should never reach here
             unreachable!()
         }

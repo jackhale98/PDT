@@ -156,6 +156,9 @@
         "process": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -163,6 +166,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -176,8 +199,11 @@
           ],
           "description": "Parent process ID"
         },
-        "feature": {
+        "component": {
           "oneOf": [
+            {
+              "type": "string"
+            },
             {
               "type": "object",
               "properties": {
@@ -186,6 +212,72 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Component ID being controlled"
+        },
+        "feature": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -202,57 +294,138 @@
         "risks": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "IDs of risks this control mitigates"
         },
         "verifies": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "IDs of requirements this control verifies"
         },
         "added_by_capa": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "CAPA IDs that added this control (reciprocal of CAPA.controls_added)"
         }

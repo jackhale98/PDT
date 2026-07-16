@@ -13,7 +13,9 @@ use tdt_core::core::shortid::ShortIdIndex;
 use tdt_core::core::Config;
 use tdt_core::schema::template::{TemplateContext, TemplateGenerator};
 
-use super::common::{build_header_map, get_field, truncate, ImportArgs, ImportStats};
+use super::common::{
+    build_header_map, get_field, resolve_entity_ref, truncate, ImportArgs, ImportStats,
+};
 
 pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
@@ -78,6 +80,30 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
             }
             continue;
         }
+
+        // Resolve short ID (e.g. CMP@1) to a full validated entity ID
+        let component = match resolve_entity_ref(&short_ids, &component) {
+            Ok(id) => id,
+            Err(e) => {
+                eprintln!(
+                    "{} Row {}: Invalid component reference '{}': {}",
+                    style("✗").red(),
+                    row_num,
+                    component,
+                    e
+                );
+                stats.errors += 1;
+                if !args.skip_errors {
+                    return Err(miette::miette!(
+                        "Invalid component reference '{}' at row {}: {}",
+                        component,
+                        row_num,
+                        e
+                    ));
+                }
+                continue;
+            }
+        };
 
         let title = get_field(&record, &header_map, "title").unwrap_or_default();
         if title.is_empty() {

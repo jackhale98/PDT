@@ -655,7 +655,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(tests.iter().map(|t| t.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        output_cached_tests(&tests, &short_ids, &args, format)
+        output_cached_tests(&tests, &short_ids, &args, format, &project)
     }
 }
 
@@ -860,7 +860,10 @@ fn output_tests(
                 }
             }
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
     Ok(())
 }
@@ -871,6 +874,7 @@ fn output_cached_tests(
     short_ids: &ShortIdIndex,
     args: &ListArgs,
     format: OutputFormat,
+    project: &Project,
 ) -> Result<()> {
     if tests.is_empty() {
         println!("No tests found.");
@@ -926,7 +930,17 @@ fn output_cached_tests(
                 }
             }
         }
-        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto | OutputFormat::Path => {
+        OutputFormat::Path => {
+            for e in tests {
+                let path = if e.file_path.is_absolute() {
+                    e.file_path.clone()
+                } else {
+                    project.root().join(&e.file_path)
+                };
+                println!("{}", path.display());
+            }
+        }
+        OutputFormat::Json | OutputFormat::Yaml | OutputFormat::Auto => {
             // Should never reach here - JSON/YAML use full YAML path
             unreachable!()
         }

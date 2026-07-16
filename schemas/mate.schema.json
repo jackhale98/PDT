@@ -58,6 +58,26 @@
             "component_name": {
               "type": "string",
               "description": "Component name (cached)"
+            },
+            "suspect": {
+              "type": "boolean"
+            },
+            "suspect_reason": {
+              "type": "string",
+              "enum": [
+                "revision_changed",
+                "status_regressed",
+                "manually_marked",
+                "content_modified"
+              ]
+            },
+            "suspect_since": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "verified_revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "additionalProperties": false
@@ -93,6 +113,26 @@
             "component_name": {
               "type": "string",
               "description": "Component name (cached)"
+            },
+            "suspect": {
+              "type": "boolean"
+            },
+            "suspect_reason": {
+              "type": "string",
+              "enum": [
+                "revision_changed",
+                "status_regressed",
+                "manually_marked",
+                "content_modified"
+              ]
+            },
+            "suspect_since": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "verified_revision": {
+              "type": "integer",
+              "minimum": 0
             }
           },
           "additionalProperties": false
@@ -139,15 +179,15 @@
             },
             "sigma_clearance": {
               "type": "number",
-              "description": "Standard deviation of clearance (RSS of hole and shaft \u03c3)"
+              "description": "Standard deviation of clearance (RSS of hole and shaft σ)"
             },
             "clearance_3sigma_min": {
               "type": "number",
-              "description": "Minimum clearance at 3\u03c3 (mean - 3\u03c3)"
+              "description": "Minimum clearance at 3σ (mean - 3σ)"
             },
             "clearance_3sigma_max": {
               "type": "number",
-              "description": "Maximum clearance at 3\u03c3 (mean + 3\u03c3)"
+              "description": "Maximum clearance at 3σ (mean + 3σ)"
             },
             "probability_interference": {
               "type": "number",
@@ -162,7 +202,7 @@
                 "interference",
                 "transition"
               ],
-              "description": "Fit classification at 3\u03c3 limits"
+              "description": "Fit classification at 3σ limits"
             }
           }
         }
@@ -198,38 +238,92 @@
         "used_in_stackups": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Stackup IDs using this mate"
         },
         "verifies": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Requirement IDs verified by this mate"
         }

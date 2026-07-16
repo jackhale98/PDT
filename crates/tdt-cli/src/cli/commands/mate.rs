@@ -546,7 +546,10 @@ fn output_mates(
                 }
             }
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -945,7 +948,28 @@ fn run_edit(args: EditArgs) -> Result<()> {
 }
 
 fn run_delete(args: DeleteArgs) -> Result<()> {
-    crate::cli::commands::utils::run_delete(&args.id, MATE_DIRS, args.force, false, args.quiet)
+    // Route through the service so the stackup-reference check fires before
+    // the file is removed (utils::run_delete is a generic file deleter and
+    // doesn't know about engineering relationships).
+    let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
+    let cache = EntityCache::open(&project).map_err(|e| miette::miette!("{}", e))?;
+
+    let short_ids = ShortIdIndex::load(&project);
+    let resolved_id = short_ids
+        .resolve(&args.id)
+        .unwrap_or_else(|| args.id.clone());
+
+    let service = MateService::new(&project, &cache);
+    service
+        .delete(&resolved_id, args.force)
+        .map_err(|e| miette::miette!("{}", e))?;
+
+    if !args.quiet {
+        println!("{} Deleted mate {}", style("✓").green(), style(&args.id).cyan());
+    }
+
+    crate::cli::commands::utils::sync_cache(&project);
+    Ok(())
 }
 
 fn run_archive(args: ArchiveArgs) -> Result<()> {

@@ -112,47 +112,49 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
         let notes = get_field(&record, &header_map, "notes");
         let tags = get_field(&record, &header_map, "tags");
 
+        // Parse executed_date if provided (date-only or full ISO/RFC3339 timestamp)
+        let executed_date_parsed = match executed_date.as_deref().filter(|d| !d.is_empty()) {
+            Some(date) => match parse_executed_date(date) {
+                Some(dt) => Some(dt),
+                None => {
+                    eprintln!(
+                        "{} Row {}: Invalid executed_date '{}' (expected YYYY-MM-DD or RFC 3339 timestamp)",
+                        style("✗").red(),
+                        row_num,
+                        date
+                    );
+                    stats.errors += 1;
+                    if !args.skip_errors {
+                        return Err(miette::miette!(
+                            "Invalid executed_date '{}' at row {} (expected YYYY-MM-DD or RFC 3339 timestamp)",
+                            date,
+                            row_num
+                        ));
+                    }
+                    continue;
+                }
+            },
+            None => None,
+        };
+
         let id = EntityId::new(EntityPrefix::Rslt);
 
         // Build a title from test ID and date
         let result_title = format!("Result for {}", test_id_str);
 
-        let ctx = TemplateContext::new(id.clone(), config.author())
+        let mut ctx = TemplateContext::new(id.clone(), config.author())
             .with_title(&result_title)
             .with_test_id(test_entity_id)
             .with_verdict(&verdict)
             .with_executed_by(&executed_by);
 
+        if let Some(dt) = executed_date_parsed {
+            ctx = ctx.with_executed_date(dt);
+        }
+
         let mut yaml = generator
             .generate_result(&ctx)
             .map_err(|e| miette::miette!("Template error at row {}: {}", row_num, e))?;
-
-        // Update executed_date if provided
-        if let Some(date) = executed_date {
-            if !date.is_empty() {
-                // Replace the auto-generated date with the provided one
-                // The template uses ISO format like "2024-01-15T10:30:00Z"
-                // Allow either date-only or full ISO format
-                if date.contains('T') {
-                    yaml = yaml.replace(
-                        &format!(
-                            "executed_date: {}",
-                            chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
-                        ),
-                        &format!("executed_date: {}", date),
-                    );
-                } else {
-                    // Convert date-only to full ISO format
-                    yaml = yaml.replace(
-                        &format!(
-                            "executed_date: {}",
-                            chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ")
-                        ),
-                        &format!("executed_date: {}T00:00:00Z", date),
-                    );
-                }
-            }
-        }
 
         // Add description/notes
         if let Some(desc) = description {
@@ -214,4 +216,23 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
     }
 
     Ok(stats)
+}
+
+/// Parse an executed_date value from CSV.
+///
+/// Accepts a date (`2024-01-15`), an RFC 3339 timestamp (`2024-01-15T10:30:00Z`),
+/// or a naive ISO timestamp (`2024-01-15T10:30:00`, assumed UTC).
+fn parse_executed_date(date: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
+
+    if let Ok(dt) = DateTime::parse_from_rfc3339(date) {
+        return Some(dt.with_timezone(&Utc));
+    }
+    if let Ok(naive) = NaiveDateTime::parse_from_str(date, "%Y-%m-%dT%H:%M:%S") {
+        return Some(naive.and_utc());
+    }
+    if let Ok(d) = NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+        return Some(d.and_hms_opt(0, 0, 0)?.and_utc());
+    }
+    None
 }

@@ -440,14 +440,13 @@ impl<'a> NcrService<'a> {
             ncr_status: NcrStatus::Open,
             tags: input.tags,
             status: input.status.unwrap_or(Status::Draft),
-            links: {
-                let mut links = NcrLinks::default();
-                links.lot = input
+            links: NcrLinks {
+                lot: input
                     .lot_ids
                     .into_iter()
                     .filter_map(|s| s.parse().ok())
-                    .collect();
-                links
+                    .collect(),
+                ..Default::default()
             },
             created: now,
             author: input.author,

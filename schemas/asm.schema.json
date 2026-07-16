@@ -191,27 +191,195 @@
     "links": {
       "type": "object",
       "properties": {
+        "requirements": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "IDs of requirements this assembly satisfies"
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "IDs of tests for this assembly"
+        },
         "risks": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "IDs of risks affecting this assembly"
         },
+        "processes": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "IDs of processes used to build this assembly"
+        },
         "parent": {
           "oneOf": [
+            {
+              "type": "string"
+            },
             {
               "type": "object",
               "properties": {
@@ -220,6 +388,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -236,21 +424,186 @@
         "related_to": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "IDs of related entities"
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "Features on this assembly (reciprocal of FEAT.component)"
+        },
+        "hazards": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "Hazards originating from this assembly (reciprocal of HAZ.originates_from)"
+        },
+        "quotes": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "Quotes for this assembly (reciprocal of QUOT.assembly)"
         }
       }
     },

@@ -206,7 +206,7 @@ tdt asm show ASM@1 -f yaml
 tdt asm bom ASM@1
 
 # Recursively expand sub-assemblies
-tdt asm bom ASM@1 --recursive
+tdt asm bom ASM@1          # recursive by default; use --flat for a flat list
 
 # Output as CSV for import
 tdt asm bom ASM@1 -f csv

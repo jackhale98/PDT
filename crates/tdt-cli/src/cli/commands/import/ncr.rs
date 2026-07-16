@@ -30,7 +30,9 @@ pub fn import(project: &Project, file_path: &PathBuf, args: &ImportArgs) -> Resu
     let headers = rdr.headers().into_diagnostic()?.clone();
     let header_map = build_header_map(&headers);
 
-    let output_dir = project.root().join("quality/ncrs");
+    let output_dir = project
+        .root()
+        .join(Project::entity_directory(EntityPrefix::Ncr));
     if !args.dry_run && !output_dir.exists() {
         fs::create_dir_all(&output_dir).into_diagnostic()?;
     }

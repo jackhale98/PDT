@@ -539,6 +539,7 @@
             <li><a href="#datums">Datums</a></li>
             <li><a href="#analysis">Running Analysis</a></li>
             <li><a href="#theory">Theory Deep Dive</a></li>
+            <li><a href="#limitations">Model Limitations</a></li>
             <li><a href="#reference">Reference</a></li>
           </ul>
         </aside>
@@ -558,7 +559,7 @@
             <ul>
               <li><strong>Automatic DOF mapping</strong> - GD&T symbols map to the correct degrees of freedom based on geometry</li>
               <li><strong>Material condition bonuses</strong> - MMC/LMC bonus calculations are automatic</li>
-              <li><strong>Datum reference frames</strong> - ASME Y14.5 3-2-1 rule is applied automatically</li>
+              <li><strong>Datum reference frames</strong> - a 3-2-1 DOF analysis informs which degrees of freedom receive derived bounds when no explicit torsor bounds are stored (datum geometry and datum shift are not yet modeled)</li>
               <li><strong>Validation</strong> - Tessera warns if your GD&T changes but torsor bounds are stale</li>
             </ul>
           </section>
@@ -605,7 +606,7 @@
                   <td class="gdt-symbol">&#x2300;</td>
                   <td><code>symmetry</code></td>
                   <td>plane</td>
-                  <td>u or v</td>
+                  <td>u</td>
                   <td>±(tol / 2)</td>
                 </tr>
               </tbody>
@@ -628,8 +629,8 @@
                   <td class="gdt-symbol">&#x27C2;</td>
                   <td><code>perpendicularity</code></td>
                   <td>plane</td>
-                  <td>&#x03B1; or &#x03B2;</td>
-                  <td>±(tol / extent)</td>
+                  <td>&#x03B1;, &#x03B2;</td>
+                  <td>±(tol / length)</td>
                 </tr>
                 <tr>
                   <td class="gdt-symbol">&#x2225;</td>
@@ -642,8 +643,8 @@
                   <td class="gdt-symbol">&#x2225;</td>
                   <td><code>parallelism</code></td>
                   <td>plane</td>
-                  <td>&#x03B1; or &#x03B2;</td>
-                  <td>±(tol / extent)</td>
+                  <td>&#x03B1;, &#x03B2;</td>
+                  <td>±(tol / length)</td>
                 </tr>
                 <tr>
                   <td class="gdt-symbol">&#x2220;</td>
@@ -700,7 +701,7 @@
               <tbody>
                 <tr>
                   <td class="gdt-symbol">&#x2197;</td>
-                  <td><code>circular_runout</code></td>
+                  <td><code>runout</code></td>
                   <td>cylinder</td>
                   <td>u, v, &#x03B1;, &#x03B2;</td>
                   <td>radial + angular</td>
@@ -709,8 +710,8 @@
                   <td class="gdt-symbol">&#x21D7;</td>
                   <td><code>total_runout</code></td>
                   <td>cylinder</td>
-                  <td>u, v, &#x03B1;, &#x03B2;</td>
-                  <td>radial + angular</td>
+                  <td>u, v, w, &#x03B1;, &#x03B2;</td>
+                  <td>radial + axial + angular</td>
                 </tr>
               </tbody>
             </table>
@@ -725,14 +726,14 @@
                   <td class="gdt-symbol">&#x2313;</td>
                   <td><code>profile_line</code></td>
                   <td>any</td>
-                  <td>w (normal)</td>
+                  <td>u, v</td>
                   <td>±(tol / 2)</td>
                 </tr>
                 <tr>
                   <td class="gdt-symbol">&#x2313;</td>
                   <td><code>profile_surface</code></td>
                   <td>any</td>
-                  <td>w (normal)</td>
+                  <td>plane: w; cylinder: u, v; other: u, v, w</td>
                   <td>±(tol / 2)</td>
                 </tr>
               </tbody>
@@ -747,12 +748,12 @@
                 <tr>
                   <td><strong>MMC</strong> (&#x24C2;)</td>
                   <td><code>mmc</code></td>
-                  <td>bonus = |actual_size - mmc_size|</td>
+                  <td>bonus = departure from MMC toward LMC, clamped to &#8805; 0 (a size-nonconforming feature gets no bonus)</td>
                 </tr>
                 <tr>
                   <td><strong>LMC</strong> (&#x24C1;)</td>
                   <td><code>lmc</code></td>
-                  <td>bonus = |actual_size - lmc_size|</td>
+                  <td>bonus = departure from LMC toward MMC, clamped to &#8805; 0 (a size-nonconforming feature gets no bonus)</td>
                 </tr>
                 <tr>
                   <td><strong>RFS</strong></td>
@@ -1141,6 +1142,22 @@ where:
             </ol>
           </section>
 
+          <section id="limitations" class="tutorial-section">
+            <h2>Model Limitations</h2>
+            <p>The SDT model makes deliberate simplifications. Know these before trusting a 3D result on a real drawing:</p>
+            <ul>
+              <li><strong>Axis-aligned local frames.</strong> Feature local frames are assumed parallel to the assembly frame (feature axis <code>[0, 0, 1]</code>). A contributor whose <code>geometry_3d.axis</code> points elsewhere triggers a runtime warning and its zone directions are approximate.</li>
+              <li><strong>Result evaluated at the assembly origin.</strong> There is no measurement-target point; rotational contributions are lever-armed by each feature's own coordinates, and the functional projection uses translations only.</li>
+              <li><strong>Circular zones are boxed.</strong> A &#x2300;t position zone becomes independent u, v &#x2208; ±t/2 bounds. Worst case is conservative by up to &#x221A;2 on diagonal directions.</li>
+              <li><strong>Orientation zones bound both &#x03B1; and &#x03B2; independently</strong>, allowing a combined tilt of &#x221A;2·(tol/length); per Y14.5 the axis tilt magnitude is &#x2264; tol/length.</li>
+              <li><strong>Flatness contributes w translation only</strong> (±t/2) — the substitute-plane tilt within the flatness zone is not modeled.</li>
+              <li><strong>Datum modeling is partial.</strong> The 3-2-1 analysis only selects which DOFs receive derived bounds (and only from the first GD&amp;T control); datum feature geometry, datum precedence effects, and MMC datum shift are not modeled.</li>
+              <li><strong>1D-only options are ignored in 3D.</strong> Per-contributor <code>direction</code>, <code>mean_shift_k</code> (Bender), and <code>include_gdt</code> do not affect the 3D path; nominal chain closure is assumed rather than checked.</li>
+              <li><strong>3D Monte Carlo is not seedable yet</strong>, unlike the 1D path (<code>--seed</code>), so 3D MC runs are not bit-for-bit reproducible.</li>
+              <li><strong>Staleness detection does not yet cover 3D inputs</strong> (<code>functional_direction</code>, <code>geometry_3d</code>, <code>torsor_bounds</code>) — re-run <code>tdt tol analyze --3d</code> after changing feature geometry.</li>
+            </ul>
+          </section>
+
           <section id="reference" class="tutorial-section">
             <h2>Reference</h2>
 
@@ -1171,7 +1188,7 @@ where:
             </div>
 
             <h3>Supported Symbols</h3>
-            <p><code>position</code>, <code>concentricity</code>, <code>symmetry</code>, <code>perpendicularity</code>, <code>parallelism</code>, <code>angularity</code>, <code>flatness</code>, <code>cylindricity</code>, <code>circularity</code>, <code>straightness</code>, <code>circular_runout</code>, <code>total_runout</code>, <code>profile_line</code>, <code>profile_surface</code></p>
+            <p><code>position</code>, <code>concentricity</code>, <code>symmetry</code>, <code>perpendicularity</code>, <code>parallelism</code>, <code>angularity</code>, <code>flatness</code>, <code>cylindricity</code>, <code>circularity</code>, <code>straightness</code>, <code>runout</code>, <code>total_runout</code>, <code>profile_line</code>, <code>profile_surface</code></p>
 
             <h3>Further Reading</h3>
             <ul>

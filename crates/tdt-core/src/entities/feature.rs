@@ -609,11 +609,15 @@ impl Feature {
 
     /// Calculate position tolerance with bonus for actual size
     ///
-    /// For MMC (Maximum Material Condition):
-    /// - Internal features (holes): bonus = actual_size - MMC (actual > MMC = bonus)
-    /// - External features (shafts): bonus = MMC - actual_size (actual < MMC = bonus)
+    /// Bonus is the signed departure from the material condition toward the
+    /// opposite limit, clamped to >= 0. A size-nonconforming feature (beyond
+    /// MMC/LMC) gets NO bonus.
     ///
-    /// For LMC: bonus goes the opposite direction
+    /// For MMC (Maximum Material Condition):
+    /// - Internal features (holes): bonus = max(actual_size - MMC, 0)
+    /// - External features (shafts): bonus = max(MMC - actual_size, 0)
+    ///
+    /// For LMC: bonus goes the opposite direction (also clamped to >= 0)
     /// For RFS: no bonus (position = base value regardless of size)
     ///
     /// Returns None if no position GD&T or no primary dimension
@@ -634,17 +638,26 @@ impl Feature {
         let mmc = dim.mmc();
         let lmc = dim.lmc();
 
-        // Calculate departure from MMC/LMC
+        // Calculate departure from MMC/LMC, clamped so that sizes beyond the
+        // material condition (nonconforming) never grant phantom bonus.
         let bonus = match pos_control.material_condition {
             MaterialCondition::Mmc => {
-                // Bonus = |actual - MMC|
-                // Internal: actual grows from MMC toward LMC (actual > MMC)
-                // External: actual shrinks from MMC toward LMC (actual < MMC)
-                (actual - mmc).abs()
+                // Internal (hole): MMC = min size, actual grows toward LMC.
+                // External (shaft): MMC = max size, actual shrinks toward LMC.
+                if dim.internal {
+                    (actual - mmc).max(0.0)
+                } else {
+                    (mmc - actual).max(0.0)
+                }
             }
             MaterialCondition::Lmc => {
-                // Bonus based on departure from LMC
-                (actual - lmc).abs()
+                // Internal (hole): LMC = max size, actual shrinks toward MMC.
+                // External (shaft): LMC = min size, actual grows toward MMC.
+                if dim.internal {
+                    (lmc - actual).max(0.0)
+                } else {
+                    (actual - lmc).max(0.0)
+                }
             }
             MaterialCondition::Rfs => 0.0, // Already handled above
         };
@@ -929,6 +942,77 @@ mod tests {
             (pos_mid.unwrap() - 0.30).abs() < 0.001,
             "At mid-range should be 0.30, got {:?}",
             pos_mid
+        );
+    }
+
+    #[test]
+    fn test_position_bonus_mmc_nonconforming_size_no_bonus() {
+        // Regression: hole 10.0 +0.1/-0 (MMC = 10.0) measured at 9.9 is
+        // BELOW MMC -> size-nonconforming. Bonus must be 0.0, not the
+        // phantom |9.9 - 10.0| = 0.1.
+        let mut feat = Feature::new("CMP-123", FeatureType::Internal, "Hole", "Author");
+        feat.add_dimension("diameter", 10.0, 0.1, 0.0, true);
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.25,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Mmc,
+        });
+
+        let pos = feat.get_position_with_bonus(Some(9.9));
+        assert!(
+            (pos.unwrap() - 0.25).abs() < 1e-10,
+            "Nonconforming hole must get zero bonus (position 0.25), got {:?}",
+            pos
+        );
+
+        // Same for an external feature (shaft) oversized beyond MMC
+        let mut shaft = Feature::new("CMP-124", FeatureType::External, "Pin", "Author");
+        shaft.add_dimension("diameter", 9.9, 0.0, 0.1, false); // MMC = 9.9
+        shaft.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.20,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Mmc,
+        });
+
+        let pos = shaft.get_position_with_bonus(Some(10.0));
+        assert!(
+            (pos.unwrap() - 0.20).abs() < 1e-10,
+            "Oversized shaft must get zero bonus (position 0.20), got {:?}",
+            pos
+        );
+    }
+
+    #[test]
+    fn test_position_bonus_lmc_nonconforming_size_no_bonus() {
+        // Hole 10.0 +0.1/-0 with LMC modifier: LMC = 10.1.
+        // Actual 10.2 is beyond LMC (nonconforming) -> zero bonus.
+        // Actual 10.0 departs 0.1 toward MMC -> bonus 0.1.
+        let mut feat = Feature::new("CMP-123", FeatureType::Internal, "Hole", "Author");
+        feat.add_dimension("diameter", 10.0, 0.1, 0.0, true);
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.25,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Lmc,
+        });
+
+        let pos_nonconforming = feat.get_position_with_bonus(Some(10.2));
+        assert!(
+            (pos_nonconforming.unwrap() - 0.25).abs() < 1e-10,
+            "Beyond LMC must get zero bonus, got {:?}",
+            pos_nonconforming
+        );
+
+        let pos_at_mmc = feat.get_position_with_bonus(Some(10.0));
+        assert!(
+            (pos_at_mmc.unwrap() - 0.35).abs() < 1e-10,
+            "At MMC with LMC modifier bonus should be 0.1 (0.35 total), got {:?}",
+            pos_at_mmc
         );
     }
 

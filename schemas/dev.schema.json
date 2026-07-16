@@ -166,100 +166,238 @@
         "processes": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Affected process entities"
         },
         "lots": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "LOT entities this applies to"
         },
         "components": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Affected component entities"
         },
         "requirements": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Requirements being deviated from"
         },
         "ncrs": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Related NCRs (if deviation arose from NCR)"
         },
         "change_order": {
           "oneOf": [
+            {
+              "type": "string"
+            },
             {
               "type": "object",
               "properties": {
@@ -268,6 +406,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [

@@ -11,6 +11,14 @@ use crate::core::identity::EntityId;
 #[folder = "templates/"]
 struct EmbeddedTemplates;
 
+/// Escape a value for safe interpolation inside a double-quoted YAML scalar.
+///
+/// Escapes backslashes first, then double quotes, so a title like
+/// `Verify "fail-safe" mode` renders as valid YAML.
+fn yaml_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 /// Context for template generation
 #[derive(Debug, Clone)]
 pub struct TemplateContext {
@@ -492,7 +500,7 @@ impl TemplateGenerator {
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("created_date", &ctx.created.format("%Y-%m-%d").to_string());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "req_type",
             &ctx.req_type.clone().unwrap_or_else(|| "input".to_string()),
@@ -507,7 +515,10 @@ impl TemplateGenerator {
             "priority",
             &ctx.priority.clone().unwrap_or_else(|| "medium".to_string()),
         );
-        context.insert("category", &ctx.category.clone().unwrap_or_default());
+        context.insert(
+            "category",
+            &yaml_escape(&ctx.category.clone().unwrap_or_default()),
+        );
 
         // Try to use embedded template, fall back to hardcoded
         if self
@@ -530,7 +541,7 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "test_type",
             &ctx.test_type
@@ -553,12 +564,17 @@ impl TemplateGenerator {
             "priority",
             &ctx.priority.clone().unwrap_or_else(|| "medium".to_string()),
         );
-        context.insert("category", &ctx.category.clone().unwrap_or_default());
+        context.insert(
+            "category",
+            &yaml_escape(&ctx.category.clone().unwrap_or_default()),
+        );
         context.insert(
             "estimated_duration",
-            &ctx.estimated_duration
-                .clone()
-                .unwrap_or_else(|| "1 hour".to_string()),
+            &yaml_escape(
+                &ctx.estimated_duration
+                    .clone()
+                    .unwrap_or_else(|| "1 hour".to_string()),
+            ),
         );
 
         if self
@@ -580,7 +596,7 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "test_id",
             &ctx.test_id
@@ -602,8 +618,14 @@ impl TemplateGenerator {
             "executed_date",
             &ctx.executed_date.unwrap_or(ctx.created).to_rfc3339(),
         );
-        context.insert("category", &ctx.category.clone().unwrap_or_default());
-        context.insert("duration", &ctx.duration.clone().unwrap_or_default());
+        context.insert(
+            "category",
+            &yaml_escape(&ctx.category.clone().unwrap_or_default()),
+        );
+        context.insert(
+            "duration",
+            &yaml_escape(&ctx.duration.clone().unwrap_or_default()),
+        );
 
         if self
             .tera
@@ -625,14 +647,17 @@ impl TemplateGenerator {
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("created_date", &ctx.created.format("%Y-%m-%d").to_string());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "risk_type",
             &ctx.risk_type
                 .clone()
                 .unwrap_or_else(|| "design".to_string()),
         );
-        context.insert("category", &ctx.category.clone().unwrap_or_default());
+        context.insert(
+            "category",
+            &yaml_escape(&ctx.category.clone().unwrap_or_default()),
+        );
         context.insert("severity", &ctx.severity.unwrap_or(5));
         context.insert("occurrence", &ctx.occurrence.unwrap_or(5));
         context.insert("detection", &ctx.detection.unwrap_or(5));
@@ -668,11 +693,14 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("part_number", &ctx.part_number.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "part_number",
+            &yaml_escape(&ctx.part_number.clone().unwrap_or_default()),
+        );
         context.insert(
             "part_revision",
-            &ctx.part_revision.clone().unwrap_or_default(),
+            &yaml_escape(&ctx.part_revision.clone().unwrap_or_default()),
         );
         context.insert(
             "make_buy",
@@ -684,7 +712,10 @@ impl TemplateGenerator {
                 .clone()
                 .unwrap_or_else(|| "mechanical".to_string()),
         );
-        context.insert("material", &ctx.material.clone().unwrap_or_default());
+        context.insert(
+            "material",
+            &yaml_escape(&ctx.material.clone().unwrap_or_default()),
+        );
 
         if self
             .tera
@@ -705,11 +736,14 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
-        context.insert("part_number", &ctx.part_number.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "part_number",
+            &yaml_escape(&ctx.part_number.clone().unwrap_or_default()),
+        );
         context.insert(
             "part_revision",
-            &ctx.part_revision.clone().unwrap_or_default(),
+            &yaml_escape(&ctx.part_revision.clone().unwrap_or_default()),
         );
 
         if self
@@ -726,9 +760,9 @@ impl TemplateGenerator {
     }
 
     fn hardcoded_assembly_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
-        let part_number = ctx.part_number.clone().unwrap_or_default();
-        let part_revision = ctx.part_revision.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
+        let part_number = yaml_escape(&ctx.part_number.clone().unwrap_or_default());
+        let part_revision = yaml_escape(&ctx.part_revision.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
 
         format!(
@@ -800,7 +834,7 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "component_id",
             &ctx.component_id.clone().unwrap_or_default(),
@@ -826,7 +860,7 @@ entity_revision: 1
     }
 
     fn hardcoded_feature_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let component_id = ctx.component_id.clone().unwrap_or_default();
         let feature_type = ctx
             .feature_type
@@ -901,7 +935,7 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert("feature_a", &ctx.feature_a.clone().unwrap_or_default());
         context.insert("feature_b", &ctx.feature_b.clone().unwrap_or_default());
         context.insert(
@@ -925,7 +959,7 @@ entity_revision: 1
     }
 
     fn hardcoded_mate_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let feature_a = ctx.feature_a.clone().unwrap_or_default();
         let feature_b = ctx.feature_b.clone().unwrap_or_default();
         let mate_type = ctx
@@ -995,10 +1029,10 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "target_name",
-            &ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string()),
+            &yaml_escape(&ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string())),
         );
         context.insert("target_nominal", &ctx.target_nominal.unwrap_or(1.0));
         context.insert("target_upper", &ctx.target_upper.unwrap_or(1.5));
@@ -1018,8 +1052,8 @@ entity_revision: 1
     }
 
     fn hardcoded_stackup_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
-        let target_name = ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string());
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
+        let target_name = yaml_escape(&ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string()));
         let target_nominal = ctx.target_nominal.unwrap_or(1.0);
         let target_upper = ctx.target_upper.unwrap_or(1.5);
         let target_lower = ctx.target_lower.unwrap_or(0.5);
@@ -1102,15 +1136,15 @@ entity_revision: 1
     }
 
     fn hardcoded_component_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
-        let part_number = ctx.part_number.clone().unwrap_or_default();
-        let part_revision = ctx.part_revision.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
+        let part_number = yaml_escape(&ctx.part_number.clone().unwrap_or_default());
+        let part_revision = yaml_escape(&ctx.part_revision.clone().unwrap_or_default());
         let make_buy = ctx.make_buy.clone().unwrap_or_else(|| "buy".to_string());
         let category = ctx
             .component_category
             .clone()
             .unwrap_or_else(|| "mechanical".to_string());
-        let material = ctx.material.clone().unwrap_or_default();
+        let material = yaml_escape(&ctx.material.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
 
         format!(
@@ -1194,12 +1228,12 @@ entity_revision: 1
     }
 
     fn hardcoded_risk_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let risk_type = ctx
             .risk_type
             .clone()
             .unwrap_or_else(|| "design".to_string());
-        let category = ctx.category.clone().unwrap_or_default();
+        let category = yaml_escape(&ctx.category.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
         let severity = ctx.severity.unwrap_or(5);
         let occurrence = ctx.occurrence.unwrap_or(5);
@@ -1281,14 +1315,14 @@ revision: 1
     }
 
     fn hardcoded_requirement_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let req_type = ctx.req_type.clone().unwrap_or_else(|| "input".to_string());
         let level = ctx
             .req_level
             .clone()
             .unwrap_or_else(|| "system".to_string());
         let priority = ctx.priority.clone().unwrap_or_else(|| "medium".to_string());
-        let category = ctx.category.clone().unwrap_or_default();
+        let category = yaml_escape(&ctx.category.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
         let created_date = ctx.created.format("%Y-%m-%d");
         let tags = if ctx.tags.is_empty() {
@@ -1351,7 +1385,7 @@ revision: 1
     }
 
     fn hardcoded_test_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let test_type = ctx
             .test_type
             .clone()
@@ -1365,11 +1399,12 @@ revision: 1
             .clone()
             .unwrap_or_else(|| "test".to_string());
         let priority = ctx.priority.clone().unwrap_or_else(|| "medium".to_string());
-        let category = ctx.category.clone().unwrap_or_default();
-        let estimated_duration = ctx
-            .estimated_duration
-            .clone()
-            .unwrap_or_else(|| "1 hour".to_string());
+        let category = yaml_escape(&ctx.category.clone().unwrap_or_default());
+        let estimated_duration = yaml_escape(
+            &ctx.estimated_duration
+                .clone()
+                .unwrap_or_else(|| "1 hour".to_string()),
+        );
         let created = ctx.created.to_rfc3339();
 
         format!(
@@ -1470,7 +1505,7 @@ revision: 1
     }
 
     fn hardcoded_result_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let test_id = ctx
             .test_id
             .as_ref()
@@ -1482,8 +1517,8 @@ revision: 1
             .clone()
             .unwrap_or_else(|| ctx.author.clone());
         let executed_date = ctx.executed_date.unwrap_or(ctx.created).to_rfc3339();
-        let category = ctx.category.clone().unwrap_or_default();
-        let duration = ctx.duration.clone().unwrap_or_default();
+        let category = yaml_escape(&ctx.category.clone().unwrap_or_default());
+        let duration = yaml_escape(&ctx.duration.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
 
         format!(
@@ -1609,7 +1644,7 @@ revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "component_id",
             &ctx.component_id.clone().unwrap_or_default(),
@@ -1630,7 +1665,7 @@ revision: 1
     }
 
     fn hardcoded_quote_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let component_id = ctx.component_id.clone().unwrap_or_default();
         let supplier = ctx.supplier.clone().unwrap_or_default();
         let created = ctx.created.to_rfc3339();
@@ -1721,12 +1756,18 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("name", &ctx.title.clone().unwrap_or_default());
-        context.insert("short_name", &ctx.short_name.clone().unwrap_or_default());
-        context.insert("website", &ctx.website.clone().unwrap_or_default());
+        context.insert("name", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "short_name",
+            &yaml_escape(&ctx.short_name.clone().unwrap_or_default()),
+        );
+        context.insert(
+            "website",
+            &yaml_escape(&ctx.website.clone().unwrap_or_default()),
+        );
         context.insert(
             "payment_terms",
-            &ctx.payment_terms.clone().unwrap_or_default(),
+            &yaml_escape(&ctx.payment_terms.clone().unwrap_or_default()),
         );
         context.insert("notes", &ctx.notes.clone().unwrap_or_default());
 
@@ -1744,10 +1785,10 @@ entity_revision: 1
     }
 
     fn hardcoded_supplier_template(&self, ctx: &TemplateContext) -> String {
-        let name = ctx.title.clone().unwrap_or_default();
-        let short_name = ctx.short_name.clone();
-        let website = ctx.website.clone();
-        let payment_terms = ctx.payment_terms.clone();
+        let name = yaml_escape(&ctx.title.clone().unwrap_or_default());
+        let short_name = ctx.short_name.as_deref().map(yaml_escape);
+        let website = ctx.website.as_deref().map(yaml_escape);
+        let payment_terms = ctx.payment_terms.as_deref().map(yaml_escape);
         let notes = ctx.notes.clone();
         let created = ctx.created.to_rfc3339();
 
@@ -1833,7 +1874,7 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &ctx.title.clone().unwrap_or_default());
+        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
         context.insert(
             "process_type",
             &ctx.process_type
@@ -1859,12 +1900,12 @@ entity_revision: 1
     }
 
     fn hardcoded_process_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let process_type = ctx
             .process_type
             .clone()
             .unwrap_or_else(|| "machining".to_string());
-        let operation_number = ctx.operation_number.clone().unwrap_or_default();
+        let operation_number = yaml_escape(&ctx.operation_number.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
 
         let op_line = if operation_number.is_empty() {
@@ -1961,7 +2002,7 @@ entity_revision: 1
     }
 
     fn hardcoded_control_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let control_type = ctx
             .control_type
             .clone()
@@ -2066,9 +2107,9 @@ entity_revision: 1
     }
 
     fn hardcoded_work_instruction_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let process_id = ctx.process_id.clone().unwrap_or_default();
-        let document_number = ctx.document_number.clone().unwrap_or_default();
+        let document_number = yaml_escape(&ctx.document_number.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
 
         let process_line = if process_id.is_empty() {
@@ -2167,7 +2208,7 @@ entity_revision: 1
     }
 
     fn hardcoded_ncr_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let ncr_type = ctx
             .ncr_type
             .clone()
@@ -2202,7 +2243,7 @@ description: |
 # Detection details
 detection:
   found_at: in_process
-  found_by: "{author}"
+  found_by: "{found_by}"
   found_date: {report_date}
   operation: ""
 
@@ -2266,6 +2307,7 @@ entity_revision: 1
             category = category,
             report_date = report_date,
             created = created,
+            found_by = yaml_escape(&ctx.author),
             author = ctx.author,
         )
     }
@@ -2276,13 +2318,13 @@ entity_revision: 1
     }
 
     fn hardcoded_capa_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let capa_type = ctx
             .capa_type
             .clone()
             .unwrap_or_else(|| "corrective".to_string());
         let source_type = ctx.source_type.clone().unwrap_or_else(|| "ncr".to_string());
-        let source_ref = ctx.source_ref.clone().unwrap_or_default();
+        let source_ref = yaml_escape(&ctx.source_ref.clone().unwrap_or_default());
         let created = ctx.created.to_rfc3339();
         let initiated_date = ctx.created.format("%Y-%m-%d").to_string();
 
@@ -2381,14 +2423,14 @@ entity_revision: 1
     }
 
     fn hardcoded_lot_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let lot_number = ctx.lot_number.clone();
         let quantity = ctx.quantity;
         let created = ctx.created.to_rfc3339();
         let start_date = ctx.created.format("%Y-%m-%d").to_string();
 
         let lot_number_line = match lot_number {
-            Some(ln) => format!("lot_number: \"{}\"", ln),
+            Some(ln) => format!("lot_number: \"{}\"", yaml_escape(&ln)),
             None => "lot_number: null".to_string(),
         };
 
@@ -2467,7 +2509,7 @@ entity_revision: 1
     }
 
     fn hardcoded_dev_template(&self, ctx: &TemplateContext) -> String {
-        let title = ctx.title.clone().unwrap_or_default();
+        let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
         let dev_type = ctx
             .dev_type
             .clone()
@@ -2481,7 +2523,7 @@ entity_revision: 1
         let created = ctx.created.to_rfc3339();
 
         let deviation_number_line = match deviation_number {
-            Some(dn) => format!("deviation_number: \"{}\"", dn),
+            Some(dn) => format!("deviation_number: \"{}\"", yaml_escape(&dn)),
             None => "deviation_number: null".to_string(),
         };
 
@@ -2580,5 +2622,34 @@ mod tests {
         assert!(parsed.get("title").is_some());
         assert_eq!(parsed.get("type").unwrap().as_str(), Some("input"));
         assert_eq!(parsed.get("priority").unwrap().as_str(), Some("high"));
+    }
+
+    #[test]
+    fn test_template_escapes_quotes_in_title() {
+        let generator = TemplateGenerator::new().unwrap();
+        let title = r#"Verify "fail-safe" mode \ backslash"#;
+        let ctx = TemplateContext::new(EntityId::new(EntityPrefix::Req), "test".to_string())
+            .with_title(title)
+            .with_req_type("input");
+
+        let yaml = generator.generate_requirement(&ctx).unwrap();
+
+        // Must still be valid YAML and the title must round-trip exactly
+        let parsed: serde_yml::Value = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(parsed.get("title").unwrap().as_str(), Some(title));
+    }
+
+    #[test]
+    fn test_hardcoded_template_escapes_quotes_in_title() {
+        let generator = TemplateGenerator::new().unwrap();
+        let title = r#"NCR with "quoted" text"#;
+        // NCR uses the hardcoded template path
+        let ctx = TemplateContext::new(EntityId::new(EntityPrefix::Ncr), "test".to_string())
+            .with_title(title);
+
+        let yaml = generator.generate_ncr(&ctx).unwrap();
+
+        let parsed: serde_yml::Value = serde_yml::from_str(&yaml).unwrap();
+        assert_eq!(parsed.get("title").unwrap().as_str(), Some(title));
     }
 }

@@ -280,10 +280,4 @@ fn parse_date(s: &str) -> Option<DateTime<Utc>> {
         .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc))
 }
 
-fn truncate_str(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}...", &s[..max_len - 3])
-    } else {
-        s.to_string()
-    }
-}
+use crate::cli::helpers::truncate_str;

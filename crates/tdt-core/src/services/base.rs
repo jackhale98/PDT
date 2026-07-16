@@ -159,6 +159,16 @@ impl<'a> ServiceBase<'a> {
         // Serialize to YAML
         let yaml = serde_yml::to_string(entity).map_err(|e| ServiceError::Yaml(e.to_string()))?;
 
+        // Update saves round-trip through typed structs that model links as
+        // bare EntityIds, which collapses `{id, title, suspect, ...}` link
+        // entries to plain strings. Restore that metadata from the previous
+        // file so `tdt link` titles and suspect-tracking data survive updates.
+        let yaml = if prefix.is_none() && path.exists() {
+            preserve_link_metadata(&yaml, path)
+        } else {
+            yaml
+        };
+
         // Convert long text fields to block scalars for readability and clean git diffs
         let yaml = crate::yaml::template::to_block_scalars(&yaml);
 
@@ -218,6 +228,94 @@ impl<'a> ServiceBase<'a> {
         }
         Ok(all)
     }
+}
+
+/// Restore link metadata that a typed round-trip destroyed.
+///
+/// Entity structs model links as bare `EntityId`s, so loading a file whose
+/// links were written as `{id, title, suspect, suspect_reason, ...}` mappings
+/// (by `tdt link add` or the suspect system) and re-saving it collapses those
+/// entries to plain ID strings. This walks the `links:` section of the new
+/// YAML and, for every link whose ID also exists in the old file, restores the
+/// mapping form and any metadata keys the new serialization lost. Links
+/// removed from the new document stay removed, and freshly-set keys in the new
+/// document win over old values.
+fn preserve_link_metadata(new_yaml: &str, path: &Path) -> String {
+    use serde_yml::Value;
+
+    let Ok(old_text) = fs::read_to_string(path) else {
+        return new_yaml.to_string();
+    };
+    let (Ok(mut new_doc), Ok(old_doc)) = (
+        serde_yml::from_str::<Value>(new_yaml),
+        serde_yml::from_str::<Value>(&old_text),
+    ) else {
+        return new_yaml.to_string();
+    };
+
+    let Some(old_links) = old_doc.get("links").and_then(Value::as_mapping) else {
+        return new_yaml.to_string();
+    };
+    let Some(new_links) = new_doc.get_mut("links").and_then(Value::as_mapping_mut) else {
+        return new_yaml.to_string();
+    };
+
+    // Find the old mapping entry (single value or sequence item) whose `id`
+    // matches `id`.
+    fn old_entry_with_id<'v>(old_val: &'v Value, id: &str) -> Option<&'v serde_yml::Mapping> {
+        match old_val {
+            Value::Mapping(m) => {
+                (m.get("id").and_then(Value::as_str) == Some(id)).then_some(m)
+            }
+            Value::Sequence(items) => items.iter().find_map(|item| {
+                item.as_mapping()
+                    .filter(|m| m.get("id").and_then(Value::as_str) == Some(id))
+            }),
+            _ => None,
+        }
+    }
+
+    fn restore_item(item: &mut Value, old_val: &Value) {
+        let id = match &*item {
+            Value::String(s) => s.clone(),
+            Value::Mapping(m) => match m.get("id").and_then(Value::as_str) {
+                Some(s) => s.to_string(),
+                None => return,
+            },
+            _ => return,
+        };
+        let Some(old_m) = old_entry_with_id(old_val, &id) else {
+            return;
+        };
+        match item {
+            Value::String(_) => *item = Value::Mapping(old_m.clone()),
+            Value::Mapping(m) => {
+                for (k, v) in old_m {
+                    if !m.contains_key(k) {
+                        m.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    for (key, new_val) in new_links.iter_mut() {
+        let Some(old_val) = old_links.get(key) else {
+            continue;
+        };
+        match new_val {
+            Value::Sequence(items) => {
+                for item in items {
+                    restore_item(item, old_val);
+                }
+            }
+            Value::String(_) | Value::Mapping(_) => restore_item(new_val, old_val),
+            _ => {}
+        }
+    }
+
+    serde_yml::to_string(&new_doc).unwrap_or_else(|_| new_yaml.to_string())
 }
 
 #[cfg(test)]
@@ -415,5 +513,53 @@ mod tests {
 
         assert_eq!(found_path, path);
         assert_eq!(found.title, "Output Req");
+    }
+
+    #[test]
+    fn test_preserve_link_metadata_restores_suspect_and_title() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("REQ-1.tdt.yaml");
+        fs::write(
+            &path,
+            "id: REQ-1\nlinks:\n  verified_by:\n    - id: TEST-1\n      title: Leak test\n      suspect: true\n      suspect_reason: revision_changed\n  capa:\n    id: CAPA-1\n    title: Fix seal\n",
+        )
+        .unwrap();
+
+        // A typed round-trip collapsed both links to bare strings.
+        let new_yaml = "id: REQ-1\nlinks:\n  verified_by:\n    - TEST-1\n    - TEST-2\n  capa: CAPA-1\n";
+        let merged = preserve_link_metadata(new_yaml, &path);
+
+        let doc: serde_yml::Value = serde_yml::from_str(&merged).unwrap();
+        let vb = &doc["links"]["verified_by"];
+        assert_eq!(vb[0]["id"].as_str(), Some("TEST-1"));
+        assert_eq!(vb[0]["title"].as_str(), Some("Leak test"));
+        assert_eq!(vb[0]["suspect"].as_bool(), Some(true));
+        assert_eq!(
+            vb[0]["suspect_reason"].as_str(),
+            Some("revision_changed")
+        );
+        // A link the old file didn't know about stays a plain string.
+        assert_eq!(vb[1].as_str(), Some("TEST-2"));
+        // Single-value links are restored too.
+        assert_eq!(doc["links"]["capa"]["title"].as_str(), Some("Fix seal"));
+    }
+
+    #[test]
+    fn test_preserve_link_metadata_keeps_removed_links_removed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("REQ-2.tdt.yaml");
+        fs::write(
+            &path,
+            "id: REQ-2\nlinks:\n  verified_by:\n    - id: TEST-1\n      suspect: true\n",
+        )
+        .unwrap();
+
+        let new_yaml = "id: REQ-2\nlinks:\n  verified_by: []\n";
+        let merged = preserve_link_metadata(new_yaml, &path);
+        let doc: serde_yml::Value = serde_yml::from_str(&merged).unwrap();
+        assert!(doc["links"]["verified_by"]
+            .as_sequence()
+            .unwrap()
+            .is_empty());
     }
 }

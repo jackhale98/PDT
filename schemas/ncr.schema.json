@@ -264,6 +264,9 @@
         "component": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -271,6 +274,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -287,6 +310,9 @@
         "supplier": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -294,6 +320,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -310,6 +356,9 @@
         "process": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -317,6 +366,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -333,6 +402,9 @@
         "control": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -340,6 +412,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -356,6 +448,9 @@
         "capa": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -363,6 +458,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -379,6 +494,9 @@
         "from_result": {
           "oneOf": [
             {
+              "type": "string"
+            },
+            {
               "type": "object",
               "properties": {
                 "id": {
@@ -386,6 +504,26 @@
                 },
                 "title": {
                   "type": "string"
+                },
+                "suspect": {
+                  "type": "boolean"
+                },
+                "suspect_reason": {
+                  "type": "string",
+                  "enum": [
+                    "revision_changed",
+                    "status_regressed",
+                    "manually_marked",
+                    "content_modified"
+                  ]
+                },
+                "suspect_since": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "verified_revision": {
+                  "type": "integer",
+                  "minimum": 0
                 }
               },
               "required": [
@@ -398,6 +536,52 @@
             }
           ],
           "description": "Test result ID that created this NCR"
+        },
+        "lot": {
+          "type": "array",
+          "description": "Production lot(s) where non-conformance was found",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
         }
       }
     },

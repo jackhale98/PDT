@@ -247,12 +247,6 @@ impl<'a> RiskService<'a> {
         self.project.root().join("risks")
     }
 
-    /// Get the file path for a risk
-    fn get_file_path(&self, id: &EntityId) -> PathBuf {
-        let dir = self.get_directory();
-        dir.join(format!("{}.tdt.yaml", id))
-    }
-
     /// List risks with filtering and pagination
     pub fn list(
         &self,
@@ -380,8 +374,12 @@ impl<'a> RiskService<'a> {
             revision: 1,
         };
 
-        // Write to file
-        let path = self.get_file_path(&id);
+        // Write to the type-specific directory (risks/design or
+        // risks/process) — the same path the CLI reports to the user.
+        let path = self
+            .project
+            .risk_directory(&risk.risk_type.to_string())
+            .join(format!("{}.tdt.yaml", id));
         self.base.save(&risk, &path, Some("RISK"))?;
 
         Ok(risk)

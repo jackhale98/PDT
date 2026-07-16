@@ -509,7 +509,10 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             let formatter = TableFormatter::new(RISK_COLUMNS, "risk", "RISK").with_config(config);
             formatter.output(rows, format, &visible);
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -833,6 +836,9 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             }
         }
     }
+
+    // Sync cache after creation
+    super::utils::sync_cache(&project);
 
     // Open in editor if requested (or by default unless --no-edit)
     if args.edit || (!args.no_edit && !args.interactive) {

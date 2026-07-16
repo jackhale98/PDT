@@ -55,7 +55,7 @@ pub struct ImportArgs {
     #[arg(long)]
     pub skip_errors: bool,
 
-    /// Update existing entities if ID column matches
+    /// Update existing entities if ID column matches (not yet implemented)
     #[arg(long)]
     pub update: bool,
 
@@ -104,6 +104,14 @@ fn parse_import_target(s: &str) -> Result<ImportTarget, String> {
 }
 
 pub fn run(args: ImportArgs) -> Result<()> {
+    // --update is declared but not wired up yet; fail loudly instead of
+    // silently re-importing (which would duplicate every row).
+    if args.update {
+        return Err(miette::miette!(
+            "--update is not yet implemented. Remove the flag to import rows as new entities."
+        ));
+    }
+
     // Handle template generation
     if args.template {
         let target = args.target.ok_or_else(|| {

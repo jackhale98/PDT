@@ -217,8 +217,8 @@ pub async fn get_git_status(state: State<'_, AppState>) -> CommandResult<GitStat
 
                 // Extract the file path from porcelain format "XY path" or "?? path"
                 let path = line
-                    .splitn(2, ' ')
-                    .nth(1)
+                    .split_once(' ')
+                    .map(|x| x.1)
                     .unwrap_or(&line)
                     .trim_start()
                     .to_string();

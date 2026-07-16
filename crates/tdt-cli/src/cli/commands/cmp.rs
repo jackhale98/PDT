@@ -287,7 +287,7 @@ impl std::fmt::Display for ListColumn {
 /// Column definitions for component list output
 const CMP_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("id", "ID", 17),
-    ColumnDef::new("part-number", "PART #", 12),
+    ColumnDef::new("part-number", "PART #", 18),
     ColumnDef::new("revision", "REV", 8),
     ColumnDef::new("title", "TITLE", 30),
     ColumnDef::new("make-buy", "M/B", 6),
@@ -624,7 +624,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(cached_cmps.iter().map(|c| c.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        output_cached_components(&cached_cmps, &short_ids, &args, output_format)
+        output_cached_components(&cached_cmps, &short_ids, &args, output_format, &project)
     }
 }
 
@@ -772,7 +772,10 @@ fn output_components(
                 TableFormatter::new(CMP_COLUMNS, "component", "CMP").with_config(config);
             formatter.output(rows, format, &visible);
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -801,7 +804,21 @@ fn output_cached_components(
     short_ids: &ShortIdIndex,
     args: &ListArgs,
     format: OutputFormat,
+    project: &Project,
 ) -> Result<()> {
+    // The table formatter below can't render file paths; handle -o path here.
+    if format == OutputFormat::Path {
+        for e in cmps {
+            let path = if e.file_path.is_absolute() {
+                e.file_path.clone()
+            } else {
+                project.root().join(&e.file_path)
+            };
+            println!("{}", path.display());
+        }
+        return Ok(());
+    }
+
     // Build visible columns list
     let mut visible: Vec<&str> = args
         .columns

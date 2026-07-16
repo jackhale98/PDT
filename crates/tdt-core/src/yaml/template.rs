@@ -299,8 +299,18 @@ pub fn to_block_scalars(yaml: &str) -> String {
 
                     if let Some(unquoted) = extract_scalar_value(raw_value) {
                         if unquoted.len() >= BLOCK_SCALAR_THRESHOLD {
-                            result.push(format!("{}: |", field_name));
-                            result.push(format!("  {}", unquoted));
+                            // `|-` (strip chomping) so a round-trip doesn't add a
+                            // trailing newline to the value and churn the file.
+                            result.push(format!("{}: |-", field_name));
+                            // Indent every line of the value (it may contain
+                            // newlines from unescaped double-quoted scalars).
+                            for value_line in unquoted.lines() {
+                                if value_line.is_empty() {
+                                    result.push(String::new());
+                                } else {
+                                    result.push(format!("  {}", value_line));
+                                }
+                            }
                             i += 1;
                             continue;
                         }
@@ -349,17 +359,40 @@ fn extract_scalar_value(raw: &str) -> Option<String> {
     // Double-quoted: "value"
     if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
         let inner = &trimmed[1..trimmed.len() - 1];
-        // Basic unescape for common sequences
-        return Some(
-            inner
-                .replace("\\\"", "\"")
-                .replace("\\n", "\n")
-                .replace("\\\\", "\\"),
-        );
+        return Some(unescape_double_quoted(inner));
     }
 
     // Bare string (unquoted)
     Some(trimmed.to_string())
+}
+
+/// Unescape the common escape sequences in a YAML double-quoted scalar.
+///
+/// Processed in a single pass so `\\` is handled before any following
+/// character (sequential `str::replace` calls would corrupt inputs like
+/// `\\n`, which is a literal backslash followed by `n`, not a newline).
+fn unescape_double_quoted(inner: &str) -> String {
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            // Unknown escape: keep as-is
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -581,7 +614,7 @@ revision: 1
     fn test_block_scalar_long_description() {
         let yaml = "id: RISK-123\ndescription: This is a very long description that exceeds the threshold and should be converted to block scalar format\nstatus: draft\n";
         let result = to_block_scalars(yaml);
-        assert!(result.contains("description: |"));
+        assert!(result.contains("description: |-"));
         assert!(result.contains("  This is a very long description"));
         assert!(result.contains("status: draft"));
     }
@@ -598,8 +631,49 @@ revision: 1
     fn test_block_scalar_single_quoted() {
         let yaml = "id: REQ-123\ntext: 'This is a single-quoted string that is long enough to trigger the block scalar conversion threshold'\nstatus: draft\n";
         let result = to_block_scalars(yaml);
-        assert!(result.contains("text: |"));
+        assert!(result.contains("text: |-"));
         assert!(result.contains("  This is a single-quoted string"));
+    }
+
+    #[test]
+    fn test_block_scalar_double_quoted_with_escapes() {
+        // Double-quoted value containing \" and \n escapes: every line of the
+        // unescaped value must be indented under the block scalar.
+        let yaml = "id: REQ-123\ntext: \"The \\\"first\\\" line of this long value is here.\\nSecond line follows after a newline.\"\nstatus: draft\n";
+        let result = to_block_scalars(yaml);
+        assert!(result.contains("text: |-"));
+        assert!(result.contains("  The \"first\" line of this long value is here.\n"));
+        assert!(result.contains("\n  Second line follows after a newline.\n"));
+        assert!(result.contains("status: draft"));
+        // The converted output must be valid YAML that round-trips the value
+        let parsed: serde_yml::Value = serde_yml::from_str(&result).unwrap();
+        assert_eq!(
+            parsed["text"].as_str().unwrap(),
+            "The \"first\" line of this long value is here.\nSecond line follows after a newline."
+        );
+    }
+
+    #[test]
+    fn test_unescape_double_quoted_backslash_order() {
+        // `\\n` is a literal backslash followed by 'n', not a newline
+        assert_eq!(unescape_double_quoted("a\\\\nb"), "a\\nb");
+        assert_eq!(unescape_double_quoted("a\\nb"), "a\nb");
+        assert_eq!(unescape_double_quoted("say \\\"hi\\\""), "say \"hi\"");
+        assert_eq!(unescape_double_quoted("tab\\there"), "tab\there");
+    }
+
+    #[test]
+    fn test_block_scalar_strip_chomping_round_trip() {
+        // `|-` (strip) must not add a trailing newline to the value on re-parse
+        let yaml = "id: RISK-123\ndescription: This is a very long description that exceeds the threshold and should be converted to block scalar format\nstatus: draft\n";
+        let result = to_block_scalars(yaml);
+        let parsed: serde_yml::Value = serde_yml::from_str(&result).unwrap();
+        let value = parsed["description"].as_str().unwrap();
+        assert!(!value.ends_with('\n'));
+        assert_eq!(
+            value,
+            "This is a very long description that exceeds the threshold and should be converted to block scalar format"
+        );
     }
 
     #[test]

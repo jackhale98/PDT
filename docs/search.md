@@ -25,13 +25,13 @@ tdt search "Temperature" --case-sensitive
 
 ```bash
 # Search only requirements
-tdt search "motor" --type req
+tdt search "motor" --entity-type req
 
 # Search only risks
-tdt search "failure" --type risk
+tdt search "failure" --entity-type risk
 
 # Search multiple types (comma-separated)
-tdt search "thermal" --type req,risk,test
+tdt search "thermal" --entity-type req,risk,test
 
 # Available type prefixes:
 #   req, risk, test, rslt, cmp, asm, feat, mate,
@@ -65,17 +65,17 @@ tdt search "spec" --author "Jane"
 tdt search "v2" --tag "release"
 
 # Combined with type filter
-tdt search "feature" --type req --tag "phase1"
+tdt search "feature" --entity-type req --tag "phase1"
 ```
 
 ### Combine Filters
 
 ```bash
 # Complex search with multiple filters
-tdt search "thermal" --type req,risk --status approved --author "Jane"
+tdt search "thermal" --entity-type req,risk --status approved --author "Jane"
 
 # Search for high-priority items by a specific author
-tdt search "critical" --type risk --author "Bob"
+tdt search "critical" --entity-type risk --author "Bob"
 ```
 
 ### Output Options
@@ -202,10 +202,10 @@ tdt search "" --tag "release" --status approved
 
 ```bash
 # Find all open NCRs and CAPAs
-tdt search "" --type ncr,capa --status draft
+tdt search "" --entity-type ncr,capa --status draft
 
 # Find high-risk items
-tdt search "critical" --type risk
+tdt search "critical" --entity-type risk
 ```
 
 ## Performance
@@ -220,7 +220,7 @@ tdt cache rebuild
 
 ## Tips
 
-1. **Use short type names**: `--type req` instead of `--type requirement`
+1. **Use short type names**: `--entity-type req` instead of `--entity-type requirement`
 
 2. **Combine with other commands**: Pipe search results to other tools
    ```bash

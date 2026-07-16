@@ -21,6 +21,26 @@ use crate::services::common::{
     CommonFilter, NoneLast, ServiceError, ServiceResult, SortDirection, SortKey, Sortable,
 };
 
+/// Reject sigma levels that would produce Inf/NaN analysis output.
+fn validate_sigma_level(sigma: f64) -> ServiceResult<()> {
+    if !sigma.is_finite() || sigma <= 0.0 {
+        return Err(ServiceError::ValidationFailed(format!(
+            "sigma_level must be a positive number (got {sigma})"
+        )));
+    }
+    Ok(())
+}
+
+/// Reject mean-shift factors that would produce nonsensical analysis output.
+fn validate_mean_shift_k(k: f64) -> ServiceResult<()> {
+    if !k.is_finite() || k < 0.0 {
+        return Err(ServiceError::ValidationFailed(format!(
+            "mean_shift_k must be a non-negative number (got {k})"
+        )));
+    }
+    Ok(())
+}
+
 /// Filter options for listing stackups
 #[derive(Debug, Clone, Default)]
 pub struct StackupFilter {
@@ -412,9 +432,11 @@ impl<'a> StackupService<'a> {
             stackup.target.units = units;
         }
         if let Some(sigma) = input.sigma_level {
+            validate_sigma_level(sigma)?;
             stackup.sigma_level = sigma;
         }
         if let Some(k) = input.mean_shift_k {
+            validate_mean_shift_k(k)?;
             stackup.mean_shift_k = k;
         }
         stackup.include_gdt = input.include_gdt;
@@ -459,9 +481,11 @@ impl<'a> StackupService<'a> {
             stackup.target.critical = critical;
         }
         if let Some(sigma) = input.sigma_level {
+            validate_sigma_level(sigma)?;
             stackup.sigma_level = sigma;
         }
         if let Some(k) = input.mean_shift_k {
+            validate_mean_shift_k(k)?;
             stackup.mean_shift_k = k;
         }
         if let Some(include_gdt) = input.include_gdt {
@@ -496,11 +520,44 @@ impl<'a> StackupService<'a> {
         Ok(())
     }
 
-    /// Add a contributor to a stackup
+    /// Add a contributor to a stackup. If `input.feature_id` is set, the
+    /// referenced feature must exist on disk — otherwise this errors with
+    /// `ValidationFailed`. This prevents stackups from being silently saved
+    /// with dangling references that would later produce wrong analyses.
     pub fn add_contributor(&self, id: &str, input: AddContributorInput) -> ServiceResult<Stackup> {
         let (_, mut stackup) = self.find_stackup(id)?;
 
-        let feature_ref = input.feature_id.map(FeatureRef::new);
+        let mut feature_distribution = None;
+        let feature_ref = if let Some(feat_id) = input.feature_id {
+            let feature = self.load_feature(&feat_id.to_string())?.ok_or_else(|| {
+                ServiceError::ValidationFailed(format!(
+                    "feature {} does not exist; cannot add stackup contributor referencing it",
+                    feat_id
+                ))
+            })?;
+            // Default the distribution from the feature's dimension (matching
+            // the CLI `tol add` behavior): prefer the dimension whose values
+            // match the input, else the feature's first dimension.
+            feature_distribution = feature
+                .dimensions
+                .iter()
+                .find(|d| {
+                    d.nominal == input.nominal
+                        && d.plus_tol == input.plus_tol
+                        && d.minus_tol == input.minus_tol
+                })
+                .or_else(|| feature.dimensions.first())
+                .map(|d| d.distribution);
+            // Populate cached metadata so views and `validate` checks have it.
+            Some(FeatureRef::with_cache(
+                feat_id,
+                Some(feature.title.clone()),
+                Some(feature.component.clone()),
+                None,
+            ))
+        } else {
+            None
+        };
 
         let contributor = Contributor {
             name: input.name,
@@ -509,7 +566,10 @@ impl<'a> StackupService<'a> {
             nominal: input.nominal,
             plus_tol: input.plus_tol,
             minus_tol: input.minus_tol,
-            distribution: input.distribution.unwrap_or_default(),
+            distribution: input
+                .distribution
+                .or(feature_distribution)
+                .unwrap_or_default(),
             source: input.source,
             gdt_position: None,
         };
@@ -521,6 +581,20 @@ impl<'a> StackupService<'a> {
         self.base.save(&stackup, &file_path, None)?;
 
         Ok(stackup)
+    }
+
+    /// Load a feature by ID from the features directory. Returns `Ok(None)`
+    /// if the feature does not exist (rather than an error) so callers can
+    /// distinguish "missing" from "I/O failure".
+    fn load_feature(&self, id: &str) -> ServiceResult<Option<crate::entities::feature::Feature>> {
+        let feature_dir = self.project.root().join("tolerances/features");
+        if !feature_dir.exists() {
+            return Ok(None);
+        }
+        let result =
+            loader::load_entity::<crate::entities::feature::Feature>(&feature_dir, id)
+                .map_err(ServiceError::from)?;
+        Ok(result.map(|(_, f)| f))
     }
 
     /// Remove a contributor from a stackup by index
@@ -580,11 +654,25 @@ impl<'a> StackupService<'a> {
         let (_, mut stackup) = self.find_stackup(id)?;
 
         // Calculate all analysis types
-        stackup.analysis_results.worst_case = Some(stackup.calculate_worst_case());
-        stackup.analysis_results.rss = Some(stackup.calculate_rss());
+        stackup.analysis_results.worst_case = Some(
+            stackup
+                .calculate_worst_case()
+                .map_err(|e| ServiceError::ValidationFailed(e.to_string()))?,
+        );
+        stackup.analysis_results.rss = Some(
+            stackup
+                .calculate_rss()
+                .map_err(|e| ServiceError::ValidationFailed(e.to_string()))?,
+        );
 
         let iterations = monte_carlo_iterations.unwrap_or(10000);
-        stackup.analysis_results.monte_carlo = Some(stackup.calculate_monte_carlo(iterations));
+        stackup.analysis_results.monte_carlo = Some(
+            stackup
+                .calculate_monte_carlo(iterations)
+                .map_err(|e| ServiceError::ValidationFailed(e.to_string()))?,
+        );
+        stackup.analysis_results.analyzed_at = Some(Utc::now());
+        stackup.analysis_results.input_hash = Some(stackup.contributor_input_hash());
 
         stackup.entity_revision += 1;
 
@@ -597,13 +685,17 @@ impl<'a> StackupService<'a> {
     /// Calculate worst-case analysis only
     pub fn calculate_worst_case(&self, id: &str) -> ServiceResult<WorstCaseResult> {
         let (_, stackup) = self.find_stackup(id)?;
-        Ok(stackup.calculate_worst_case())
+        stackup
+            .calculate_worst_case()
+            .map_err(|e| ServiceError::ValidationFailed(e.to_string()))
     }
 
     /// Calculate RSS analysis only
     pub fn calculate_rss(&self, id: &str) -> ServiceResult<RssResult> {
         let (_, stackup) = self.find_stackup(id)?;
-        Ok(stackup.calculate_rss())
+        stackup
+            .calculate_rss()
+            .map_err(|e| ServiceError::ValidationFailed(e.to_string()))
     }
 
     /// Calculate Monte Carlo analysis only
@@ -613,7 +705,22 @@ impl<'a> StackupService<'a> {
         iterations: u32,
     ) -> ServiceResult<MonteCarloResult> {
         let (_, stackup) = self.find_stackup(id)?;
-        Ok(stackup.calculate_monte_carlo(iterations))
+        stackup
+            .calculate_monte_carlo(iterations)
+            .map_err(|e| ServiceError::ValidationFailed(e.to_string()))
+    }
+
+    /// Calculate Monte Carlo analysis with a specific seed (reproducible).
+    pub fn calculate_monte_carlo_seeded(
+        &self,
+        id: &str,
+        iterations: u32,
+        seed: u64,
+    ) -> ServiceResult<MonteCarloResult> {
+        let (_, stackup) = self.find_stackup(id)?;
+        stackup
+            .calculate_monte_carlo_with_seed(iterations, seed)
+            .map_err(|e| ServiceError::ValidationFailed(e.to_string()))
     }
 
     /// Set disposition for a stackup
@@ -1050,5 +1157,81 @@ mod tests {
         assert_eq!(stats.by_disposition.under_review, 2);
         assert_eq!(stats.analyzed_count, 1);
         assert_eq!(stats.by_result.not_analyzed, 2);
+    }
+
+    #[test]
+    fn test_add_contributor_with_unknown_feature_errors() {
+        let (_tmp, project, cache) = setup();
+        let service = StackupService::new(&project, &cache);
+
+        let stackup = service.create(make_create_stackup("S")).unwrap();
+        let phantom_id = EntityId::new(EntityPrefix::Feat);
+
+        let err = service
+            .add_contributor(
+                &stackup.id.to_string(),
+                AddContributorInput {
+                    name: "Bad".into(),
+                    direction: Direction::Positive,
+                    nominal: 1.0,
+                    plus_tol: 0.1,
+                    minus_tol: 0.1,
+                    distribution: None,
+                    source: None,
+                    feature_id: Some(phantom_id.clone()),
+                },
+            )
+            .unwrap_err();
+
+        match err {
+            ServiceError::ValidationFailed(msg) => {
+                assert!(msg.contains(&phantom_id.to_string()));
+                assert!(msg.contains("does not exist"));
+            }
+            other => panic!("expected ValidationFailed, got {:?}", other),
+        }
+
+        // The stackup should still have zero contributors — the bad add must
+        // not have been persisted.
+        let after = service.get(&stackup.id.to_string()).unwrap().unwrap();
+        assert_eq!(after.contributors.len(), 0);
+    }
+
+    #[test]
+    fn test_add_contributor_with_existing_feature_succeeds_and_caches_metadata() {
+        use crate::entities::feature::{Feature, FeatureType};
+
+        let (_tmp, project, cache) = setup();
+        let service = StackupService::new(&project, &cache);
+
+        // Hand-write a feature to disk so it's discoverable by the loader.
+        let feature = Feature::new("CMP-TEST", FeatureType::Internal, "Test Hole", "Author");
+        let feat_dir = project.root().join("tolerances/features");
+        std::fs::create_dir_all(&feat_dir).unwrap();
+        let feat_path = feat_dir.join(format!("{}.tdt.yaml", feature.id));
+        std::fs::write(&feat_path, serde_yml::to_string(&feature).unwrap()).unwrap();
+
+        let stackup = service.create(make_create_stackup("S")).unwrap();
+        let stackup = service
+            .add_contributor(
+                &stackup.id.to_string(),
+                AddContributorInput {
+                    name: "Good".into(),
+                    direction: Direction::Positive,
+                    nominal: 1.0,
+                    plus_tol: 0.1,
+                    minus_tol: 0.1,
+                    distribution: None,
+                    source: None,
+                    feature_id: Some(feature.id.clone()),
+                },
+            )
+            .unwrap();
+
+        let c = &stackup.contributors[0];
+        let fr = c.feature.as_ref().expect("feature ref");
+        assert_eq!(fr.id, feature.id);
+        assert_eq!(fr.name.as_deref(), Some("Test Hole"));
+        assert_eq!(fr.component_id.as_deref(), Some("CMP-TEST"));
     }
 }

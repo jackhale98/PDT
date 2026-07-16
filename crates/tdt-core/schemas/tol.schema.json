@@ -158,7 +158,7 @@
       "minimum": 1,
       "maximum": 12,
       "default": 6.0,
-      "description": "Sigma level for statistical analysis (tolerance = sigma_level \u00d7 \u03c3). Default 6.0 means tolerance band spans \u00b13\u03c3."
+      "description": "Sigma level for statistical analysis (tolerance = sigma_level × σ). Default 6.0 means tolerance band spans ±3σ."
     },
     "mean_shift_k": {
       "type": "number",
@@ -250,7 +250,7 @@
                 },
                 "minItems": 6,
                 "maxItems": 6,
-                "description": "Variance contribution per DOF [u, v, w, \u03b1, \u03b2, \u03b3] as percentages"
+                "description": "Variance contribution per DOF [u, v, w, α, β, γ] as percentages"
               }
             }
           },
@@ -316,19 +316,19 @@
             },
             "sigma_3": {
               "type": "number",
-              "description": "3-sigma spread (\u00b13\u03c3)"
+              "description": "3-sigma spread (±3σ)"
             },
             "margin": {
               "type": "number",
-              "description": "Margin to specification limits at 3\u03c3"
+              "description": "Margin to specification limits at 3σ"
             },
             "cp": {
               "type": "number",
-              "description": "Process capability index (Cp) - ignores centering. Cp = (USL - LSL) / (6\u03c3)"
+              "description": "Process capability index (Cp) - ignores centering. Cp = (USL - LSL) / (6σ)"
             },
             "cpk": {
               "type": "number",
-              "description": "Process capability index (Cpk) - accounts for centering. Cpk = min(USL-\u03bc, \u03bc-LSL) / (3\u03c3)"
+              "description": "Process capability index (Cpk) - accounts for centering. Cpk = min(USL-μ, μ-LSL) / (3σ)"
             },
             "yield_percent": {
               "type": "number",
@@ -380,7 +380,7 @@
             },
             "ppk": {
               "type": "number",
-              "description": "Process performance index (Ppk) - uses sample std_dev, accounts for centering. Ppk = min(USL-\u03bc, \u03bc-LSL) / (3s)"
+              "description": "Process performance index (Ppk) - uses sample std_dev, accounts for centering. Ppk = min(USL-μ, μ-LSL) / (3s)"
             }
           }
         }
@@ -422,38 +422,92 @@
         "verifies": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Requirements verified by this stackup"
         },
         "mates_used": {
           "type": "array",
           "items": {
-            "type": "object",
-            "properties": {
-              "id": {
+            "oneOf": [
+              {
                 "type": "string"
               },
-              "title": {
-                "type": "string"
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "suspect": {
+                    "type": "boolean"
+                  },
+                  "suspect_reason": {
+                    "type": "string",
+                    "enum": [
+                      "revision_changed",
+                      "status_regressed",
+                      "manually_marked",
+                      "content_modified"
+                    ]
+                  },
+                  "suspect_since": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "verified_revision": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "id"
+                ],
+                "additionalProperties": false
               }
-            },
-            "required": [
-              "id"
-            ],
-            "additionalProperties": false
+            ]
           },
           "description": "Mates used in this stackup"
         }

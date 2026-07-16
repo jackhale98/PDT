@@ -72,6 +72,34 @@ pub fn run(cmd: ReportCommands, global: &GlobalOpts) -> Result<()> {
 
 // Shared helper functions
 
+/// Parse a set of entity files, warning (once per type) about files that
+/// failed to parse instead of dropping them silently.
+fn parse_entity_files<T, I, P>(paths: I, type_name: &str) -> Vec<T>
+where
+    T: serde::de::DeserializeOwned,
+    I: IntoIterator<Item = P>,
+    P: AsRef<std::path::Path>,
+{
+    let mut entities = Vec::new();
+    let mut skipped = 0usize;
+
+    for path in paths {
+        match tdt_core::yaml::parse_yaml_file::<T>(path.as_ref()) {
+            Ok(entity) => entities.push(entity),
+            Err(_) => skipped += 1,
+        }
+    }
+
+    if skipped > 0 {
+        eprintln!(
+            "warning: skipped {} unparseable {} file(s)",
+            skipped, type_name
+        );
+    }
+
+    entities
+}
+
 pub(crate) fn write_output(content: &str, output_path: Option<PathBuf>) -> Result<()> {
     match output_path {
         Some(path) => {
@@ -90,10 +118,7 @@ pub(crate) fn write_output(content: &str, output_path: Option<PathBuf>) -> Resul
 /// Load all requirements using cache (no directory walk)
 pub(crate) fn load_all_requirements_cached(cache: &EntityCache) -> Vec<Requirement> {
     let cached = cache.list_requirements(None, None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Requirement>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "requirement")
 }
 
 /// Load all requirements (legacy - uses directory walk, prefer load_all_requirements_cached)
@@ -125,10 +150,7 @@ pub(crate) fn load_all_requirements(project: &Project) -> Vec<Requirement> {
 /// Load all tests using cache (no directory walk)
 pub(crate) fn load_all_tests_cached(cache: &EntityCache) -> Vec<Test> {
     let cached = cache.list_tests(None, None, None, None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Test>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "test")
 }
 
 /// Load all tests (legacy - uses directory walk, prefer load_all_tests_cached)
@@ -162,10 +184,7 @@ pub(crate) fn load_all_tests(project: &Project) -> Vec<Test> {
 /// Load all results using cache (no directory walk)
 pub(crate) fn load_all_results_cached(cache: &EntityCache) -> Vec<TestResult> {
     let cached = cache.list_results(None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<TestResult>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "result")
 }
 
 /// Load all results (legacy - uses directory walk, prefer load_all_results_cached)
@@ -199,10 +218,7 @@ pub(crate) fn load_all_results(project: &Project) -> Vec<TestResult> {
 /// Load all risks using cache (no directory walk)
 pub(crate) fn load_all_risks_cached(cache: &EntityCache) -> Vec<Risk> {
     let cached = cache.list_risks(None, None, None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Risk>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "risk")
 }
 
 /// Load all risks (legacy - uses directory walk, prefer load_all_risks_cached)
@@ -234,10 +250,7 @@ pub(crate) fn load_all_risks(project: &Project) -> Vec<Risk> {
 /// Load all components using cache (no directory walk)
 pub(crate) fn load_all_components_cached(cache: &EntityCache) -> Vec<Component> {
     let cached = cache.list_components(None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Component>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "component")
 }
 
 /// Load all components (legacy - uses directory walk, prefer load_all_components_cached)
@@ -273,10 +286,7 @@ pub(crate) fn load_all_assemblies_cached(cache: &EntityCache) -> Vec<Assembly> {
         prefix: Some(tdt_core::core::identity::EntityPrefix::Asm),
         ..Default::default()
     });
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Assembly>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "assembly")
 }
 
 /// Load all assemblies (legacy - uses directory walk, prefer load_all_assemblies_cached)
@@ -308,10 +318,7 @@ pub(crate) fn load_all_assemblies(project: &Project) -> Vec<Assembly> {
 /// Load all quotes using cache (no directory walk)
 pub(crate) fn load_all_quotes_cached(cache: &EntityCache) -> Vec<Quote> {
     let cached = cache.list_quotes(None, None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Quote>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "quote")
 }
 
 /// Load all quotes (legacy - uses directory walk, prefer load_all_quotes_cached)
@@ -383,12 +390,7 @@ pub(crate) fn load_assembly(project: &Project, id: &str) -> Result<Assembly> {
 /// Load all NCRs using cache (no directory walk)
 pub(crate) fn load_all_ncrs_cached(cache: &EntityCache) -> Vec<tdt_core::entities::ncr::Ncr> {
     let cached = cache.list_ncrs(None, None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| {
-            tdt_core::yaml::parse_yaml_file::<tdt_core::entities::ncr::Ncr>(&c.file_path).ok()
-        })
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "NCR")
 }
 
 /// Load all NCRs (legacy - uses directory walk, prefer load_all_ncrs_cached)
@@ -422,12 +424,7 @@ pub(crate) fn load_all_ncrs(project: &Project) -> Vec<tdt_core::entities::ncr::N
 /// Load all CAPAs using cache (no directory walk)
 pub(crate) fn load_all_capas_cached(cache: &EntityCache) -> Vec<tdt_core::entities::capa::Capa> {
     let cached = cache.list_capas(None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| {
-            tdt_core::yaml::parse_yaml_file::<tdt_core::entities::capa::Capa>(&c.file_path).ok()
-        })
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "CAPA")
 }
 
 /// Load all CAPAs (legacy - uses directory walk, prefer load_all_capas_cached)
@@ -465,10 +462,7 @@ pub(crate) fn load_all_capas(project: &Project) -> Vec<tdt_core::entities::capa:
 /// Load all features using cache (no directory walk)
 pub(crate) fn load_all_features_cached(cache: &EntityCache) -> Vec<Feature> {
     let cached = cache.list_features(None, None, None, None, None, None);
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Feature>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "feature")
 }
 
 /// Load all features (legacy - uses directory walk, prefer load_all_features_cached)
@@ -504,10 +498,7 @@ pub(crate) fn load_all_mates_cached(cache: &EntityCache) -> Vec<Mate> {
         prefix: Some(tdt_core::core::identity::EntityPrefix::Mate),
         ..Default::default()
     });
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Mate>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "mate")
 }
 
 /// Load all mates (legacy - uses directory walk, prefer load_all_mates_cached)
@@ -543,10 +534,7 @@ pub(crate) fn load_all_stackups_cached(cache: &EntityCache) -> Vec<Stackup> {
         prefix: Some(tdt_core::core::identity::EntityPrefix::Tol),
         ..Default::default()
     });
-    cached
-        .into_iter()
-        .filter_map(|c| tdt_core::yaml::parse_yaml_file::<Stackup>(&c.file_path).ok())
-        .collect()
+    parse_entity_files(cached.into_iter().map(|c| c.file_path), "stackup")
 }
 
 /// Load all stackups (legacy - uses directory walk, prefer load_all_stackups_cached)

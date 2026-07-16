@@ -774,10 +774,10 @@ mod tests {
         let mut result = WizardResult::default();
         result.values.insert(
             "value".to_string(),
-            Value::Number(serde_json::Number::from_f64(3.14).unwrap()),
+            Value::Number(serde_json::Number::from_f64(2.5).unwrap()),
         );
 
-        assert!((result.get_f64("value").unwrap() - 3.14).abs() < 0.001);
+        assert!((result.get_f64("value").unwrap() - 2.5).abs() < 0.001);
         assert_eq!(result.get_f64("nonexistent"), None);
     }
 
@@ -796,7 +796,7 @@ mod tests {
         let mut result = WizardResult::default();
         result.values.insert(
             "float".to_string(),
-            Value::Number(serde_json::Number::from_f64(3.14).unwrap()),
+            Value::Number(serde_json::Number::from_f64(2.5).unwrap()),
         );
 
         // as_i64 returns None for non-integer numbers

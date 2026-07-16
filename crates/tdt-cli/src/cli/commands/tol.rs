@@ -307,9 +307,15 @@ pub struct AnalyzeArgs {
     #[arg(long, short = 'A')]
     pub all: bool,
 
-    /// Number of Monte Carlo iterations (default: 10000)
-    #[arg(long, default_value = "10000")]
+    /// Number of Monte Carlo iterations (default: 10000, minimum: 2)
+    #[arg(long, default_value = "10000", value_parser = clap::value_parser!(u32).range(2..))]
     pub iterations: u32,
+
+    /// Seed for the Monte Carlo PRNG. Use the seed printed by a previous run
+    /// (shown in `tdt tol show`) to reproduce its results bit-for-bit.
+    /// Required for regulated audit trails (FDA, ISO 13485).
+    #[arg(long)]
+    pub seed: Option<u64>,
 
     /// Show detailed results after analysis
     #[arg(long, short = 'v')]
@@ -349,8 +355,13 @@ pub struct AnalyzeArgs {
     #[arg(long)]
     pub mean_shift: Option<f64>,
 
-    /// Exclude GD&T position tolerances from statistical analysis
-    /// By default, GD&T position tolerances are automatically included when present
+    /// Include GD&T position tolerances in the analysis for this run
+    /// (equivalent to setting include_gdt: true on the stackup)
+    #[arg(long, conflicts_with = "no_gdt")]
+    pub gdt: bool,
+
+    /// Exclude GD&T position tolerances from the analysis for this run,
+    /// overriding include_gdt: true on the stackup
     #[arg(long)]
     pub no_gdt: bool,
 
@@ -617,7 +628,10 @@ fn output_stackups(
                 }
             }
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -943,6 +957,42 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
 
                 println!();
                 println!("{}", style("Analysis Results:").bold());
+
+                // Staleness banner: if the contributor chain has changed since
+                // the analysis was last run, warn the user before they trust
+                // any of the numbers below.
+                if stackup.analysis_is_fresh() == Some(false) {
+                    println!(
+                        "  {} {}",
+                        style("⚠").yellow().bold(),
+                        style(
+                            "Analysis is STALE — contributors changed since last run. \
+                             Run `tdt tol analyze <id>` to refresh."
+                        )
+                        .yellow()
+                    );
+                }
+                if let Some(ts) = results.analyzed_at {
+                    println!(
+                        "  {} {}",
+                        style("Analyzed:").dim(),
+                        style(ts.format("%Y-%m-%d %H:%M:%S UTC").to_string()).dim()
+                    );
+                }
+                if let Some(ref mc) = results.monte_carlo {
+                    if let Some(seed) = mc.seed {
+                        let id_hint = short_ids
+                            .get_short_id(&stackup.id.to_string())
+                            .unwrap_or_else(|| stackup.id.to_string());
+                        println!(
+                            "  {} {} (rerun with `tdt tol analyze {} --seed {}`)",
+                            style("MC seed:").dim(),
+                            style(seed).dim(),
+                            id_hint,
+                            seed
+                        );
+                    }
+                }
                 if let Some(ref wc) = results.worst_case {
                     let result_color = match wc.result {
                         tdt_core::entities::stackup::AnalysisResult::Pass => style("PASS").green(),
@@ -1098,9 +1148,11 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         stackup.mean_shift_k = mean_shift;
     }
 
-    // Only override GD&T setting when --no-gdt is explicitly passed;
-    // otherwise respect the YAML file's setting
-    if args.no_gdt {
+    // Only override the GD&T setting when --gdt/--no-gdt is explicitly
+    // passed; otherwise respect the YAML file's setting
+    if args.gdt {
+        stackup.include_gdt = true;
+    } else if args.no_gdt {
         stackup.include_gdt = false;
     }
 
@@ -1146,18 +1198,45 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         println!();
     }
 
-    // Run analysis - use with_samples if we need histogram or CSV
+    // Run analysis - use with_samples if we need histogram or CSV.
+    // calculate_* now refuses to run on an empty contributor chain, so any
+    // error here is reported up to the user as a diagnostic.
     let mc_samples = if args.histogram || args.csv {
-        let (mc_result, samples) = stackup.calculate_monte_carlo_with_samples(args.iterations);
+        let (mc_result, samples) = match args.seed {
+            Some(s) => stackup
+                .calculate_monte_carlo_with_samples_seeded(args.iterations, s)
+                .map_err(|e| miette::miette!("{}", e))?,
+            None => stackup
+                .calculate_monte_carlo_with_samples(args.iterations)
+                .map_err(|e| miette::miette!("{}", e))?,
+        };
         stackup.analysis_results.monte_carlo = Some(mc_result);
         Some(samples)
     } else {
-        stackup.analysis_results.monte_carlo = Some(stackup.calculate_monte_carlo(args.iterations));
+        let mc = match args.seed {
+            Some(s) => stackup
+                .calculate_monte_carlo_with_seed(args.iterations, s)
+                .map_err(|e| miette::miette!("{}", e))?,
+            None => stackup
+                .calculate_monte_carlo(args.iterations)
+                .map_err(|e| miette::miette!("{}", e))?,
+        };
+        stackup.analysis_results.monte_carlo = Some(mc);
         None
     };
 
-    stackup.analysis_results.worst_case = Some(stackup.calculate_worst_case());
-    stackup.analysis_results.rss = Some(stackup.calculate_rss());
+    stackup.analysis_results.worst_case = Some(
+        stackup
+            .calculate_worst_case()
+            .map_err(|e| miette::miette!("{}", e))?,
+    );
+    stackup.analysis_results.rss = Some(
+        stackup
+            .calculate_rss()
+            .map_err(|e| miette::miette!("{}", e))?,
+    );
+    stackup.analysis_results.analyzed_at = Some(chrono::Utc::now());
+    stackup.analysis_results.input_hash = Some(stackup.contributor_input_hash());
 
     // 3D SDT Analysis (if requested)
     let contributors_3d = if args.three_d {
@@ -1165,6 +1244,11 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
     } else {
         None
     };
+
+    // Write back BEFORE any early return: a seeded audit run must persist
+    // analyzed_at/input_hash/seed even when the caller only wants CSV samples.
+    let yaml_content = serde_yml::to_string(&stackup).into_diagnostic()?;
+    fs::write(&path, &yaml_content).into_diagnostic()?;
 
     // CSV output mode - just output samples and exit
     if args.csv {
@@ -1178,10 +1262,6 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
         }
         return Ok(());
     }
-
-    // Write back
-    let yaml_content = serde_yml::to_string(&stackup).into_diagnostic()?;
-    fs::write(&path, &yaml_content).into_diagnostic()?;
 
     println!(
         "{} Analyzing stackup {} with {} contributors...",
@@ -1713,10 +1793,42 @@ fn run_analyze_all(args: &AnalyzeArgs) -> Result<()> {
             continue;
         }
 
-        // Run analysis
-        stackup.analysis_results.monte_carlo = Some(stackup.calculate_monte_carlo(args.iterations));
-        stackup.analysis_results.worst_case = Some(stackup.calculate_worst_case());
-        stackup.analysis_results.rss = Some(stackup.calculate_rss());
+        // Run analysis. The `analyze --all` flow already filters out empty
+        // stackups upstream (see `skipped += 1`), so unwrap-style is safe here
+        // — but still surface any error rather than panicking.
+        let mc_res = match args.seed {
+            Some(s) => stackup.calculate_monte_carlo_with_seed(args.iterations, s),
+            None => stackup.calculate_monte_carlo(args.iterations),
+        };
+        let mc = match mc_res {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("{} {}: {}", style("✗").red(), short_id, e);
+                errors += 1;
+                continue;
+            }
+        };
+        let wc = match stackup.calculate_worst_case() {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("{} {}: {}", style("✗").red(), short_id, e);
+                errors += 1;
+                continue;
+            }
+        };
+        let rss = match stackup.calculate_rss() {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("{} {}: {}", style("✗").red(), short_id, e);
+                errors += 1;
+                continue;
+            }
+        };
+        stackup.analysis_results.monte_carlo = Some(mc);
+        stackup.analysis_results.worst_case = Some(wc);
+        stackup.analysis_results.rss = Some(rss);
+        stackup.analysis_results.analyzed_at = Some(chrono::Utc::now());
+        stackup.analysis_results.input_hash = Some(stackup.contributor_input_hash());
 
         // Write back
         let yaml_content = match serde_yml::to_string(&stackup) {
@@ -2080,6 +2192,7 @@ fn run_add(args: AddArgs) -> Result<()> {
             id: Some(args.stackup),
             all: false,
             iterations: 10000,
+            seed: None,
             verbose: false,
             histogram: false,
             csv: false,
@@ -2089,6 +2202,7 @@ fn run_add(args: AddArgs) -> Result<()> {
             sensitivity: false,
             sigma: None,
             mean_shift: None,
+            gdt: false,
             no_gdt: false,
             three_d: false,
             visualize: None,
@@ -2248,7 +2362,7 @@ fn print_torsor_dof(label: &str, stats: &TorsorStats, ref_precision: f64) {
     } else {
         String::new()
     };
-    println!("{} WC {} RSS {}{})", label, wc_range, rss_info, mc_info);
+    println!("{} WC {} RSS {}{}", label, wc_range, rss_info, mc_info);
 }
 
 /// Print a torsor DOF line for rotation (convert radians to mrad)
@@ -2397,6 +2511,47 @@ fn run_3d_analysis(
             .and_then(|f| f.geometry_3d.as_ref())
             .map(|g| g.axis)
             .unwrap_or([0.0, 0.0, 1.0]);
+
+        // Identifier for axis diagnostics: feature ID if linked, else contributor name
+        let axis_feature_id = contrib
+            .feature
+            .as_ref()
+            .map(|f| f.id.to_string())
+            .unwrap_or_else(|| contrib.name.clone());
+
+        // Normalize the axis; a zero axis is invalid, fall back to assembly Z
+        let axis = {
+            let [ax, ay, az] = axis;
+            let len = (ax * ax + ay * ay + az * az).sqrt();
+            if len < 1e-9 {
+                eprintln!(
+                    "{} warning: feature {} has zero-length axis [0, 0, 0]; defaulting to assembly Z axis [0, 0, 1]",
+                    style("⚠").yellow(),
+                    axis_feature_id,
+                );
+                [0.0, 0.0, 1.0]
+            } else {
+                [ax / len, ay / len, az / len]
+            }
+        };
+
+        // The 3D propagators currently assume every contributor's local frame
+        // is parallel to the assembly frame (no rotation-matrix Jacobian yet),
+        // so warn when a feature axis is not the assembly Z axis.
+        let axis_eps = 1e-6;
+        if axis[0].abs() > axis_eps
+            || axis[1].abs() > axis_eps
+            || (axis[2] - 1.0).abs() > axis_eps
+        {
+            eprintln!(
+                "{} warning: feature {} axis [{}, {}, {}] is not the assembly Z axis; 3D analysis currently assumes axis-aligned local frames and may misattribute tolerance zones — results for this contributor are approximate",
+                style("⚠").yellow(),
+                axis_feature_id,
+                axis[0],
+                axis[1],
+                axis[2],
+            );
+        }
 
         // Check if we have geometry_3d data
         if feat_opt.is_some() && feat_opt.unwrap().geometry_3d.is_none() {
@@ -2623,7 +2778,7 @@ fn calculate_functional_projection(
     nominal: f64,
     lsl: f64,
     usl: f64,
-    sigma_level: f64,
+    _sigma_level: f64,
 ) -> FunctionalProjection {
     // Normalize direction vector
     let [dx, dy, dz] = direction;
@@ -2684,16 +2839,20 @@ fn calculate_functional_projection(
     let dev_usl = usl - nominal; // e.g., 68.5 - 67 = +1.5
     let tol_range = dev_usl - dev_lsl; // Total tolerance band width
 
-    // Calculate capability indices based on projected deviation
+    // Calculate capability indices based on projected deviation.
+    // sigma_projected is already the true process sigma (sigma_level is
+    // incorporated when converting tolerance ranges to sigma upstream), so
+    // use the standard fixed constants like the 1D path:
+    // Cp = range / 6σ, Cpk = min margin / 3σ.
     let cp = if sigma_projected > 0.0 {
-        Some(tol_range / (sigma_level * sigma_projected))
+        Some(tol_range / (6.0 * sigma_projected))
     } else {
         None
     };
 
     let cpk = if sigma_projected > 0.0 {
-        let cpu = (dev_usl - rss_mean) / (sigma_level / 2.0 * sigma_projected);
-        let cpl = (rss_mean - dev_lsl) / (sigma_level / 2.0 * sigma_projected);
+        let cpu = (dev_usl - rss_mean) / (3.0 * sigma_projected);
+        let cpl = (rss_mean - dev_lsl) / (3.0 * sigma_projected);
         Some(cpu.min(cpl))
     } else {
         None

@@ -58,8 +58,23 @@ impl TableConfig {
 
 /// Wrap text to fit within a maximum width, breaking at word boundaries
 fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
+    // Split an over-long word at char boundaries — byte slicing panics
+    // mid-codepoint on multibyte characters (Ø, ±, µ, °).
+    fn force_break(word: &str, max_width: usize, lines: &mut Vec<String>) -> String {
+        let mut remaining = word;
+        while remaining.chars().count() > max_width {
+            let cut = remaining
+                .char_indices()
+                .nth(max_width)
+                .map_or(remaining.len(), |(i, _)| i);
+            lines.push(remaining[..cut].to_string());
+            remaining = &remaining[cut..];
+        }
+        remaining.to_string()
+    }
+
     // Don't wrap if text already fits or width is too small to be useful
-    if text.len() <= max_width || max_width < 5 {
+    if text.chars().count() <= max_width || max_width < 5 {
         return vec![text.to_string()];
     }
 
@@ -67,33 +82,24 @@ fn wrap_text(text: &str, max_width: usize) -> Vec<String> {
     let mut current_line = String::new();
 
     for word in text.split_whitespace() {
+        let word_len = word.chars().count();
         if current_line.is_empty() {
             // First word on line
-            if word.len() > max_width {
+            if word_len > max_width {
                 // Word is longer than max width, force break
-                let mut remaining = word;
-                while remaining.len() > max_width {
-                    lines.push(remaining[..max_width].to_string());
-                    remaining = &remaining[max_width..];
-                }
-                current_line = remaining.to_string();
+                current_line = force_break(word, max_width, &mut lines);
             } else {
                 current_line = word.to_string();
             }
-        } else if current_line.len() + 1 + word.len() <= max_width {
+        } else if current_line.chars().count() + 1 + word_len <= max_width {
             // Word fits on current line
             current_line.push(' ');
             current_line.push_str(word);
         } else {
             // Start new line
             lines.push(current_line);
-            if word.len() > max_width {
-                let mut remaining = word;
-                while remaining.len() > max_width {
-                    lines.push(remaining[..max_width].to_string());
-                    remaining = &remaining[max_width..];
-                }
-                current_line = remaining.to_string();
+            if word_len > max_width {
+                current_line = force_break(word, max_width, &mut lines);
             } else {
                 current_line = word.to_string();
             }

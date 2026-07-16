@@ -114,9 +114,27 @@ impl Validator {
 
         for prefix in EntityPrefix::all() {
             if let Some(schema_str) = registry.get(*prefix) {
-                if let Ok(schema_json) = serde_json::from_str::<JsonValue>(schema_str) {
-                    if let Ok(compiled_schema) = validator_for(&schema_json) {
-                        compiled.insert(*prefix, compiled_schema);
+                match serde_json::from_str::<JsonValue>(schema_str) {
+                    Ok(schema_json) => match validator_for(&schema_json) {
+                        Ok(compiled_schema) => {
+                            compiled.insert(*prefix, compiled_schema);
+                        }
+                        Err(e) => {
+                            // A skipped schema would make this entity type
+                            // validate as always-OK; make the gap visible.
+                            eprintln!(
+                                "warning: schema for {} failed to compile ({}); \
+                                 {} files will not be schema-validated",
+                                prefix, e, prefix
+                            );
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!(
+                            "warning: schema for {} is not valid JSON ({}); \
+                             {} files will not be schema-validated",
+                            prefix, e, prefix
+                        );
                     }
                 }
             }

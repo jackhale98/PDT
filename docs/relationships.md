@@ -407,7 +407,7 @@ tdt test list --linked-to REQ@1 --via verified_by
 tdt cmp list -f short-id | tdt risk list --linked-to -
 
 # Find NCRs for all components in an assembly's BOM
-tdt asm bom ASM@1 -f short-id | tdt ncr list --linked-to -
+tdt asm bom ASM@1 -o short-id | tdt ncr list --linked-to -
 
 # Find CAPAs linked to open NCRs
 tdt ncr list --ncr-status open -f short-id | tdt capa list --linked-to -
@@ -429,10 +429,10 @@ Links enable traceability analysis:
 
 ```bash
 # Coverage report (requirements with/without tests)
-tdt trace coverage
+tdt trace matrix --rvm
 
 # Show only uncovered requirements
-tdt trace coverage --uncovered
+tdt report rvm   # requirements without passing tests are listed as gaps
 
 # Generate traceability matrix
 tdt trace matrix

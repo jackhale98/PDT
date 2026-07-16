@@ -391,7 +391,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         short_ids.ensure_all(entities.iter().map(|e| e.id.clone()));
         super::utils::save_short_ids(&mut short_ids, &project);
 
-        return output_cached_processes(&entities, &args, &short_ids, format);
+        return output_cached_processes(&entities, &args, &short_ids, format, &project);
     }
 
     // Full entity loading path
@@ -572,7 +572,10 @@ fn output_processes(
                 TableFormatter::new(PROC_COLUMNS, "process", "PROC").with_config(config);
             formatter.output(rows, format, &visible_columns);
         }
-        OutputFormat::Auto | OutputFormat::Path => unreachable!(),
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
     }
 
     Ok(())
@@ -718,6 +721,9 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
         &added_links,
         global,
     );
+
+    // Sync cache after creation
+    super::utils::sync_cache(&project);
 
     // Open in editor if requested
     if args.edit || (!args.no_edit && !args.interactive) {
@@ -891,6 +897,7 @@ fn output_cached_processes(
     args: &ListArgs,
     short_ids: &ShortIdIndex,
     format: OutputFormat,
+    project: &Project,
 ) -> Result<()> {
     // Count only
     if args.count {
@@ -901,6 +908,19 @@ fn output_cached_processes(
     // No results
     if entities.is_empty() {
         println!("No processes found.");
+        return Ok(());
+    }
+
+    // The table formatter below can't render file paths; handle -o path here.
+    if format == OutputFormat::Path {
+        for e in entities {
+            let path = if e.file_path.is_absolute() {
+                e.file_path.clone()
+            } else {
+                project.root().join(&e.file_path)
+            };
+            println!("{}", path.display());
+        }
         return Ok(());
     }
 

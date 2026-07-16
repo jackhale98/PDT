@@ -104,13 +104,14 @@ fn gix_err(e: impl std::fmt::Display) -> GitError {
     }
 }
 
-/// Parse pipe-delimited log output from `git log --format`
+/// Parse NUL-delimited log output from `git log --format` (fields separated
+/// with %x00 so `|` in commit subjects or author names can't break parsing)
 fn parse_log_output(stdout: &str) -> Vec<CommitLogEntry> {
     stdout
         .lines()
         .filter(|line| !line.is_empty())
         .filter_map(|line| {
-            let parts: Vec<&str> = line.split('|').collect();
+            let parts: Vec<&str> = line.split('\0').collect();
             if parts.len() >= 7 {
                 Some(CommitLogEntry {
                     hash: parts[0].to_string(),
@@ -165,9 +166,9 @@ fn glob_match_inner(pattern: &[u8], text: &[u8]) -> bool {
 /// Format a gix time as ISO 8601
 fn format_gix_time(time: gix::date::Time) -> String {
     let secs = time.seconds;
-    let offset = time.offset;
+    // gix-date's offset is already in seconds (OffsetInSeconds).
+    let offset_secs = time.offset;
     if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
-        let offset_secs = offset * 60;
         if let Some(tz) = chrono::FixedOffset::east_opt(offset_secs) {
             return dt.with_timezone(&tz).to_rfc3339();
         }

@@ -909,6 +909,7 @@ mod tests {
     use super::*;
     use tdt_core::entities::stackup::{Contributor, Direction, Distribution, Target, TorsorStats};
 
+    #[allow(clippy::field_reassign_with_default)] // Stackup has too many fields for a literal
     fn make_test_stackup() -> Stackup {
         let mut stackup = Stackup::default();
         // Use a new ID instead of parsing
@@ -974,8 +975,10 @@ mod tests {
 
     #[test]
     fn test_render_chain_schematic_empty() {
-        let mut stackup = Stackup::default();
-        stackup.title = "Empty".to_string();
+        let stackup = Stackup {
+            title: "Empty".to_string(),
+            ..Stackup::default()
+        };
 
         let output = render_chain_schematic(&stackup);
         assert!(output.contains("no contributors"));

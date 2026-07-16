@@ -1020,7 +1020,7 @@ tdt tol analyze TOL@1 --iterations 100000
 tdt tol analyze TOL@1 --verbose
 
 <span class="comment"># Include GD&T position tolerances in calculations</span>
-tdt tol analyze TOL@1 --with-gdt
+tdt tol analyze TOL@1 --gdt   # include GD&T position tolerances (--no-gdt to exclude)
 
 <span class="comment"># Custom sigma level (4σ = more conservative)</span>
 tdt tol analyze TOL@1 --sigma 4.0
@@ -1038,7 +1038,7 @@ tdt tol analyze TOL@1 --3d
 tdt tol analyze TOL@1 --3d --visualize
 
 <span class="comment"># 3D Monte Carlo simulation</span>
-tdt tol analyze TOL@1 --3d --method-3d monte-carlo
+tdt tol analyze TOL@1 --3d --iterations 50000
 
 <span class="comment"># List all stackups with results</span>
 tdt tol list

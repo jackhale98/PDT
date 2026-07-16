@@ -5,7 +5,8 @@ use csv::StringRecord;
 use miette::Result;
 use std::collections::HashMap;
 
-use tdt_core::core::identity::EntityPrefix;
+use tdt_core::core::identity::{EntityId, EntityPrefix};
+use tdt_core::core::shortid::ShortIdIndex;
 
 /// Import options passed to entity-specific import functions
 #[derive(Debug)]
@@ -24,12 +25,41 @@ pub struct ImportArgs {
     pub assembly: Option<String>,
 }
 
-/// Truncate a string to max length with ellipsis
+/// Truncate a string to max length (in characters) with ellipsis
 pub fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len - 3])
+        let truncated: String = s.chars().take(max_len.saturating_sub(3)).collect();
+        format!("{}...", truncated)
+    }
+}
+
+/// Resolve a short ID (e.g. "CMP@1") or full entity ID to a validated full ID.
+/// Returns Err with a message when the reference is not a resolvable entity ID.
+pub fn resolve_entity_ref(short_ids: &ShortIdIndex, reference: &str) -> Result<String, String> {
+    let resolved = short_ids
+        .resolve(reference)
+        .unwrap_or_else(|| reference.to_string());
+    resolved
+        .parse::<EntityId>()
+        .map(|id| id.to_string())
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate;
+
+    #[test]
+    fn truncate_handles_multibyte_utf8() {
+        // Multibyte characters: byte-based slicing would panic here
+        let s = "日本語のテキストです。";
+        assert_eq!(truncate(s, 8), "日本語のテ...");
+        // Short strings are returned unchanged
+        assert_eq!(truncate("héllo", 10), "héllo");
+        // ASCII truncation still works
+        assert_eq!(truncate("abcdefghij", 8), "abcde...");
     }
 }
 
@@ -44,12 +74,28 @@ pub struct ImportStats {
 }
 
 /// Build a map from header name to column index
+///
+/// Warns when duplicate headers are present (the last occurrence wins).
 pub fn build_header_map(headers: &StringRecord) -> HashMap<String, usize> {
-    headers
-        .iter()
-        .enumerate()
-        .map(|(i, h)| (h.to_lowercase().trim().to_string(), i))
-        .collect()
+    let mut map: HashMap<String, usize> = HashMap::new();
+    let mut duplicates: Vec<String> = Vec::new();
+
+    for (i, h) in headers.iter().enumerate() {
+        let key = h.to_lowercase().trim().to_string();
+        if map.insert(key.clone(), i).is_some() && !duplicates.contains(&key) {
+            duplicates.push(key);
+        }
+    }
+
+    if !duplicates.is_empty() {
+        eprintln!(
+            "{} Duplicate CSV header(s): {} (last occurrence wins)",
+            style("!").yellow(),
+            duplicates.join(", ")
+        );
+    }
+
+    map
 }
 
 /// Get a field value from a CSV record

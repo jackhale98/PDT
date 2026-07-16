@@ -615,6 +615,97 @@ mod tests {
         assert_eq!(analysis.fit_result, FitResult::Transition);
     }
 
+    /// Auto-detection rejects two internal features: physically impossible to
+    /// mate two holes via fit analysis. Locks in existing behavior so a future
+    /// refactor can't quietly drop the check.
+    #[test]
+    fn test_fit_analysis_rejects_two_internal_features() {
+        use crate::entities::feature::Dimension;
+        let dim_a = Dimension {
+            name: "A".into(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.0,
+            internal: true,
+            units: "mm".into(),
+            distribution: Default::default(),
+        };
+        let dim_b = Dimension {
+            name: "B".into(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.0,
+            internal: true,
+            units: "mm".into(),
+            distribution: Default::default(),
+        };
+        let err = FitAnalysis::from_dimensions(&dim_a, &dim_b).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("internal") && msg.contains("external"),
+            "error should explain hole/shaft requirement, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_fit_analysis_rejects_two_external_features() {
+        use crate::entities::feature::Dimension;
+        let dim_a = Dimension {
+            name: "A".into(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.0,
+            internal: false,
+            units: "mm".into(),
+            distribution: Default::default(),
+        };
+        let dim_b = Dimension {
+            name: "B".into(),
+            nominal: 9.9,
+            plus_tol: 0.0,
+            minus_tol: 0.1,
+            internal: false,
+            units: "mm".into(),
+            distribution: Default::default(),
+        };
+        let err = FitAnalysis::from_dimensions(&dim_a, &dim_b).unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("internal") && msg.contains("external"),
+            "error should explain hole/shaft requirement, got: {msg}"
+        );
+    }
+
+    /// Order doesn't matter: hole-first vs shaft-first should give the same
+    /// fit result. Locks in the auto-detection swap in `from_dimensions`.
+    #[test]
+    fn test_fit_analysis_swaps_hole_shaft_order() {
+        use crate::entities::feature::Dimension;
+        let hole = Dimension {
+            name: "Hole".into(),
+            nominal: 10.0,
+            plus_tol: 0.1,
+            minus_tol: 0.0,
+            internal: true,
+            units: "mm".into(),
+            distribution: Default::default(),
+        };
+        let shaft = Dimension {
+            name: "Shaft".into(),
+            nominal: 9.9,
+            plus_tol: 0.0,
+            minus_tol: 0.1,
+            internal: false,
+            units: "mm".into(),
+            distribution: Default::default(),
+        };
+        let a = FitAnalysis::from_dimensions(&hole, &shaft).unwrap();
+        let b = FitAnalysis::from_dimensions(&shaft, &hole).unwrap();
+        assert_eq!(a.fit_result, b.fit_result);
+        assert!((a.worst_case_min_clearance - b.worst_case_min_clearance).abs() < 1e-12);
+        assert!((a.worst_case_max_clearance - b.worst_case_max_clearance).abs() < 1e-12);
+    }
+
     #[test]
     fn test_entity_trait_implementation() {
         let feat_a = EntityId::new(EntityPrefix::Feat);

@@ -212,36 +212,31 @@ impl EntityCache {
         Ok(false)
     }
 
-    /// Get the list of entity directories to scan
+    /// Get the list of entity directories to scan.
+    ///
+    /// Derived from the single source of truth in
+    /// `Project::entity_search_directories`, deduplicated so that a directory
+    /// already covered by a recursive ancestor scan (e.g. `risks/design`
+    /// under `risks`) isn't walked twice.
     fn entity_directories() -> &'static [&'static str] {
-        &[
-            "requirements/inputs",
-            "requirements/outputs",
-            // Scan root risks/ directory for risk files placed directly there
-            // WalkDir will recursively find files in subdirs (design, process, use, software, hazards)
-            "risks",
-            // Also check safety/hazards for projects that use that structure
-            "safety/hazards",
-            "bom/assemblies",
-            "bom/components",
-            "bom/quotes",
-            "bom/suppliers",
-            "tolerances/features",
-            "tolerances/mates",
-            "tolerances/stackups",
-            "verification/protocols",
-            "verification/results",
-            "validation/protocols",
-            "validation/results",
-            "manufacturing/processes",
-            "manufacturing/controls",
-            "manufacturing/work_instructions",
-            "manufacturing/ncrs",
-            "quality/capas",
-            "manufacturing/capas",
-            "manufacturing/lots",
-            "manufacturing/deviations",
-        ]
+        use std::sync::OnceLock;
+        static DIRS: OnceLock<Vec<&'static str>> = OnceLock::new();
+        DIRS.get_or_init(|| {
+            let mut dirs: Vec<&'static str> = crate::core::identity::EntityPrefix::all()
+                .iter()
+                .flat_map(|p| Project::entity_search_directories(*p))
+                .copied()
+                .collect();
+            dirs.sort_unstable();
+            dirs.dedup();
+            // Drop dirs subsumed by a recursive ancestor also in the list.
+            let all = dirs.clone();
+            dirs.retain(|d| {
+                !all.iter()
+                    .any(|a| a != d && d.starts_with(a) && d.as_bytes()[a.len()] == b'/')
+            });
+            dirs
+        })
     }
 
     /// Open cache without auto-sync (for testing)

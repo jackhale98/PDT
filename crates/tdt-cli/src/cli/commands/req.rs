@@ -432,8 +432,11 @@ pub struct StatsArgs {
     pub by_category: bool,
 }
 
-/// Directories where requirements are stored
-const REQ_DIRS: &[&str] = &["requirements/inputs", "requirements/outputs"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const REQ_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Req,
+);
 
 /// Entity configuration for requirements
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

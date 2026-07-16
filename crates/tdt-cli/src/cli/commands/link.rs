@@ -1506,72 +1506,18 @@ fn find_entity(project: &Project, id_query: &str) -> Result<EntityInfo> {
 fn get_search_dirs_for_query(project: &Project, query: &str) -> Vec<PathBuf> {
     let root = project.root();
 
-    // Try to determine prefix from query
-    let prefix = query.split('-').next().unwrap_or("");
-
-    match prefix.to_uppercase().as_str() {
-        "REQ" => vec![
-            root.join("requirements/inputs"),
-            root.join("requirements/outputs"),
-        ],
-        "RISK" => vec![
-            root.join("risks/design"),
-            root.join("risks/process"),
-            root.join("risks/use"),
-            root.join("risks/software"),
-            root.join("risks"),
-        ],
-        "TEST" => vec![
-            root.join("verification/protocols"),
-            root.join("validation/protocols"),
-        ],
-        "RSLT" => vec![
-            root.join("verification/results"),
-            root.join("validation/results"),
-        ],
-        "CMP" => vec![root.join("bom/components")],
-        "ASM" => vec![root.join("bom/assemblies")],
-        "FEAT" => vec![root.join("tolerances/features")],
-        "MATE" => vec![root.join("tolerances/mates")],
-        "TOL" => vec![root.join("tolerances/stackups")],
-        "QUOT" => vec![root.join("bom/quotes"), root.join("sourcing/quotes")],
-        "SUP" => vec![root.join("bom/suppliers"), root.join("sourcing/suppliers")],
-        "PROC" => vec![root.join("manufacturing/processes")],
-        "CTRL" => vec![root.join("manufacturing/controls")],
-        "WORK" => vec![root.join("manufacturing/work_instructions")],
-        "NCR" => vec![root.join("manufacturing/ncrs")],
-        "CAPA" => vec![root.join("quality/capas"), root.join("manufacturing/capas")],
-        "ACT" => vec![root.join("manufacturing/actions")],
-        _ => {
-            // Search all directories if prefix is unknown
-            vec![
-                root.join("requirements/inputs"),
-                root.join("requirements/outputs"),
-                root.join("risks/design"),
-                root.join("risks/process"),
-                root.join("risks/use"),
-                root.join("risks/software"),
-                root.join("risks"),
-                root.join("safety/hazards"),
-                root.join("verification/protocols"),
-                root.join("validation/protocols"),
-                root.join("bom/components"),
-                root.join("bom/assemblies"),
-                root.join("bom/quotes"),
-                root.join("bom/suppliers"),
-                root.join("tolerances/features"),
-                root.join("tolerances/mates"),
-                root.join("tolerances/stackups"),
-                root.join("sourcing/quotes"),
-                root.join("sourcing/suppliers"),
-                root.join("manufacturing/processes"),
-                root.join("manufacturing/controls"),
-                root.join("manufacturing/work_instructions"),
-                root.join("manufacturing/ncrs"),
-                root.join("quality/capas"),
-                root.join("manufacturing/capas"),
-            ]
-        }
+    // Try to determine prefix from query; unknown prefixes search everywhere.
+    let prefix_str = query.split(['-', '@']).next().unwrap_or("").to_uppercase();
+    match prefix_str.parse::<EntityPrefix>() {
+        Ok(prefix) => Project::entity_search_directories(prefix)
+            .iter()
+            .map(|d| root.join(d))
+            .collect(),
+        Err(_) => EntityPrefix::all()
+            .iter()
+            .flat_map(|p| Project::entity_search_directories(*p))
+            .map(|d| root.join(d))
+            .collect(),
     }
 }
 
@@ -1785,57 +1731,12 @@ fn find_entity_file(project: &Project, id: &EntityId) -> Result<PathBuf> {
         }
     }
 
-    // Fallback: filesystem search
+    // Fallback: filesystem search over the canonical search directories
     let prefix = id.prefix();
-    let search_dirs: Vec<PathBuf> = match prefix {
-        EntityPrefix::Req => vec![
-            project.root().join("requirements/inputs"),
-            project.root().join("requirements/outputs"),
-        ],
-        EntityPrefix::Haz => vec![
-            project.root().join("risks/hazards"),
-            project.root().join("safety/hazards"),
-        ],
-        EntityPrefix::Risk => vec![
-            project.root().join("risks/design"),
-            project.root().join("risks/process"),
-            project.root().join("risks/use"),
-            project.root().join("risks/software"),
-            project.root().join("risks"),
-        ],
-        EntityPrefix::Test => vec![
-            project.root().join("verification/protocols"),
-            project.root().join("validation/protocols"),
-        ],
-        EntityPrefix::Rslt => vec![
-            project.root().join("verification/results"),
-            project.root().join("validation/results"),
-        ],
-        EntityPrefix::Cmp => vec![project.root().join("bom/components")],
-        EntityPrefix::Asm => vec![project.root().join("bom/assemblies")],
-        EntityPrefix::Feat => vec![project.root().join("tolerances/features")],
-        EntityPrefix::Mate => vec![project.root().join("tolerances/mates")],
-        EntityPrefix::Tol => vec![project.root().join("tolerances/stackups")],
-        EntityPrefix::Quot => vec![
-            project.root().join("bom/quotes"),
-            project.root().join("sourcing/quotes"),
-        ],
-        EntityPrefix::Sup => vec![
-            project.root().join("bom/suppliers"),
-            project.root().join("sourcing/suppliers"),
-        ],
-        EntityPrefix::Proc => vec![project.root().join("manufacturing/processes")],
-        EntityPrefix::Ctrl => vec![project.root().join("manufacturing/controls")],
-        EntityPrefix::Work => vec![project.root().join("manufacturing/work_instructions")],
-        EntityPrefix::Ncr => vec![project.root().join("manufacturing/ncrs")],
-        EntityPrefix::Capa => vec![
-            project.root().join("quality/capas"),
-            project.root().join("manufacturing/capas"),
-        ],
-        EntityPrefix::Act => vec![project.root().join("manufacturing/actions")],
-        EntityPrefix::Lot => vec![project.root().join("manufacturing/lots")],
-        EntityPrefix::Dev => vec![project.root().join("manufacturing/deviations")],
-    };
+    let search_dirs: Vec<PathBuf> = Project::entity_search_directories(prefix)
+        .iter()
+        .map(|d| project.root().join(d))
+        .collect();
 
     for dir in search_dirs {
         if !dir.exists() {

@@ -694,57 +694,46 @@ fn collect_entities_with_author(
 }
 
 fn entity_type_dirs(entity_type: &str) -> Vec<&'static str> {
-    match entity_type.to_lowercase().as_str() {
-        "req" | "requirement" => vec!["requirements/inputs", "requirements/outputs"],
-        "risk" => vec!["risks/design", "risks/process"],
-        "test" => vec!["verification/protocols", "validation/protocols"],
-        "rslt" | "result" => vec!["verification/results", "validation/results"],
-        "cmp" | "component" => vec!["bom/components"],
-        "asm" | "assembly" => vec!["bom/assemblies"],
-        "sup" | "supplier" => vec!["bom/suppliers"],
-        "quot" | "quote" => vec!["bom/quotes"],
-        "proc" | "process" => vec!["manufacturing/processes"],
-        "ctrl" | "control" => vec!["manufacturing/controls"],
-        "work" => vec!["manufacturing/work_instructions"],
-        "ncr" => vec!["manufacturing/ncrs"],
-        "capa" => vec!["manufacturing/capas"],
-        "lot" => vec!["manufacturing/lots"],
-        "dev" | "deviation" => vec!["manufacturing/deviations"],
-        "haz" | "hazard" => vec!["safety/hazards"],
-        "act" | "action" => vec!["actions"],
-        "feat" | "feature" => vec!["tolerances/features"],
-        "mate" => vec!["tolerances/mates"],
-        "tol" | "stackup" => vec!["tolerances/stackups"],
-        _ => vec![],
-    }
+    use tdt_core::core::identity::EntityPrefix;
+    use tdt_core::core::project::Project;
+
+    // Accept both prefixes and long names; dirs come from the single source
+    // of truth in Project::entity_search_directories.
+    let prefix = match entity_type.to_lowercase().as_str() {
+        "req" | "requirement" => EntityPrefix::Req,
+        "risk" => EntityPrefix::Risk,
+        "test" => EntityPrefix::Test,
+        "rslt" | "result" => EntityPrefix::Rslt,
+        "cmp" | "component" => EntityPrefix::Cmp,
+        "asm" | "assembly" => EntityPrefix::Asm,
+        "sup" | "supplier" => EntityPrefix::Sup,
+        "quot" | "quote" => EntityPrefix::Quot,
+        "proc" | "process" => EntityPrefix::Proc,
+        "ctrl" | "control" => EntityPrefix::Ctrl,
+        "work" => EntityPrefix::Work,
+        "ncr" => EntityPrefix::Ncr,
+        "capa" => EntityPrefix::Capa,
+        "lot" => EntityPrefix::Lot,
+        "dev" | "deviation" => EntityPrefix::Dev,
+        "haz" | "hazard" => EntityPrefix::Haz,
+        "act" | "action" => EntityPrefix::Act,
+        "feat" | "feature" => EntityPrefix::Feat,
+        "mate" => EntityPrefix::Mate,
+        "tol" | "stackup" => EntityPrefix::Tol,
+        _ => return vec![],
+    };
+    Project::entity_search_directories(prefix).to_vec()
 }
 
 fn find_entity_file(project: &Project, id: &str) -> Option<PathBuf> {
     // Determine entity type from ID prefix
     let prefix = id.split('-').next()?;
 
-    let dirs = match prefix {
-        "REQ" => vec!["requirements/inputs", "requirements/outputs"],
-        "RISK" => vec!["risks/design", "risks/process"],
-        "TEST" => vec!["verification/protocols", "validation/protocols"],
-        "RSLT" => vec!["verification/results", "validation/results"],
-        "CMP" => vec!["bom/components"],
-        "ASM" => vec!["bom/assemblies"],
-        "SUP" => vec!["bom/suppliers"],
-        "QUOT" => vec!["bom/quotes"],
-        "PROC" => vec!["manufacturing/processes"],
-        "CTRL" => vec!["manufacturing/controls"],
-        "WORK" => vec!["manufacturing/work_instructions"],
-        "NCR" => vec!["manufacturing/ncrs"],
-        "CAPA" => vec!["manufacturing/capas"],
-        "LOT" => vec!["manufacturing/lots"],
-        "DEV" => vec!["manufacturing/deviations"],
-        "HAZ" => vec!["safety/hazards"],
-        "ACT" => vec!["actions"],
-        "FEAT" => vec!["tolerances/features"],
-        "MATE" => vec!["tolerances/mates"],
-        "TOL" => vec!["tolerances/stackups"],
-        _ => return None,
+    let dirs: Vec<&'static str> = {
+        use tdt_core::core::identity::EntityPrefix;
+        use tdt_core::core::project::Project as P;
+        let parsed: EntityPrefix = prefix.parse().ok()?;
+        P::entity_search_directories(parsed).to_vec()
     };
 
     // First pass: match by canonical filename (<ID>.tdt.yaml)

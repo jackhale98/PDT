@@ -268,8 +268,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where results are stored
-const RESULT_DIRS: &[&str] = &["verification/results", "validation/results"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const RESULT_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Rslt,
+);
 
 #[derive(clap::Args, Debug)]
 pub struct SummaryArgs {

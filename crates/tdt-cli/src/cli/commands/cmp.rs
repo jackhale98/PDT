@@ -392,8 +392,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where components are stored
-const COMPONENT_DIRS: &[&str] = &["bom/components"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const COMPONENT_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Cmp,
+);
 
 /// Entity configuration for components
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

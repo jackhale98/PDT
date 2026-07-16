@@ -370,8 +370,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where NCRs are stored
-const NCR_DIRS: &[&str] = &["manufacturing/ncrs"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const NCR_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Ncr,
+);
 
 /// Entity configuration for NCRs
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

@@ -271,8 +271,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where mates are stored
-const MATE_DIRS: &[&str] = &["tolerances/mates"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const MATE_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Mate,
+);
 
 /// Entity configuration for mates
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

@@ -313,8 +313,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where processes are stored
-const PROCESS_DIRS: &[&str] = &["manufacturing/processes"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const PROCESS_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Proc,
+);
 
 /// Entity configuration for processes
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

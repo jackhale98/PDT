@@ -217,6 +217,45 @@ impl Project {
         }
     }
 
+    /// All directories where entities of this prefix may live, in search
+    /// order: type-specific variants first, then legacy fallbacks.
+    ///
+    /// This is the single source of truth for entity search paths — CLI
+    /// commands, bulk operations, and the cache scan list all derive from it.
+    pub const fn entity_search_directories(prefix: EntityPrefix) -> &'static [&'static str] {
+        match prefix {
+            EntityPrefix::Req => &["requirements/inputs", "requirements/outputs"],
+            EntityPrefix::Haz => &["risks/hazards", "safety/hazards"],
+            EntityPrefix::Risk => &[
+                "risks/design",
+                "risks/process",
+                "risks/use",
+                "risks/software",
+                // Legacy flat layout
+                "risks",
+            ],
+            EntityPrefix::Test => &["verification/protocols", "validation/protocols"],
+            EntityPrefix::Rslt => &["verification/results", "validation/results"],
+            EntityPrefix::Tol => &["tolerances/stackups"],
+            EntityPrefix::Mate => &["tolerances/mates"],
+            EntityPrefix::Asm => &["bom/assemblies"],
+            EntityPrefix::Cmp => &["bom/components"],
+            EntityPrefix::Feat => &["tolerances/features"],
+            EntityPrefix::Proc => &["manufacturing/processes"],
+            EntityPrefix::Ctrl => &["manufacturing/controls"],
+            EntityPrefix::Quot => &["bom/quotes", "sourcing/quotes"],
+            EntityPrefix::Sup => &["bom/suppliers", "sourcing/suppliers"],
+            EntityPrefix::Act => &["actions", "manufacturing/actions"],
+            EntityPrefix::Work => &["manufacturing/work_instructions"],
+            EntityPrefix::Ncr => &["manufacturing/ncrs"],
+            // quality/capas is the legacy location, still scanned first for
+            // backward compatibility with existing projects.
+            EntityPrefix::Capa => &["quality/capas", "manufacturing/capas"],
+            EntityPrefix::Lot => &["manufacturing/lots"],
+            EntityPrefix::Dev => &["manufacturing/deviations"],
+        }
+    }
+
     /// Get the directory for requirements of a specific type
     pub fn requirement_directory(&self, req_type: &str) -> PathBuf {
         match req_type {

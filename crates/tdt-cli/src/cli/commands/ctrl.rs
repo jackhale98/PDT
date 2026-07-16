@@ -245,8 +245,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where controls are stored
-const CONTROL_DIRS: &[&str] = &["manufacturing/controls"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const CONTROL_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Ctrl,
+);
 
 /// Entity configuration for controls
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

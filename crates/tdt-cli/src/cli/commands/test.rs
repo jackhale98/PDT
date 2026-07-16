@@ -445,8 +445,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where tests are stored
-const TEST_DIRS: &[&str] = &["verification/protocols", "validation/protocols"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const TEST_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Test,
+);
 
 /// Verdict options for test execution
 #[derive(Debug, Clone, Copy, ValueEnum)]

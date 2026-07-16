@@ -302,8 +302,11 @@ pub struct SetLengthArgs {
     pub quiet: bool,
 }
 
-/// Directories where features are stored
-const FEATURE_DIRS: &[&str] = &["tolerances/features"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const FEATURE_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Feat,
+);
 
 /// Entity configuration for features
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

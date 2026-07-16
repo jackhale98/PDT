@@ -349,13 +349,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where risks are stored
-const RISK_DIRS: &[&str] = &[
-    "risks/design",
-    "risks/process",
-    "risks/use",
-    "risks/software",
-];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const RISK_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Risk,
+);
 
 #[derive(clap::Args, Debug)]
 pub struct SummaryArgs {

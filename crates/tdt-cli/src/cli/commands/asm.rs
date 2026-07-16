@@ -306,8 +306,11 @@ pub struct ArchiveArgs {
     pub quiet: bool,
 }
 
-/// Directories where assemblies are stored
-const ASSEMBLY_DIRS: &[&str] = &["bom/assemblies"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const ASSEMBLY_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Asm,
+);
 
 /// Entity configuration for assemblies
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

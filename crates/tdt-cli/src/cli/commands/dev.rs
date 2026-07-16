@@ -448,8 +448,11 @@ pub struct ExpireArgs {
     pub yes: bool,
 }
 
-/// Directories where deviations are stored
-const DEV_DIRS: &[&str] = &["manufacturing/deviations"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const DEV_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Dev,
+);
 
 /// Entity configuration for deviation commands
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

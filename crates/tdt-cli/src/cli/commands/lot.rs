@@ -508,8 +508,11 @@ fn get_git_email() -> Option<String> {
         })
 }
 
-/// Directories where lots are stored
-const LOT_DIRS: &[&str] = &["manufacturing/lots"];
+/// Search directories for this entity type — single source of truth
+/// lives in `Project::entity_search_directories`.
+const LOT_DIRS: &[&str] = tdt_core::core::project::Project::entity_search_directories(
+    tdt_core::core::identity::EntityPrefix::Lot,
+);
 
 /// Entity configuration for lot commands
 const ENTITY_CONFIG: crate::cli::EntityConfig = crate::cli::EntityConfig {

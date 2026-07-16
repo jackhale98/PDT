@@ -429,8 +429,10 @@ The `--fix` flag will:
 
 ## JSON Schema
 
-The full JSON Schema for mates is available at:
+View the full JSON Schema for mates with:
 
+```bash
+tdt schema show mate
 ```
-tdt/schemas/mate.schema.json
-```
+
+(source: `crates/tdt-core/schemas/mate.schema.json` in the repository)

@@ -399,8 +399,10 @@ tdt validate bom/components/CMP-01HC2JB7SMQX7RS1Y0GFKBHPTD.tdt.yaml
 
 ## JSON Schema
 
-The full JSON Schema for components is available at:
+View the full JSON Schema for components with:
 
+```bash
+tdt schema show cmp
 ```
-tdt/schemas/cmp.schema.json
-```
+
+(source: `crates/tdt-core/schemas/cmp.schema.json` in the repository)

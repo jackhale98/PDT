@@ -965,7 +965,11 @@ fn run_delete(args: DeleteArgs) -> Result<()> {
         .map_err(|e| miette::miette!("{}", e))?;
 
     if !args.quiet {
-        println!("{} Deleted mate {}", style("✓").green(), style(&args.id).cyan());
+        println!(
+            "{} Deleted mate {}",
+            style("✓").green(),
+            style(&args.id).cyan()
+        );
     }
 
     crate::cli::commands::utils::sync_cache(&project);

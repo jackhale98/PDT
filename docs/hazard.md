@@ -351,8 +351,10 @@ tdt validate --entity-type haz
 
 ## JSON Schema
 
-The full JSON Schema for hazards is embedded in Tessera and available at:
+View the full JSON Schema for hazards with:
 
+```bash
+tdt schema show haz
 ```
-tdt/schemas/haz.schema.json
-```
+
+(source: `crates/tdt-core/schemas/haz.schema.json` in the repository)

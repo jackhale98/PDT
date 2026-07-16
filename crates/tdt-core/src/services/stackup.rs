@@ -591,9 +591,8 @@ impl<'a> StackupService<'a> {
         if !feature_dir.exists() {
             return Ok(None);
         }
-        let result =
-            loader::load_entity::<crate::entities::feature::Feature>(&feature_dir, id)
-                .map_err(ServiceError::from)?;
+        let result = loader::load_entity::<crate::entities::feature::Feature>(&feature_dir, id)
+            .map_err(ServiceError::from)?;
         Ok(result.map(|(_, f)| f))
     }
 

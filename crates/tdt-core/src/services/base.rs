@@ -264,9 +264,7 @@ fn preserve_link_metadata(new_yaml: &str, path: &Path) -> String {
     // matches `id`.
     fn old_entry_with_id<'v>(old_val: &'v Value, id: &str) -> Option<&'v serde_yml::Mapping> {
         match old_val {
-            Value::Mapping(m) => {
-                (m.get("id").and_then(Value::as_str) == Some(id)).then_some(m)
-            }
+            Value::Mapping(m) => (m.get("id").and_then(Value::as_str) == Some(id)).then_some(m),
             Value::Sequence(items) => items.iter().find_map(|item| {
                 item.as_mapping()
                     .filter(|m| m.get("id").and_then(Value::as_str) == Some(id))
@@ -526,7 +524,8 @@ mod tests {
         .unwrap();
 
         // A typed round-trip collapsed both links to bare strings.
-        let new_yaml = "id: REQ-1\nlinks:\n  verified_by:\n    - TEST-1\n    - TEST-2\n  capa: CAPA-1\n";
+        let new_yaml =
+            "id: REQ-1\nlinks:\n  verified_by:\n    - TEST-1\n    - TEST-2\n  capa: CAPA-1\n";
         let merged = preserve_link_metadata(new_yaml, &path);
 
         let doc: serde_yml::Value = serde_yml::from_str(&merged).unwrap();
@@ -534,10 +533,7 @@ mod tests {
         assert_eq!(vb[0]["id"].as_str(), Some("TEST-1"));
         assert_eq!(vb[0]["title"].as_str(), Some("Leak test"));
         assert_eq!(vb[0]["suspect"].as_bool(), Some(true));
-        assert_eq!(
-            vb[0]["suspect_reason"].as_str(),
-            Some("revision_changed")
-        );
+        assert_eq!(vb[0]["suspect_reason"].as_str(), Some("revision_changed"));
         // A link the old file didn't know about stays a plain string.
         assert_eq!(vb[1].as_str(), Some("TEST-2"));
         // Single-value links are restored too.

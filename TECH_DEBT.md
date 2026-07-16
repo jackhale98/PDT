@@ -54,10 +54,9 @@ the panic cases were fixed).
   `feat compute-bounds`/`validate` pass `None`). Only tests exercise it.
   Wire the feature lookup or delete the path.
 - 13 `#[allow(dead_code)]` markers worth a quarterly audit.
-- `schemas/` (repo root) is referenced by no code (the embedded copies in
-  `crates/tdt-core/schemas/` are the real ones). It is now synced
-  byte-identical; either delete it or generate it in CI so it can't drift
-  again.
+- ~~`schemas/` (repo root) duplicate directory~~ — **resolved**: deleted; the
+  embedded `crates/tdt-core/schemas/` copies are the single source, browsable
+  via `tdt schema show <type>`.
 
 ## 5. Performance
 

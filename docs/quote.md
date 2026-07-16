@@ -433,8 +433,10 @@ tdt validate bom/quotes/QUOT-01HC2JB7SMQX7RS1Y0GFKBHPTD.tdt.yaml
 
 ## JSON Schema
 
-The full JSON Schema for quotes is available at:
+View the full JSON Schema for quotes with:
 
+```bash
+tdt schema show quot
 ```
-tdt/schemas/quot.schema.json
-```
+
+(source: `crates/tdt-core/schemas/quot.schema.json` in the repository)

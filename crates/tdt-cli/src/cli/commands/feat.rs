@@ -378,7 +378,14 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             features.truncate(limit);
         }
 
-        return output_cached_features(&features, &short_ids, &args, format, &component_info, &project);
+        return output_cached_features(
+            &features,
+            &short_ids,
+            &args,
+            format,
+            &component_info,
+            &project,
+        );
     }
 
     // Full entity loading path

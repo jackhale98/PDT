@@ -2539,9 +2539,7 @@ fn run_3d_analysis(
         // is parallel to the assembly frame (no rotation-matrix Jacobian yet),
         // so warn when a feature axis is not the assembly Z axis.
         let axis_eps = 1e-6;
-        if axis[0].abs() > axis_eps
-            || axis[1].abs() > axis_eps
-            || (axis[2] - 1.0).abs() > axis_eps
+        if axis[0].abs() > axis_eps || axis[1].abs() > axis_eps || (axis[2] - 1.0).abs() > axis_eps
         {
             eprintln!(
                 "{} warning: feature {} axis [{}, {}, {}] is not the assembly Z axis; 3D analysis currently assumes axis-aligned local frames and may misattribute tolerance zones — results for this contributor are approximate",

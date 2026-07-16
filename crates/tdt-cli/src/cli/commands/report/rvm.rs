@@ -80,8 +80,8 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     let mut verified_count = 0; // Has linked tests that passed
     let mut partial_count = 0; // Has linked tests but not all passed
     let mut unverified_count = 0; // No linked tests
-    // Distinct tests that passed/failed (a test verifying several requirements
-    // must only be counted once)
+                                  // Distinct tests that passed/failed (a test verifying several requirements
+                                  // must only be counted once)
     let mut passed_tests: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut failed_tests: std::collections::HashSet<String> = std::collections::HashSet::new();
 

@@ -328,8 +328,10 @@ tdt validate bom/suppliers/SUP-01HC2JB7SMQX7RS1Y0GFKBHPTA.tdt.yaml
 
 ## JSON Schema
 
-The full JSON Schema for suppliers is available at:
+View the full JSON Schema for suppliers with:
 
+```bash
+tdt schema show sup
 ```
-tdt/schemas/sup.schema.json
-```
+
+(source: `crates/tdt-core/schemas/sup.schema.json` in the repository)

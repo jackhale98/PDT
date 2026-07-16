@@ -4,8 +4,8 @@
 //! Supports worst-case, RSS (statistical), and Monte Carlo analysis methods.
 
 use chrono::{DateTime, Utc};
-use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
@@ -1479,7 +1479,9 @@ mod tests {
             gdt_position: None,
         });
 
-        let mc = stackup.calculate_monte_carlo(1000).expect("populated stackup");
+        let mc = stackup
+            .calculate_monte_carlo(1000)
+            .expect("populated stackup");
 
         // Mean should be close to 1.0
         assert!((mc.mean - 1.0).abs() < 0.1);
@@ -1643,7 +1645,9 @@ mod tests {
         // Run analysis
         let wc = stackup.calculate_worst_case().expect("populated stackup");
         let rss = stackup.calculate_rss().expect("populated stackup");
-        let mc = stackup.calculate_monte_carlo(10000).expect("populated stackup");
+        let mc = stackup
+            .calculate_monte_carlo(10000)
+            .expect("populated stackup");
 
         // Worst case:
         // min = (10 - 0) - (8 + 0) = 2.0
@@ -2095,7 +2099,9 @@ author: "Test"
         });
 
         let rss_no_shift = stackup_no_shift.calculate_rss().expect("populated stackup");
-        let rss_with_shift = stackup_with_shift.calculate_rss().expect("populated stackup");
+        let rss_with_shift = stackup_with_shift
+            .calculate_rss()
+            .expect("populated stackup");
 
         // Shifted version should have lower Cpk (more conservative)
         assert!(
@@ -2278,7 +2284,9 @@ author: "Test"
             gdt_position: None,
         });
 
-        let mc = stackup.calculate_monte_carlo(10000).expect("populated stackup");
+        let mc = stackup
+            .calculate_monte_carlo(10000)
+            .expect("populated stackup");
 
         // Pp and Ppk should be present
         assert!(mc.pp.is_some(), "Monte Carlo should calculate Pp");
@@ -2317,7 +2325,9 @@ author: "Test"
             gdt_position: None,
         });
 
-        let mc = stackup.calculate_monte_carlo(50000).expect("populated stackup");
+        let mc = stackup
+            .calculate_monte_carlo(50000)
+            .expect("populated stackup");
 
         let pp = mc.pp.expect("Pp should be present");
         let ppk = mc.ppk.expect("Ppk should be present");

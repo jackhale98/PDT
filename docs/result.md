@@ -555,8 +555,10 @@ tdt rslt list --verdict fail --recent 30
 
 ## JSON Schema
 
-The full JSON Schema for results is embedded in Tessera and available at:
+View the full JSON Schema for results with:
 
+```bash
+tdt schema show rslt
 ```
-tdt/schemas/rslt.schema.json
-```
+
+(source: `crates/tdt-core/schemas/rslt.schema.json` in the repository)

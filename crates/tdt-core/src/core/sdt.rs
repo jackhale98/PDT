@@ -976,8 +976,16 @@ mod tests {
         let result = propagate_worst_case(&[contrib]);
 
         let [w_min, w_max] = result.w.unwrap();
-        assert!((w_min - 0.0).abs() < 1e-10, "w_min should be 0.0, got {}", w_min);
-        assert!((w_max - 0.1).abs() < 1e-10, "w_max should be +0.1, got {}", w_max);
+        assert!(
+            (w_min - 0.0).abs() < 1e-10,
+            "w_min should be 0.0, got {}",
+            w_min
+        );
+        assert!(
+            (w_max - 0.1).abs() < 1e-10,
+            "w_max should be +0.1, got {}",
+            w_max
+        );
     }
 
     #[test]

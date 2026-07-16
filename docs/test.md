@@ -469,8 +469,10 @@ tdt trace to REQ-01HC2
 
 ## JSON Schema
 
-The full JSON Schema for tests is embedded in Tessera and available at:
+View the full JSON Schema for tests with:
 
+```bash
+tdt schema show test
 ```
-tdt/schemas/test.schema.json
-```
+
+(source: `crates/tdt-core/schemas/test.schema.json` in the repository)

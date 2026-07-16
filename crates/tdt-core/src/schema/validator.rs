@@ -101,46 +101,68 @@ pub struct ValidationIssue {
     pub column: Option<usize>,
 }
 
-/// Schema validator with compiled schemas
+/// Schema validator with lazily-compiled schemas
+///
+/// Schemas are compiled on first use per entity prefix: compiling all ~20
+/// embedded schemas takes ~100ms, which would otherwise be paid on every
+/// command that constructs a Validator, even to validate a single file.
 pub struct Validator {
-    /// Compiled JSON schemas by entity prefix
-    compiled: HashMap<EntityPrefix, JsonValidator>,
+    /// Raw schema sources by entity prefix
+    sources: HashMap<EntityPrefix, String>,
+    /// Compiled JSON schemas, populated on first use per prefix.
+    /// `None` records a schema that failed to compile (warned once).
+    compiled: std::sync::Mutex<HashMap<EntityPrefix, Option<std::sync::Arc<JsonValidator>>>>,
 }
 
 impl Validator {
     /// Create a new validator with schemas from the registry
     pub fn new(registry: &SchemaRegistry) -> Self {
-        let mut compiled = HashMap::new();
-
+        let mut sources = HashMap::new();
         for prefix in EntityPrefix::all() {
             if let Some(schema_str) = registry.get(*prefix) {
-                match serde_json::from_str::<JsonValue>(schema_str) {
-                    Ok(schema_json) => match validator_for(&schema_json) {
-                        Ok(compiled_schema) => {
-                            compiled.insert(*prefix, compiled_schema);
-                        }
-                        Err(e) => {
-                            // A skipped schema would make this entity type
-                            // validate as always-OK; make the gap visible.
-                            eprintln!(
-                                "warning: schema for {} failed to compile ({}); \
-                                 {} files will not be schema-validated",
-                                prefix, e, prefix
-                            );
-                        }
-                    },
+                sources.insert(*prefix, schema_str.to_string());
+            }
+        }
+        Self {
+            sources,
+            compiled: std::sync::Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Get (compiling on first use) the validator for a prefix.
+    /// Returns `None` when no schema exists or it failed to compile.
+    fn compiled_for(&self, prefix: EntityPrefix) -> Option<std::sync::Arc<JsonValidator>> {
+        let mut compiled = self.compiled.lock().expect("validator cache poisoned");
+        if let Some(entry) = compiled.get(&prefix) {
+            return entry.clone();
+        }
+        let result = self.sources.get(&prefix).and_then(|schema_str| {
+            match serde_json::from_str::<JsonValue>(schema_str) {
+                Ok(schema_json) => match validator_for(&schema_json) {
+                    Ok(compiled_schema) => Some(std::sync::Arc::new(compiled_schema)),
                     Err(e) => {
+                        // A skipped schema would make this entity type
+                        // validate as always-OK; make the gap visible.
                         eprintln!(
-                            "warning: schema for {} is not valid JSON ({}); \
+                            "warning: schema for {} failed to compile ({}); \
                              {} files will not be schema-validated",
                             prefix, e, prefix
                         );
+                        None
                     }
+                },
+                Err(e) => {
+                    eprintln!(
+                        "warning: schema for {} is not valid JSON ({}); \
+                         {} files will not be schema-validated",
+                        prefix, e, prefix
+                    );
+                    None
                 }
             }
-        }
-
-        Self { compiled }
+        });
+        compiled.insert(prefix, result.clone());
+        result
     }
 
     /// Validate YAML content against the schema for the given entity type
@@ -180,8 +202,8 @@ impl Validator {
             }
         };
 
-        // Get compiled schema
-        let schema = match self.compiled.get(&prefix) {
+        // Get compiled schema (compiled lazily on first use)
+        let schema = match self.compiled_for(prefix) {
             Some(s) => s,
             None => {
                 // No schema available - validation passes (schema optional)
@@ -235,8 +257,8 @@ impl Validator {
             }
         };
 
-        // Get compiled schema
-        let schema = match self.compiled.get(&prefix) {
+        // Get compiled schema (compiled lazily on first use)
+        let schema = match self.compiled_for(prefix) {
             Some(s) => s,
             None => {
                 return Ok(ValidationResult::success());
@@ -527,7 +549,9 @@ mod tests {
     fn test_validator_creation() {
         let registry = SchemaRegistry::default();
         let validator = Validator::new(&registry);
-        assert!(validator.compiled.contains_key(&EntityPrefix::Req));
+        // Schemas compile lazily; the source must be present and compile on demand.
+        assert!(validator.sources.contains_key(&EntityPrefix::Req));
+        assert!(validator.compiled_for(EntityPrefix::Req).is_some());
     }
 
     #[test]

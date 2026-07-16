@@ -528,11 +528,13 @@ Priority: Focus on high-severity risks first, then high-RPN risks.
 
 ## JSON Schema
 
-The full JSON Schema for risks is embedded in Tessera and available at:
+View the full JSON Schema for risks with:
 
+```bash
+tdt schema show risk
 ```
-tdt/schemas/risk.schema.json
-```
+
+(source: `crates/tdt-core/schemas/risk.schema.json` in the repository)
 
 Key schema properties:
 

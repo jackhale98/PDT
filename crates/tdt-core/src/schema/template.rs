@@ -500,7 +500,10 @@ impl TemplateGenerator {
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("created_date", &ctx.created.format("%Y-%m-%d").to_string());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "req_type",
             &ctx.req_type.clone().unwrap_or_else(|| "input".to_string()),
@@ -541,7 +544,10 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "test_type",
             &ctx.test_type
@@ -596,7 +602,10 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "test_id",
             &ctx.test_id
@@ -647,7 +656,10 @@ impl TemplateGenerator {
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
         context.insert("created_date", &ctx.created.format("%Y-%m-%d").to_string());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "risk_type",
             &ctx.risk_type
@@ -693,7 +705,10 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "part_number",
             &yaml_escape(&ctx.part_number.clone().unwrap_or_default()),
@@ -736,7 +751,10 @@ impl TemplateGenerator {
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "part_number",
             &yaml_escape(&ctx.part_number.clone().unwrap_or_default()),
@@ -834,7 +852,10 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "component_id",
             &ctx.component_id.clone().unwrap_or_default(),
@@ -935,7 +956,10 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert("feature_a", &ctx.feature_a.clone().unwrap_or_default());
         context.insert("feature_b", &ctx.feature_b.clone().unwrap_or_default());
         context.insert(
@@ -1029,7 +1053,10 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "target_name",
             &yaml_escape(&ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string())),
@@ -1053,7 +1080,8 @@ entity_revision: 1
 
     fn hardcoded_stackup_template(&self, ctx: &TemplateContext) -> String {
         let title = yaml_escape(&ctx.title.clone().unwrap_or_default());
-        let target_name = yaml_escape(&ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string()));
+        let target_name =
+            yaml_escape(&ctx.target_name.clone().unwrap_or_else(|| "Gap".to_string()));
         let target_nominal = ctx.target_nominal.unwrap_or(1.0);
         let target_upper = ctx.target_upper.unwrap_or(1.5);
         let target_lower = ctx.target_lower.unwrap_or(0.5);
@@ -1644,7 +1672,10 @@ revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "component_id",
             &ctx.component_id.clone().unwrap_or_default(),
@@ -1874,7 +1905,10 @@ entity_revision: 1
         context.insert("id", &ctx.id.to_string());
         context.insert("author", &ctx.author);
         context.insert("created", &ctx.created.to_rfc3339());
-        context.insert("title", &yaml_escape(&ctx.title.clone().unwrap_or_default()));
+        context.insert(
+            "title",
+            &yaml_escape(&ctx.title.clone().unwrap_or_default()),
+        );
         context.insert(
             "process_type",
             &ctx.process_type

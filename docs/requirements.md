@@ -319,11 +319,13 @@ draft → review → approved → released
 
 ## JSON Schema
 
-The full JSON Schema for requirements is embedded in Tessera and available at:
+View the full JSON Schema for requirements with:
 
+```bash
+tdt schema show req
 ```
-tdt/schemas/req.schema.json
-```
+
+(source: `crates/tdt-core/schemas/req.schema.json` in the repository)
 
 Key schema properties:
 

@@ -810,8 +810,16 @@ mod tests {
         assert!(!result.has_bonus, "nonconforming size must not grant bonus");
         let [u_min, u_max] = result.bounds.u.unwrap();
         // Base position 0.25 diameter -> ±0.125, no bonus
-        assert!((u_min - (-0.125)).abs() < 1e-10, "u_min should be -0.125, got {}", u_min);
-        assert!((u_max - 0.125).abs() < 1e-10, "u_max should be 0.125, got {}", u_max);
+        assert!(
+            (u_min - (-0.125)).abs() < 1e-10,
+            "u_min should be -0.125, got {}",
+            u_min
+        );
+        assert!(
+            (u_max - 0.125).abs() < 1e-10,
+            "u_max should be 0.125, got {}",
+            u_max
+        );
     }
 
     #[test]
@@ -870,11 +878,25 @@ mod tests {
 
         let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, None, None);
 
-        assert!(result.bounds.u.is_none(), "position on plane must not bound u");
-        assert!(result.bounds.v.is_none(), "position on plane must not bound v");
+        assert!(
+            result.bounds.u.is_none(),
+            "position on plane must not bound u"
+        );
+        assert!(
+            result.bounds.v.is_none(),
+            "position on plane must not bound v"
+        );
         let [w_min, w_max] = result.bounds.w.unwrap();
-        assert!((w_min - (-0.1)).abs() < 1e-10, "w_min should be -0.1, got {}", w_min);
-        assert!((w_max - 0.1).abs() < 1e-10, "w_max should be 0.1, got {}", w_max);
+        assert!(
+            (w_min - (-0.1)).abs() < 1e-10,
+            "w_min should be -0.1, got {}",
+            w_min
+        );
+        assert!(
+            (w_max - 0.1).abs() < 1e-10,
+            "w_max should be 0.1, got {}",
+            w_max
+        );
     }
 
     #[test]
@@ -1239,8 +1261,16 @@ mod tests {
         let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, None, None);
 
         let [u_min, u_max] = result.bounds.u.unwrap();
-        assert!((u_min - (-0.04)).abs() < 1e-10, "u_min should be -0.04, got {}", u_min);
-        assert!((u_max - 0.04).abs() < 1e-10, "u_max should be 0.04, got {}", u_max);
+        assert!(
+            (u_min - (-0.04)).abs() < 1e-10,
+            "u_min should be -0.04, got {}",
+            u_min
+        );
+        assert!(
+            (u_max - 0.04).abs() < 1e-10,
+            "u_max should be 0.04, got {}",
+            u_max
+        );
         let [v_min, v_max] = result.bounds.v.unwrap();
         assert!((v_min - (-0.04)).abs() < 1e-10);
         assert!((v_max - 0.04).abs() < 1e-10);

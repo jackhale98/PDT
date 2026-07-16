@@ -432,8 +432,10 @@ tdt validate bom/assemblies/ASM-01HC2JB7SMQX7RS1Y0GFKBHPTE.tdt.yaml
 
 ## JSON Schema
 
-The full JSON Schema for assemblies is available at:
+View the full JSON Schema for assemblies with:
 
+```bash
+tdt schema show asm
 ```
-tdt/schemas/asm.schema.json
-```
+
+(source: `crates/tdt-core/schemas/asm.schema.json` in the repository)

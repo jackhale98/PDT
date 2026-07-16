@@ -782,9 +782,8 @@ fn find_entity_file(project: &Project, id: &str) -> Option<PathBuf> {
         {
             if let Ok(content) = std::fs::read_to_string(entry.path()) {
                 let matches_id = content.lines().any(|line| {
-                    line.strip_prefix("id:").is_some_and(|rest| {
-                        rest.trim().trim_matches('"').trim_matches('\'') == id
-                    })
+                    line.strip_prefix("id:")
+                        .is_some_and(|rest| rest.trim().trim_matches('"').trim_matches('\'') == id)
                 });
                 if matches_id {
                     return Some(entry.path().to_path_buf());

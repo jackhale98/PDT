@@ -746,8 +746,10 @@ Note that this does NOT automatically re-run the analysis - use `tdt tol analyze
 
 ## JSON Schema
 
-The full JSON Schema for stackups is available at:
+View the full JSON Schema for stackups with:
 
+```bash
+tdt schema show tol
 ```
-tdt/schemas/tol.schema.json
-```
+
+(source: `crates/tdt-core/schemas/tol.schema.json` in the repository)

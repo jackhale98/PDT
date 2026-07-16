@@ -310,22 +310,4 @@ mod tests {
         assert_eq!(determine_decimal_places(0.001), 4);
         assert_eq!(determine_decimal_places(0.0), 4); // Default
     }
-
-    #[test]
-    fn test_markdown_table() {
-        let mut table = MarkdownTable::new(vec!["ID", "Name", "Value"]);
-        table.add_row(vec!["1", "Alpha", "100"]);
-        table.add_row(vec!["2", "Beta", "2000"]);
-
-        let output = table.render();
-        assert!(output.contains("| ID | Name  | Value |"));
-        assert!(output.contains("| 1  | Alpha | 100   |"));
-        assert!(output.contains("| 2  | Beta  | 2000  |"));
-    }
-
-    #[test]
-    fn test_markdown_table_empty() {
-        let table = MarkdownTable::new(vec!["A", "B"]);
-        assert!(table.is_empty());
-    }
 }

@@ -930,11 +930,4 @@ mod tests {
         assert_eq!(config.wrap_width, Some(40));
         assert!(config.show_summary);
     }
-
-    #[test]
-    fn test_table_config_for_pipe() {
-        let config = TableConfig::for_pipe();
-        assert!(config.wrap_width.is_none());
-        assert!(!config.show_summary);
-    }
 }

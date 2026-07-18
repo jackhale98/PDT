@@ -6,7 +6,7 @@ use miette::{IntoDiagnostic, Result};
 
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::filters::StatusFilter;
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::identity::EntityPrefix;
@@ -333,71 +333,6 @@ fn sort_cached_controls(entities: &mut [CachedEntity], sort: ListColumn, reverse
     });
 }
 
-/// Output controls in the requested format
-fn output_controls(
-    controls: &[Control],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // Update short ID index
-    short_ids.ensure_all(controls.iter().map(|c| c.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&controls).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&controls).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Tsv
-        | OutputFormat::Csv
-        | OutputFormat::Md
-        | OutputFormat::Id
-        | OutputFormat::ShortId
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build visible columns list
-            let mut visible: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-            if args.show_id && !visible.contains(&"id") {
-                visible.insert(0, "id");
-            }
-
-            // Convert to TableRows
-            let rows: Vec<TableRow> = controls
-                .iter()
-                .map(|ctrl| control_to_row(ctrl, short_ids))
-                .collect();
-
-            // Configure table
-            let config = if let Some(width) = args.wrap {
-                TableConfig::with_wrap(width)
-            } else {
-                TableConfig::default()
-            };
-
-            let formatter =
-                TableFormatter::new(CTRL_COLUMNS, "control", "CTRL").with_config(config);
-            formatter.output(rows, format, &visible);
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
-}
-
 /// Run a control subcommand
 pub fn run(cmd: CtrlCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -515,7 +450,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    output_controls(&controls, &mut short_ids, &args, format, &project)
+    {
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &controls,
+            &CTRL_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            control_to_row,
+        )
+    }
 }
 
 /// Convert a Control to a TableRow

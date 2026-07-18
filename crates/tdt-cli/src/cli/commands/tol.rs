@@ -7,7 +7,7 @@ use std::fs;
 
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::{format_short_id, smart_round, truncate_str};
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::viz::{self, SvgConfig};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
@@ -136,6 +136,14 @@ const TOL_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("author", "AUTHOR", 20),
     ColumnDef::new("created", "CREATED", 16),
 ];
+
+const TOL_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: TOL_COLUMNS,
+        entity_name: "stackup",
+        entity_prefix: "TOL",
+        empty_message: "No stackups found.",
+    };
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -482,7 +490,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    output_stackups(&stackups, &mut short_ids, &args, format, &project)
+    {
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &stackups,
+            &TOL_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            stackup_to_row,
+        )
+    }
 }
 
 /// Build a StackupFilter from CLI ListArgs
@@ -564,80 +589,6 @@ fn build_tol_sort(args: &ListArgs) -> (StackupSortField, SortDirection) {
     };
 
     (field, direction)
-}
-
-/// Output stackups in the specified format
-fn output_stackups(
-    stackups: &[Stackup],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    if stackups.is_empty() {
-        println!("No stackups found.");
-        return Ok(());
-    }
-
-    // Update short ID index
-    short_ids.ensure_all(stackups.iter().map(|s| s.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json =
-                serde_json::to_string_pretty(&stackups).map_err(|e| miette::miette!("{}", e))?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&stackups).map_err(|e| miette::miette!("{}", e))?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let mut columns: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-            if args.show_id && !columns.contains(&"id") {
-                columns.insert(0, "id");
-            }
-            let rows: Vec<TableRow> = stackups
-                .iter()
-                .map(|s| stackup_to_row(s, short_ids))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(TOL_COLUMNS, "stackup", "TOL").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for s in stackups {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&s.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", s.id);
-                }
-            }
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {

@@ -8,7 +8,7 @@ use std::fs;
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::{format_short_id, truncate_str};
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::entity::{Priority, Status};
@@ -620,13 +620,23 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             return Ok(());
         }
 
-        // Update short ID index
         let mut short_ids = ShortIdIndex::load(&project);
-        short_ids.ensure_all(tests.iter().map(|t| t.id.to_string()));
-        super::utils::save_short_ids(&mut short_ids, &project);
-
-        // Output based on format
-        output_tests(&tests, &short_ids, &args, format)
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &tests,
+            &TEST_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            test_to_row,
+        )
     } else {
         // Fast path: use cache via service
         let result = service
@@ -835,64 +845,6 @@ fn sort_cached_tests(tests: &mut [CachedTest], args: &ListArgs) {
     if args.reverse {
         tests.reverse();
     }
-}
-
-/// Output full tests
-fn output_tests(
-    tests: &[Test],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-) -> Result<()> {
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(tests).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(tests).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let mut columns: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-            if args.show_id && !columns.contains(&"id") {
-                columns.insert(0, "id");
-            }
-            let rows: Vec<TableRow> = tests.iter().map(|t| test_to_row(t, short_ids)).collect();
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(TEST_COLUMNS, "test", "TEST").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for test in tests {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&test.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", test.id);
-                }
-            }
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-    Ok(())
 }
 
 /// Convert a Test to a TableRow

@@ -7,7 +7,7 @@ use std::fs;
 
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::truncate_str;
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::{CachedEntity, EntityCache};
 use tdt_core::core::identity::EntityPrefix;
@@ -454,7 +454,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    output_processes(&processes, &mut short_ids, &args, format, &project)
+    {
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.key().to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &processes,
+            &PROC_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            process_to_row,
+        )
+    }
 }
 
 /// Build a ProcessFilter from CLI ListArgs
@@ -541,69 +558,6 @@ fn sort_cached_processes(entities: &mut [CachedEntity], args: &ListArgs) {
         ListColumn::Author => entities.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => entities.sort_by(|a, b| a.created.cmp(&b.created)),
     }
-}
-
-/// Output full Process entities
-fn output_processes(
-    processes: &[Process],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    if processes.is_empty() {
-        println!("No processes found.");
-        return Ok(());
-    }
-
-    // Update short ID index
-    short_ids.ensure_all(processes.iter().map(|p| p.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json =
-                serde_json::to_string_pretty(&processes).map_err(|e| miette::miette!("{}", e))?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&processes).map_err(|e| miette::miette!("{}", e))?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Tsv
-        | OutputFormat::Csv
-        | OutputFormat::Md
-        | OutputFormat::Id
-        | OutputFormat::ShortId
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let mut visible_columns: Vec<&str> = args.columns.iter().map(|c| c.key()).collect();
-            if args.show_id && !visible_columns.contains(&"id") {
-                visible_columns.insert(0, "id");
-            }
-
-            let rows: Vec<TableRow> = processes
-                .iter()
-                .map(|p| process_to_row(p, short_ids))
-                .collect();
-
-            let config = match args.wrap {
-                Some(width) => TableConfig::with_wrap(width),
-                None => TableConfig::default(),
-            };
-
-            let formatter =
-                TableFormatter::new(PROC_COLUMNS, "process", "PROC").with_config(config);
-            formatter.output(rows, format, &visible_columns);
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
 }
 
 /// Convert a Process entity to a TableRow

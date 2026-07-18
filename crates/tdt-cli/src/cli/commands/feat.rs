@@ -7,7 +7,7 @@ use miette::{IntoDiagnostic, Result};
 
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::truncate_str;
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::identity::EntityPrefix;
@@ -441,13 +441,23 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    output_features(
+    let mut visible: Vec<String> = if args.show_id {
+        vec!["id".to_string()]
+    } else {
+        vec![]
+    };
+    visible.extend(args.columns.iter().map(|c| c.to_string()));
+    crate::cli::entity_cmd::output_entity_list(
         &features,
-        &mut short_ids,
-        &args,
+        &FEAT_LIST_SPEC,
+        &visible,
+        args.wrap,
+        args.count,
         format,
         &project,
-        &component_info,
+        &mut short_ids,
+        |x| x.id.to_string(),
+        |x, sids| feat_to_row(x, sids, &component_info),
     )
 }
 
@@ -527,78 +537,6 @@ fn sort_cached_features(features: &mut [CachedFeature], args: &ListArgs) {
         ListColumn::Author => features.sort_by(|a, b| a.author.cmp(&b.author)),
         ListColumn::Created => features.sort_by(|a, b| a.created.cmp(&b.created)),
     }
-}
-
-/// Output full Feature entities
-fn output_features(
-    features: &[Feature],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-    component_info: &std::collections::HashMap<String, (String, String)>,
-) -> Result<()> {
-    if features.is_empty() {
-        println!("No features found.");
-        return Ok(());
-    }
-
-    // Update short ID index
-    short_ids.ensure_all(features.iter().map(|f| f.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json =
-                serde_json::to_string_pretty(&features).map_err(|e| miette::miette!("{}", e))?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&features).map_err(|e| miette::miette!("{}", e))?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build columns list, adding ID column if --show-id is set
-            let mut columns: Vec<&str> = if args.show_id { vec!["id"] } else { vec![] };
-            columns.extend(args.columns.iter().map(|c| c.to_string().leak() as &str));
-
-            let rows: Vec<TableRow> = features
-                .iter()
-                .map(|f| feat_to_row(f, short_ids, component_info))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter =
-                TableFormatter::new(FEAT_COLUMNS, "feature", "FEAT").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for feat in features {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&feat.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", feat.id);
-                }
-            }
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
 }
 
 /// Format component display string from component_info map

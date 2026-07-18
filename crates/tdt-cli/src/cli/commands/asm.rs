@@ -9,7 +9,7 @@ use std::fs;
 
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::{escape_csv, truncate_str};
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::entity::Status;
@@ -152,19 +152,7 @@ impl fmt::Display for ListColumn {
     }
 }
 
-impl ListColumn {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ListColumn::Short => "short",
-            ListColumn::Id => "id",
-            ListColumn::PartNumber => "part-number",
-            ListColumn::Title => "title",
-            ListColumn::Status => "status",
-            ListColumn::Author => "author",
-            ListColumn::Created => "created",
-        }
-    }
-}
+impl ListColumn {}
 
 /// Column definitions for TableFormatter
 const ASM_COLUMNS: &[ColumnDef] = &[
@@ -175,6 +163,14 @@ const ASM_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("author", "AUTHOR", 15),
     ColumnDef::new("created", "CREATED", 20),
 ];
+
+const ASM_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: ASM_COLUMNS,
+        entity_name: "assembly",
+        entity_prefix: "ASM",
+        empty_message: "No assemblies found.",
+    };
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -523,13 +519,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    // Update short ID index
     let mut short_ids = ShortIdIndex::load(&project);
-    short_ids.ensure_all(assemblies.iter().map(|a| a.id.to_string()));
-    super::utils::save_short_ids(&mut short_ids, &project);
-
-    // Output based on format
-    output_assemblies(&assemblies, &short_ids, &args, global)
+    let format = match global.output {
+        OutputFormat::Auto => OutputFormat::Tsv,
+        f => f,
+    };
+    let visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+    crate::cli::entity_cmd::output_entity_list(
+        &assemblies,
+        &ASM_LIST_SPEC,
+        &visible,
+        args.wrap,
+        args.count,
+        format,
+        &project,
+        &mut short_ids,
+        |x| x.id.to_string(),
+        asm_to_row,
+    )
 }
 
 /// Build AssemblyFilter from CLI args
@@ -578,66 +585,6 @@ fn build_asm_sort(args: &ListArgs) -> (AssemblySortField, SortDirection) {
     };
 
     (field, direction)
-}
-
-/// Output assemblies in the requested format
-fn output_assemblies(
-    assemblies: &[Assembly],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    global: &GlobalOpts,
-) -> Result<()> {
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
-
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(assemblies).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(assemblies).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for asm in assemblies {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&asm.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", asm.id);
-                }
-            }
-        }
-        OutputFormat::Tsv
-        | OutputFormat::Csv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let rows: Vec<TableRow> = assemblies
-                .iter()
-                .map(|asm| asm_to_row(asm, short_ids))
-                .collect();
-            let columns: Vec<&str> = args.columns.iter().map(|c| c.as_str()).collect();
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(ASM_COLUMNS, "assembly", "ASM").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
 }
 
 /// Convert an Assembly to a TableRow

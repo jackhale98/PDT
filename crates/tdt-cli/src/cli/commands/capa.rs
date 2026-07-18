@@ -8,7 +8,7 @@ use chrono::NaiveDate;
 
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::helpers::format_short_id;
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::{CachedCapa, EntityCache};
 use tdt_core::core::identity::EntityPrefix;
@@ -459,85 +459,6 @@ fn sort_cached_capas(capas: &mut Vec<CachedCapa>, args: &ListArgs) {
     }
 }
 
-/// Output full CAPA entities
-fn output_capas(
-    capas: &[Capa],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    if capas.is_empty() {
-        if args.count {
-            println!("0");
-        } else {
-            println!("No CAPAs found.");
-        }
-        return Ok(());
-    }
-
-    if args.count {
-        println!("{}", capas.len());
-        return Ok(());
-    }
-
-    // Update short ID index
-    short_ids.ensure_all(capas.iter().map(|c| c.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&capas).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&capas).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build column list from args
-            let columns: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-
-            // Build rows
-            let rows: Vec<TableRow> = capas.iter().map(|c| capa_to_row(c, short_ids)).collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(CAPA_COLUMNS, "CAPA", "CAPA").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for capa in capas {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&capa.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", capa.id);
-                }
-            }
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
-}
-
 fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let cache = EntityCache::open(&project).map_err(|e| miette::miette!("{}", e))?;
@@ -619,7 +540,21 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         capas.truncate(limit);
     }
 
-    output_capas(&capas, &mut short_ids, &args, format, &project)
+    {
+        let visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        crate::cli::entity_cmd::output_entity_list(
+            &capas,
+            &CAPA_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            capa_to_row,
+        )
+    }
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {

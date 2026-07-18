@@ -8,7 +8,7 @@ use std::fs;
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::resolve_id_arg;
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::entity::Status;
@@ -574,13 +574,23 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
             return Ok(());
         }
 
-        // Update short ID index
         let mut short_ids = ShortIdIndex::load(&project);
-        short_ids.ensure_all(components.iter().map(|c| c.id.to_string()));
-        super::utils::save_short_ids(&mut short_ids, &project);
-
-        // Output based on format
-        output_components(&components, &short_ids, &args, output_format)
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &components,
+            &CMP_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            output_format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            component_to_row,
+        )
     } else {
         // Fast path: use cache for simple list outputs
         let mut cached_cmps = cache.list_components(
@@ -747,63 +757,6 @@ fn sort_cached_components(cmps: &mut Vec<tdt_core::core::CachedComponent>, args:
     if let Some(limit) = args.limit {
         cmps.truncate(limit);
     }
-}
-
-/// Output full components
-fn output_components(
-    components: &[Component],
-    short_ids: &ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-) -> Result<()> {
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(components).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(components).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Tsv
-        | OutputFormat::Csv
-        | OutputFormat::Md
-        | OutputFormat::Id
-        | OutputFormat::ShortId
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let mut visible: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-            if args.show_id && !visible.contains(&"id") {
-                visible.insert(0, "id");
-            }
-
-            let rows: Vec<TableRow> = components
-                .iter()
-                .map(|cmp| component_to_row(cmp, short_ids))
-                .collect();
-
-            let config = if let Some(width) = args.wrap {
-                TableConfig::with_wrap(width)
-            } else {
-                TableConfig::default()
-            };
-
-            let formatter =
-                TableFormatter::new(CMP_COLUMNS, "component", "CMP").with_config(config);
-            formatter.output(rows, format, &visible);
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
 }
 
 /// Convert a Component to a TableRow

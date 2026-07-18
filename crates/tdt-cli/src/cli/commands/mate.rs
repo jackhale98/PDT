@@ -8,7 +8,7 @@ use std::fs;
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::{format_short_id, smart_round, truncate_str};
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::entity::Entity;
@@ -127,6 +127,14 @@ const MATE_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("author", "AUTHOR", 20),
     ColumnDef::new("created", "CREATED", 16),
 ];
+
+const MATE_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: MATE_COLUMNS,
+        entity_name: "mate",
+        entity_prefix: "MATE",
+        empty_message: "No mates found.",
+    };
 
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
@@ -418,7 +426,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    output_mates(&mates, &mut short_ids, &args, format, &project)
+    {
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &mates,
+            &MATE_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            mate_to_row,
+        )
+    }
 }
 
 /// Build a MateFilter from CLI ListArgs
@@ -485,77 +510,6 @@ fn build_mate_sort(args: &ListArgs) -> (MateSortField, SortDirection) {
         .unwrap_or(MateSortField::Created);
 
     (field, SortDirection::Descending)
-}
-
-/// Output mates in the specified format
-fn output_mates(
-    mates: &[Mate],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    if mates.is_empty() {
-        println!("No mates found.");
-        return Ok(());
-    }
-
-    // Update short ID index
-    short_ids.ensure_all(mates.iter().map(|m| m.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json =
-                serde_json::to_string_pretty(&mates).map_err(|e| miette::miette!("{}", e))?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&mates).map_err(|e| miette::miette!("{}", e))?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let mut columns: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-            if args.show_id && !columns.contains(&"id") {
-                columns.insert(0, "id");
-            }
-            let rows: Vec<TableRow> = mates.iter().map(|m| mate_to_row(m, short_ids)).collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(MATE_COLUMNS, "mate", "MATE").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for mate in mates {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&mate.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", mate.id);
-                }
-            }
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
 }
 
 fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {

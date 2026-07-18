@@ -7,7 +7,7 @@ use miette::{IntoDiagnostic, Result};
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::{format_short_id, format_short_id_str, truncate_str};
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::identity::{EntityId, EntityPrefix};
@@ -409,91 +409,6 @@ fn sort_cached_results(results: &mut Vec<tdt_core::core::cache::CachedResult>, a
     }
 }
 
-/// Output full result entities
-fn output_results(
-    results: &[TestResult],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    if results.is_empty() {
-        match format {
-            OutputFormat::Json => println!("[]"),
-            OutputFormat::Yaml => println!("[]"),
-            _ => {
-                println!("No results found.");
-                println!();
-                println!("Create one with: {}", style("tdt rslt new").yellow());
-            }
-        }
-        return Ok(());
-    }
-
-    if args.count {
-        println!("{}", results.len());
-        return Ok(());
-    }
-
-    // Update short ID index with current results
-    short_ids.ensure_all(results.iter().map(|r| r.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&results).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&results).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            let columns: Vec<&str> = args
-                .columns
-                .iter()
-                .filter(|c| !matches!(c, ListColumn::Short))
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-
-            let rows: Vec<TableRow> = results
-                .iter()
-                .map(|r| result_to_row(r, short_ids))
-                .collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(RSLT_COLUMNS, "result", "RSLT").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for result in results {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&result.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", result.id);
-                }
-            }
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
-}
-
 fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let project = Project::discover().map_err(|e| miette::miette!("{}", e))?;
     let mut short_ids = ShortIdIndex::load(&project);
@@ -606,7 +521,26 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         results.truncate(limit);
     }
 
-    output_results(&results, &mut short_ids, &args, format, &project)
+    {
+        let visible: Vec<String> = args
+            .columns
+            .iter()
+            .filter(|c| !matches!(c, ListColumn::Short))
+            .map(|c| c.to_string())
+            .collect();
+        crate::cli::entity_cmd::output_entity_list(
+            &results,
+            &RSLT_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            result_to_row,
+        )
+    }
 }
 
 /// Convert a TestResult to a TableRow

@@ -124,6 +124,71 @@ pub fn output_cached_list<T>(
     }
 }
 
+/// Output a full-entity list in any format.
+///
+/// The slow-path twin of [`output_cached_list`]: same count/empty/table
+/// handling, plus JSON/YAML serialization of the full entities. `-o path`
+/// is not available here (full entities don't carry file paths); it exits
+/// with a clear error, matching the previous per-entity behavior.
+///
+/// Also ensures short IDs exist for every listed entity and persists the
+/// index, which every per-entity implementation did before formatting.
+#[allow(clippy::too_many_arguments)]
+pub fn output_entity_list<T: Serialize>(
+    items: &[T],
+    spec: &CachedListSpec,
+    visible_columns: &[String],
+    wrap: Option<usize>,
+    count_only: bool,
+    format: OutputFormat,
+    project: &Project,
+    short_ids: &mut ShortIdIndex,
+    id_of: impl Fn(&T) -> String,
+    to_row: impl Fn(&T, &ShortIdIndex) -> crate::cli::table::TableRow,
+) -> Result<()> {
+    use crate::cli::table::{TableConfig, TableFormatter};
+
+    if count_only {
+        println!("{}", items.len());
+        return Ok(());
+    }
+    if items.is_empty() {
+        println!("{}", spec.empty_message);
+        return Ok(());
+    }
+
+    short_ids.ensure_all(items.iter().map(&id_of));
+    crate::cli::commands::utils::save_short_ids(short_ids, project);
+
+    match format {
+        OutputFormat::Json => {
+            let json = serde_json::to_string_pretty(items).into_diagnostic()?;
+            println!("{}", json);
+        }
+        OutputFormat::Yaml => {
+            let yaml = serde_yml::to_string(items).into_diagnostic()?;
+            print!("{}", yaml);
+        }
+        OutputFormat::Auto | OutputFormat::Path => {
+            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
+            std::process::exit(2);
+        }
+        _ => {
+            let visible: Vec<&str> = visible_columns.iter().map(|s| s.as_str()).collect();
+            let config = match wrap {
+                Some(width) => TableConfig::with_wrap(width),
+                None => TableConfig::default(),
+            };
+            let rows: Vec<crate::cli::table::TableRow> =
+                items.iter().map(|i| to_row(i, short_ids)).collect();
+            TableFormatter::new(spec.columns, spec.entity_name, spec.entity_prefix)
+                .with_config(config)
+                .output(rows, format, &visible);
+        }
+    }
+    Ok(())
+}
+
 // =========================================================================
 // Common Show Implementation
 // =========================================================================

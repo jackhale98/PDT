@@ -98,6 +98,14 @@ const SUP_COLUMNS: &[ColumnDef] = &[
     ColumnDef::new("created", "CREATED", 12),
 ];
 
+const SUP_LIST_SPEC: crate::cli::entity_cmd::CachedListSpec =
+    crate::cli::entity_cmd::CachedListSpec {
+        columns: SUP_COLUMNS,
+        entity_name: "supplier",
+        entity_prefix: "SUP",
+        empty_message: "No suppliers found.",
+    };
+
 #[derive(clap::Args, Debug)]
 pub struct ListArgs {
     /// Filter by status
@@ -333,70 +341,6 @@ fn sort_cached_suppliers(entities: &mut [CachedSupplier], sort: ListColumn, reve
     });
 }
 
-/// Output suppliers in the requested format
-fn output_suppliers(
-    suppliers: &[Supplier],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // Update short ID index
-    short_ids.ensure_all(suppliers.iter().map(|s| s.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&suppliers).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&suppliers).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Tsv
-        | OutputFormat::Csv
-        | OutputFormat::Md
-        | OutputFormat::Id
-        | OutputFormat::ShortId
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build visible columns list
-            let mut visible: Vec<&str> = args
-                .columns
-                .iter()
-                .map(|c| c.to_string().leak() as &str)
-                .collect();
-            if args.show_id && !visible.contains(&"id") {
-                visible.insert(0, "id");
-            }
-
-            // Convert to TableRows
-            let rows: Vec<TableRow> = suppliers
-                .iter()
-                .map(|sup| supplier_to_row(sup, short_ids))
-                .collect();
-
-            // Configure table
-            let config = if let Some(width) = args.wrap {
-                TableConfig::with_wrap(width)
-            } else {
-                TableConfig::default()
-            };
-
-            let formatter = TableFormatter::new(SUP_COLUMNS, "supplier", "SUP").with_config(config);
-            formatter.output(rows, format, &visible);
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
-}
-
 /// Convert a Supplier to a TableRow
 fn supplier_to_row(sup: &Supplier, short_ids: &ShortIdIndex) -> TableRow {
     // Format capabilities display
@@ -582,7 +526,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    output_suppliers(&suppliers, &mut short_ids, &args, format, &project)
+    {
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &suppliers,
+            &SUP_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            supplier_to_row,
+        )
+    }
 }
 
 /// Convert a cached supplier to a TableRow

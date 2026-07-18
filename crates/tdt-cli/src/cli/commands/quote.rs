@@ -7,7 +7,7 @@ use miette::{IntoDiagnostic, Result};
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::filters::StatusFilter;
 use crate::cli::helpers::{format_short_id, truncate_str};
-use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
+use crate::cli::table::{CellValue, ColumnDef, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
 use tdt_core::core::cache::EntityCache;
 use tdt_core::core::identity::{EntityId, EntityPrefix};
@@ -467,67 +467,6 @@ fn sort_cached_quotes(entities: &mut [CachedQuote], sort: ListColumn, reverse: b
     });
 }
 
-/// Output quotes in the requested format
-fn output_quotes(
-    quotes: &[Quote],
-    short_ids: &mut ShortIdIndex,
-    args: &ListArgs,
-    format: OutputFormat,
-    project: &Project,
-) -> Result<()> {
-    // Update short ID index
-    short_ids.ensure_all(quotes.iter().map(|q| q.id.to_string()));
-    super::utils::save_short_ids(short_ids, project);
-
-    match format {
-        OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&quotes).into_diagnostic()?;
-            println!("{}", json);
-        }
-        OutputFormat::Yaml => {
-            let yaml = serde_yml::to_string(&quotes).into_diagnostic()?;
-            print!("{}", yaml);
-        }
-        OutputFormat::Csv
-        | OutputFormat::Tsv
-        | OutputFormat::Md
-        | OutputFormat::Table
-        | OutputFormat::Dot
-        | OutputFormat::Tree => {
-            // Build columns list, adding ID column if --show-id is set
-            let mut columns: Vec<&str> = if args.show_id { vec!["id"] } else { vec![] };
-            columns.extend(args.columns.iter().map(|c| c.to_string().leak() as &str));
-
-            let rows: Vec<TableRow> = quotes.iter().map(|q| quote_to_row(q, short_ids)).collect();
-
-            let config = TableConfig {
-                wrap_width: args.wrap,
-                show_summary: true,
-            };
-            let formatter = TableFormatter::new(QUOTE_COLUMNS, "quote", "QUOT").with_config(config);
-            formatter.output(rows, format, &columns);
-        }
-        OutputFormat::Id | OutputFormat::ShortId => {
-            for quote in quotes {
-                if format == OutputFormat::ShortId {
-                    let short_id = short_ids
-                        .get_short_id(&quote.id.to_string())
-                        .unwrap_or_default();
-                    println!("{}", short_id);
-                } else {
-                    println!("{}", quote.id);
-                }
-            }
-        }
-        OutputFormat::Auto | OutputFormat::Path => {
-            eprintln!("error: -o path is not supported for this view; use -o id to get entity IDs");
-            std::process::exit(2);
-        }
-    }
-
-    Ok(())
-}
-
 /// Run a quote subcommand
 pub fn run(cmd: QuoteCommands, global: &GlobalOpts) -> Result<()> {
     match cmd {
@@ -675,7 +614,24 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         return Ok(());
     }
 
-    output_quotes(&quotes, &mut short_ids, &args, format, &project)
+    {
+        let mut visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
+        if args.show_id && !visible.iter().any(|c| c == "id") {
+            visible.insert(0, "id".to_string());
+        }
+        crate::cli::entity_cmd::output_entity_list(
+            &quotes,
+            &QUOTE_LIST_SPEC,
+            &visible,
+            args.wrap,
+            args.count,
+            format,
+            &project,
+            &mut short_ids,
+            |x| x.id.to_string(),
+            quote_to_row,
+        )
+    }
 }
 
 /// Convert a full Quote entity to a TableRow

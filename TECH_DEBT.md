@@ -20,13 +20,22 @@ This duplication is where this review found whole classes of copy-drift bugs
 (`-o path` panics in 22 places, wrong directory tables in bulk ops, a wrong
 `QUOTE` prefix, `risk new` writing to a different directory than it printed).
 
-**Consolidation sketch:** extend the existing generic in
-`cli/entity_cmd.rs` (`run_edit_generic` already proves the pattern). Define a
-per-entity descriptor (prefix, dirs from `Project`, column defs, filter
-enum) and write one generic `run_list`/`output_cached`/`run_delete`/`run_new`
-parameterized over it. Estimated saving: 10–20k lines and a single place to
-fix list/output behavior. Do this as its own reviewed change, not mixed with
-feature work.
+**Progress:**
+- ~~output_cached_* duplication~~ — **resolved**: one generic
+  (`entity_cmd::output_cached_list`) serves 10 entities.
+- ~~slow-path output_* duplication~~ — **resolved**: one generic
+  (`entity_cmd::output_entity_list`) serves 15 entities (lot/dev keep their
+  custom CSV renderers; haz has a fixed column set).
+- ~~entity-directory tables~~ — **resolved**:
+  `Project::entity_search_directories` is the single source.
+- ~~Auto→TSV format resolution~~ — **resolved**: `GlobalOpts::list_format()`
+  replaced 26 copies.
+
+**Remaining in this area:** the per-entity `ListColumn` enums/impls (~460
+lines, macro candidate), the `run_list` filter-building and dispatch (mostly
+entity-specific — generifying further has poor risk/reward), and `new`/`show`
+ceremony. Generifying `new`/`show` displays is NOT recommended: they differ
+meaningfully per entity.
 
 ## 2. Dual git implementations
 

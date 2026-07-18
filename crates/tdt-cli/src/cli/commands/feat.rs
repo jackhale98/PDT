@@ -344,10 +344,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         &cache,
     );
 
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     // Resolve component filter if provided
     let component_filter = args

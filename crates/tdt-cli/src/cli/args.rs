@@ -176,6 +176,16 @@ pub struct GlobalOpts {
     pub project: Option<PathBuf>,
 }
 
+impl GlobalOpts {
+    /// Resolve the output format for list views: `auto` means TSV tables.
+    pub fn list_format(&self) -> OutputFormat {
+        match self.output {
+            OutputFormat::Auto => OutputFormat::Tsv,
+            f => f,
+        }
+    }
+}
+
 /// Subcommands grouped logically by function area
 #[derive(Subcommand)]
 pub enum Commands {

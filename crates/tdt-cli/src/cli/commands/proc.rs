@@ -369,10 +369,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         &cache,
     );
 
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     let filter = build_proc_filter(&args);
 

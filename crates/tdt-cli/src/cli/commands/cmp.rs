@@ -455,10 +455,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let (sort_field, sort_dir) = build_cmp_sort(&args);
 
     // Determine output format
-    let output_format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let output_format = global.list_format();
 
     // Determine if we need full entities (complex filters or full output)
     let needs_full_output = matches!(output_format, OutputFormat::Json | OutputFormat::Yaml);

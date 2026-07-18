@@ -525,10 +525,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     let (sort_field, sort_dir) = build_test_sort(&args);
 
     // Determine output format
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     // Determine if we need full entities
     let needs_full_output = matches!(format, OutputFormat::Json | OutputFormat::Yaml);

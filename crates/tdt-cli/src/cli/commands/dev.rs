@@ -1011,10 +1011,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         &cache,
     );
 
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     // Build filter from CLI args
     let filter = build_dev_filter(&args);
@@ -1192,10 +1189,7 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
         .map_err(|e| miette::miette!("{}", e))?
         .ok_or_else(|| miette::miette!("No deviation found matching '{}'", args.id))?;
 
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     match format {
         OutputFormat::Json => {

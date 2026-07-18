@@ -520,10 +520,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     }
 
     let mut short_ids = ShortIdIndex::load(&project);
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
     let visible: Vec<String> = args.columns.iter().map(|c| c.to_string()).collect();
     crate::cli::entity_cmd::output_entity_list(
         &assemblies,
@@ -918,10 +915,7 @@ fn run_bom(args: BomArgs, global: &GlobalOpts) -> Result<()> {
             .collect();
 
     // Display BOM
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     println!();
     println!(

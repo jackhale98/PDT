@@ -538,10 +538,7 @@ fn run_list_with_test_filters(
     cache: &EntityCache,
     allowed_ids: Option<&std::collections::HashSet<String>>,
 ) -> Result<()> {
-    let output_format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let output_format = global.list_format();
 
     // Load full entities via service (needed for link access)
     let result = service

@@ -774,10 +774,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
         &cache,
     );
 
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     // Build filter from CLI args
     let filter = build_lot_filter(&args);

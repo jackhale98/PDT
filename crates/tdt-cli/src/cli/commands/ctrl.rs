@@ -360,10 +360,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     );
 
     // Determine output format
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     // Check if we can use the fast cache path:
     // - No type filter (control_type not in base cache)

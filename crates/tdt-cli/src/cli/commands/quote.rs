@@ -496,10 +496,7 @@ fn run_list(args: ListArgs, global: &GlobalOpts) -> Result<()> {
     );
 
     // Determine output format
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     // Check if we can use the fast cache path:
     // - No assembly filter (cache doesn't store this)
@@ -1145,10 +1142,7 @@ fn run_compare(args: CompareArgs, global: &GlobalOpts) -> Result<()> {
     super::utils::save_short_ids(&mut short_ids, &project);
 
     // Output comparison
-    let format = match global.output {
-        OutputFormat::Auto => OutputFormat::Tsv,
-        f => f,
-    };
+    let format = global.list_format();
 
     match format {
         OutputFormat::Json => {

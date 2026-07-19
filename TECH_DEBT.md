@@ -31,11 +31,14 @@ This duplication is where this review found whole classes of copy-drift bugs
 - ~~Auto→TSV format resolution~~ — **resolved**: `GlobalOpts::list_format()`
   replaced 26 copies.
 
-**Remaining in this area:** the per-entity `ListColumn` enums/impls (~460
-lines, macro candidate), the `run_list` filter-building and dispatch (mostly
-entity-specific — generifying further has poor risk/reward), and `new`/`show`
-ceremony. Generifying `new`/`show` displays is NOT recommended: they differ
-meaningfully per entity.
+- ~~per-entity `ListColumn` enums/impls~~ — **resolved**: `list_columns!`
+  macro generates enum + clap value names + `key()` + `Display` consistently
+  (help output verified byte-identical).
+
+**Remaining in this area:** the `run_list` filter-building and dispatch
+(mostly entity-specific — generifying further has poor risk/reward) and
+`new`/`show` ceremony. Generifying `new`/`show` displays is NOT recommended:
+they differ meaningfully per entity.
 
 ## 2. Dual git implementations
 

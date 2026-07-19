@@ -136,33 +136,18 @@ pub struct ListArgs {
     pub via: Option<String>,
 }
 
-/// Columns to display in list output
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum ListColumn {
-    Id,
-    Title,
-    Supplier,
-    Component,
-    Price,
-    QuoteStatus,
-    Status,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::Supplier => write!(f, "supplier"),
-            ListColumn::Component => write!(f, "component"),
-            ListColumn::Price => write!(f, "price"),
-            ListColumn::QuoteStatus => write!(f, "quote-status"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// Columns to display in list output
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        Supplier => "supplier",
+        Component => "component",
+        Price => "price",
+        QuoteStatus => "quote-status",
+        Status => "status",
+        Author => "author",
+        Created => "created",
     }
 }
 

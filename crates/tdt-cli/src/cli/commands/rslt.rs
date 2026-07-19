@@ -58,31 +58,17 @@ pub enum VerdictFilter {
     All,
 }
 
-/// Columns to display in list output
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum ListColumn {
-    Short,
-    Id,
-    Title,
-    Test,
-    Verdict,
-    Status,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Short => write!(f, "short"),
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::Test => write!(f, "test"),
-            ListColumn::Verdict => write!(f, "verdict"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// Columns to display in list output
+    pub enum ListColumn {
+        Short => "short",
+        Id => "id",
+        Title => "title",
+        Test => "test",
+        Verdict => "verdict",
+        Status => "status",
+        Author => "author",
+        Created => "created",
     }
 }
 

@@ -193,36 +193,16 @@ pub struct ListArgs {
     pub via: Option<String>,
 }
 
-/// Column selection for list output
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum ListColumn {
-    Id,
-    Title,
-    ProcessType,
-    Operation,
-    Status,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.key())
-    }
-}
-
-impl ListColumn {
-    /// Get the column key for use with TableFormatter
-    pub const fn key(&self) -> &'static str {
-        match self {
-            ListColumn::Id => "id",
-            ListColumn::Title => "title",
-            ListColumn::ProcessType => "process-type",
-            ListColumn::Operation => "operation",
-            ListColumn::Status => "status",
-            ListColumn::Author => "author",
-            ListColumn::Created => "created",
-        }
+crate::list_columns! {
+    /// Column selection for list output
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        ProcessType => "process-type",
+        Operation => "operation",
+        Status => "status",
+        Author => "author",
+        Created => "created",
     }
 }
 

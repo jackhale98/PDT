@@ -101,39 +101,21 @@ pub enum RiskLevelFilter {
     All,
 }
 
-/// Columns to display in list output
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum ListColumn {
-    Id,
-    Type,
-    Title,
-    Status,
-    RiskLevel,
-    Severity,
-    Occurrence,
-    Detection,
-    Rpn,
-    Category,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Type => write!(f, "type"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::RiskLevel => write!(f, "risk-level"),
-            ListColumn::Severity => write!(f, "severity"),
-            ListColumn::Occurrence => write!(f, "occurrence"),
-            ListColumn::Detection => write!(f, "detection"),
-            ListColumn::Rpn => write!(f, "rpn"),
-            ListColumn::Category => write!(f, "category"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// Columns to display in list output
+    pub enum ListColumn {
+        Id => "id",
+        Type => "type",
+        Title => "title",
+        Status => "status",
+        RiskLevel => "risk-level",
+        Severity => "severity",
+        Occurrence => "occurrence",
+        Detection => "detection",
+        Rpn => "rpn",
+        Category => "category",
+        Author => "author",
+        Created => "created",
     }
 }
 

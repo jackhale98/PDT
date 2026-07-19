@@ -1,6 +1,6 @@
 //! `tdt work` command - Work instruction management
 
-use clap::{Subcommand, ValueEnum};
+use clap::Subcommand;
 use console::style;
 use miette::{IntoDiagnostic, Result};
 
@@ -127,27 +127,15 @@ fn parse_data_field(s: &str) -> std::result::Result<(String, String), String> {
     Ok((parts[0].to_string(), parts[1].to_string()))
 }
 
-/// Column to display in list output
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum ListColumn {
-    Id,
-    Title,
-    DocNumber,
-    Status,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::DocNumber => write!(f, "doc-number"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// Column to display in list output
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        DocNumber => "doc-number",
+        Status => "status",
+        Author => "author",
+        Created => "created",
     }
 }
 

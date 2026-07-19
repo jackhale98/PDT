@@ -101,29 +101,16 @@ pub enum LotStatusFilter {
     All,
 }
 
-/// List column for display and sorting
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
-pub enum ListColumn {
-    Id,
-    Title,
-    LotNumber,
-    Quantity,
-    LotStatus,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::LotNumber => write!(f, "lot-number"),
-            ListColumn::Quantity => write!(f, "quantity"),
-            ListColumn::LotStatus => write!(f, "lot-status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// List column for display and sorting
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        LotNumber => "lot-number",
+        Quantity => "quantity",
+        LotStatus => "lot-status",
+        Author => "author",
+        Created => "created",
     }
 }
 

@@ -58,31 +58,17 @@ pub enum CapabilityFilter {
     All,
 }
 
-/// Columns to display in list output
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum ListColumn {
-    Id,
-    Name,
-    ShortName,
-    Status,
-    Website,
-    Capabilities,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Name => write!(f, "name"),
-            ListColumn::ShortName => write!(f, "short-name"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Website => write!(f, "website"),
-            ListColumn::Capabilities => write!(f, "capabilities"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// Columns to display in list output
+    pub enum ListColumn {
+        Id => "id",
+        Name => "name",
+        ShortName => "short-name",
+        Status => "status",
+        Website => "website",
+        Capabilities => "capabilities",
+        Author => "author",
+        Created => "created",
     }
 }
 

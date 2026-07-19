@@ -1,10 +1,9 @@
 //! `tdt asm` command - Assembly management
 
-use clap::{Subcommand, ValueEnum};
+use clap::Subcommand;
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::collections::HashSet;
-use std::fmt;
 use std::fs;
 
 use crate::cli::filters::StatusFilter;
@@ -126,33 +125,18 @@ pub struct RoutingSetArgs {
     pub procs: Vec<String>,
 }
 
-/// List column types
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum ListColumn {
-    Short,
-    Id,
-    PartNumber,
-    Title,
-    Status,
-    Author,
-    Created,
-}
-
-impl fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ListColumn::Short => write!(f, "short"),
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::PartNumber => write!(f, "part-number"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// List column types
+    pub enum ListColumn {
+        Short => "short",
+        Id => "id",
+        PartNumber => "part-number",
+        Title => "title",
+        Status => "status",
+        Author => "author",
+        Created => "created",
     }
 }
-
-impl ListColumn {}
 
 /// Column definitions for TableFormatter
 const ASM_COLUMNS: &[ColumnDef] = &[

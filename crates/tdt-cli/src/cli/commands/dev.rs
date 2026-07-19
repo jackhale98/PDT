@@ -217,42 +217,18 @@ pub enum DevStatusFilter {
     All,
 }
 
-/// List column for display and sorting
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq)]
-pub enum ListColumn {
-    #[value(name = "id")]
-    Id,
-    #[value(name = "title")]
-    Title,
-    #[value(name = "dev-number")]
-    DevNumber,
-    #[value(name = "dev-type")]
-    DevType,
-    #[value(name = "category")]
-    Category,
-    #[value(name = "risk")]
-    Risk,
-    #[value(name = "dev-status")]
-    DevStatus,
-    #[value(name = "author")]
-    Author,
-    #[value(name = "created")]
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::DevNumber => write!(f, "dev-number"),
-            ListColumn::DevType => write!(f, "dev-type"),
-            ListColumn::Category => write!(f, "category"),
-            ListColumn::Risk => write!(f, "risk"),
-            ListColumn::DevStatus => write!(f, "dev-status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// List column for display and sorting
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        DevNumber => "dev-number",
+        DevType => "dev-type",
+        Category => "category",
+        Risk => "risk",
+        DevStatus => "dev-status",
+        Author => "author",
+        Created => "created",
     }
 }
 

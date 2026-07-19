@@ -174,31 +174,17 @@ pub enum NcrStatusFilter {
     All,
 }
 
-/// List column for display and sorting
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum ListColumn {
-    Id,
-    Title,
-    NcrType,
-    Severity,
-    Status,
-    DaysOpen,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::NcrType => write!(f, "ncr-type"),
-            ListColumn::Severity => write!(f, "severity"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::DaysOpen => write!(f, "days-open"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// List column for display and sorting
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        NcrType => "ncr-type",
+        Severity => "severity",
+        Status => "status",
+        DaysOpen => "days-open",
+        Author => "author",
+        Created => "created",
     }
 }
 

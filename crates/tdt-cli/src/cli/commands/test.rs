@@ -194,35 +194,19 @@ pub enum TestMethodFilter {
     All,
 }
 
-/// Columns to display in list output
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum ListColumn {
-    Id,
-    Type,
-    Level,
-    Method,
-    Title,
-    Status,
-    Priority,
-    Category,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Type => write!(f, "type"),
-            ListColumn::Level => write!(f, "level"),
-            ListColumn::Method => write!(f, "method"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Priority => write!(f, "priority"),
-            ListColumn::Category => write!(f, "category"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// Columns to display in list output
+    pub enum ListColumn {
+        Id => "id",
+        Type => "type",
+        Level => "level",
+        Method => "method",
+        Title => "title",
+        Status => "status",
+        Priority => "priority",
+        Category => "category",
+        Author => "author",
+        Created => "created",
     }
 }
 

@@ -91,35 +91,19 @@ pub enum ResultFilter {
     All,
 }
 
-/// List column selection
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum ListColumn {
-    Id,
-    Title,
-    Result,
-    Cpk,
-    Yield,
-    Disposition,
-    Status,
-    Critical,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::Result => write!(f, "result"),
-            ListColumn::Cpk => write!(f, "cpk"),
-            ListColumn::Yield => write!(f, "yield"),
-            ListColumn::Disposition => write!(f, "disposition"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Critical => write!(f, "critical"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// List column selection
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        Result => "result",
+        Cpk => "cpk",
+        Yield => "yield",
+        Disposition => "disposition",
+        Status => "status",
+        Critical => "critical",
+        Author => "author",
+        Created => "created",
     }
 }
 

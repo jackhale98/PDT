@@ -82,35 +82,19 @@ pub enum TypeFilter {
     All,
 }
 
-/// List column selection
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum ListColumn {
-    Id,
-    Title,
-    MateType,
-    FitResult,
-    Match,
-    FeatureA,
-    FeatureB,
-    Status,
-    Author,
-    Created,
-}
-
-impl std::fmt::Display for ListColumn {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ListColumn::Id => write!(f, "id"),
-            ListColumn::Title => write!(f, "title"),
-            ListColumn::MateType => write!(f, "mate-type"),
-            ListColumn::FitResult => write!(f, "fit-result"),
-            ListColumn::Match => write!(f, "match"),
-            ListColumn::FeatureA => write!(f, "feature-a"),
-            ListColumn::FeatureB => write!(f, "feature-b"),
-            ListColumn::Status => write!(f, "status"),
-            ListColumn::Author => write!(f, "author"),
-            ListColumn::Created => write!(f, "created"),
-        }
+crate::list_columns! {
+    /// List column selection
+    pub enum ListColumn {
+        Id => "id",
+        Title => "title",
+        MateType => "mate-type",
+        FitResult => "fit-result",
+        Match => "match",
+        FeatureA => "feature-a",
+        FeatureB => "feature-b",
+        Status => "status",
+        Author => "author",
+        Created => "created",
     }
 }
 

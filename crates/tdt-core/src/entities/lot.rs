@@ -1,5 +1,6 @@
 //! LOT entity type - Production Lot / Batch (Device History Record)
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -371,23 +372,23 @@ pub struct ExecutionStep {
 pub struct LotLinks {
     /// Product being made (ASM or CMP ID)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub product: Option<String>,
+    pub product: Option<LinkRef>,
 
     /// Process entities in sequence
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub processes: Vec<String>,
+    pub processes: Vec<LinkRef>,
 
     /// Work instruction entities
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub work_instructions: Vec<String>,
+    pub work_instructions: Vec<LinkRef>,
 
     /// NCRs raised during production
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub ncrs: Vec<String>,
+    pub ncrs: Vec<LinkRef>,
 
     /// In-process inspection results
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub results: Vec<String>,
+    pub results: Vec<LinkRef>,
 }
 
 /// Production Lot / Batch entity (Device History Record)

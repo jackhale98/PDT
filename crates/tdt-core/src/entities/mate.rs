@@ -3,6 +3,7 @@
 //! A mate represents direct contact between two features, such as a pin in a hole.
 //! The fit analysis is automatically calculated based on the feature dimensions.
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, Utc};
 use miette::{miette, Result};
 use serde::{Deserialize, Serialize};
@@ -315,11 +316,11 @@ impl StatisticalFit {
 pub struct MateLinks {
     /// Stackups using this mate
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub used_in_stackups: Vec<String>,
+    pub used_in_stackups: Vec<LinkRef>,
 
     /// Requirements verified by this mate
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub verifies: Vec<String>,
+    pub verifies: Vec<LinkRef>,
 }
 
 /// Cached feature reference info for mates (denormalized for readability, validated on check)

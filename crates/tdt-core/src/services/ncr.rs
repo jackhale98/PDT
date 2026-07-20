@@ -12,6 +12,7 @@ use crate::core::entity::Status;
 use crate::core::identity::{EntityId, EntityPrefix};
 use crate::core::loader;
 use crate::core::project::Project;
+use crate::core::suspect::LinkRef;
 use crate::entities::ncr::{
     AffectedItems, ContainmentAction, ContainmentStatus, CostImpact, Defect, Detection,
     DetectionStage, Disposition, DispositionDecision, Ncr, NcrCategory, NcrLinks, NcrSeverity,
@@ -444,7 +445,8 @@ impl<'a> NcrService<'a> {
                 lot: input
                     .lot_ids
                     .into_iter()
-                    .filter_map(|s| s.parse().ok())
+                    .filter_map(|s| s.parse::<EntityId>().ok())
+                    .map(LinkRef::from)
                     .collect(),
                 ..Default::default()
             },
@@ -769,7 +771,7 @@ impl<'a> NcrService<'a> {
     pub fn set_component_link(&self, id: &str, component_id: EntityId) -> ServiceResult<Ncr> {
         let (_, mut ncr) = self.find_ncr(id)?;
 
-        ncr.links.component = Some(component_id);
+        ncr.links.component = Some(LinkRef::from(component_id));
         ncr.entity_revision += 1;
 
         // Save
@@ -783,7 +785,7 @@ impl<'a> NcrService<'a> {
     pub fn set_capa_link(&self, id: &str, capa_id: EntityId) -> ServiceResult<Ncr> {
         let (_, mut ncr) = self.find_ncr(id)?;
 
-        ncr.links.capa = Some(capa_id);
+        ncr.links.capa = Some(LinkRef::from(capa_id));
         ncr.entity_revision += 1;
 
         // Save
@@ -797,8 +799,8 @@ impl<'a> NcrService<'a> {
     pub fn add_lot_link(&self, id: &str, lot_id: EntityId) -> ServiceResult<Ncr> {
         let (_, mut ncr) = self.find_ncr(id)?;
 
-        if !ncr.links.lot.contains(&lot_id) {
-            ncr.links.lot.push(lot_id);
+        if !ncr.links.lot.iter().any(|l| *l == lot_id) {
+            ncr.links.lot.push(LinkRef::from(lot_id));
         }
         ncr.entity_revision += 1;
 
@@ -813,7 +815,7 @@ impl<'a> NcrService<'a> {
         let (_, mut ncr) = self.find_ncr(id)?;
 
         let original_len = ncr.links.lot.len();
-        ncr.links.lot.retain(|l| l != lot_id);
+        ncr.links.lot.retain(|l| *l != *lot_id);
 
         if ncr.links.lot.len() == original_len {
             return Err(ServiceError::NotFound(format!(

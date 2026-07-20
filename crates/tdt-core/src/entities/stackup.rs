@@ -3,6 +3,7 @@
 //! A stackup represents a tolerance chain with multiple dimensional contributors.
 //! Supports worst-case, RSS (statistical), and Monte Carlo analysis methods.
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, Utc};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -637,11 +638,11 @@ impl std::fmt::Display for Disposition {
 pub struct StackupLinks {
     /// Requirements verified by this stackup
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub verifies: Vec<String>,
+    pub verifies: Vec<LinkRef>,
 
     /// Mates used in this stackup
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mates_used: Vec<String>,
+    pub mates_used: Vec<LinkRef>,
 }
 
 /// Stackup entity - tolerance chain analysis

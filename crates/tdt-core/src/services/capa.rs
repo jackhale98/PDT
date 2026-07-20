@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and workflow management for CAPAs.
 
+use crate::core::suspect::LinkRef;
 use chrono::{NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -679,8 +680,8 @@ impl<'a> CapaService<'a> {
     pub fn add_ncr_link(&self, id: &str, ncr_id: &EntityId) -> ServiceResult<Capa> {
         let (_, mut capa) = self.find_capa(id)?;
 
-        if !capa.links.ncrs.contains(ncr_id) {
-            capa.links.ncrs.push(ncr_id.clone());
+        if !capa.links.ncrs.iter().any(|l| *l == *ncr_id) {
+            capa.links.ncrs.push(LinkRef::from(ncr_id));
         }
         capa.entity_revision += 1;
 
@@ -694,8 +695,8 @@ impl<'a> CapaService<'a> {
     pub fn add_risk_link(&self, id: &str, risk_id: &EntityId) -> ServiceResult<Capa> {
         let (_, mut capa) = self.find_capa(id)?;
 
-        if !capa.links.risks.contains(risk_id) {
-            capa.links.risks.push(risk_id.clone());
+        if !capa.links.risks.iter().any(|l| *l == *risk_id) {
+            capa.links.risks.push(LinkRef::from(risk_id));
         }
         capa.entity_revision += 1;
 
@@ -997,7 +998,7 @@ mod tests {
         let ncr_id = EntityId::new(EntityPrefix::Ncr);
         let capa = service.add_ncr_link(&capa.id.to_string(), &ncr_id).unwrap();
 
-        assert!(capa.links.ncrs.contains(&ncr_id));
+        assert!(capa.links.ncrs.iter().any(|l| *l == ncr_id));
     }
 
     #[test]

@@ -43,6 +43,11 @@ pub struct ExtendedLinkRef {
     /// Target entity ID
     pub id: String,
 
+    /// Cached title of the target entity (written by `tdt link add` so links
+    /// stay human-readable in the YAML)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+
     /// Whether the link is suspect (needs review)
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub suspect: bool,
@@ -65,6 +70,7 @@ impl ExtendedLinkRef {
     pub fn new(id: impl Into<String>) -> Self {
         Self {
             id: id.into(),
+            title: None,
             suspect: false,
             suspect_reason: None,
             suspect_since: None,
@@ -154,6 +160,71 @@ impl From<String> for LinkRef {
 impl From<&str> for LinkRef {
     fn from(s: &str) -> Self {
         LinkRef::Simple(s.to_string())
+    }
+}
+
+impl From<crate::core::identity::EntityId> for LinkRef {
+    fn from(id: crate::core::identity::EntityId) -> Self {
+        LinkRef::Simple(id.to_string())
+    }
+}
+
+impl From<&crate::core::identity::EntityId> for LinkRef {
+    fn from(id: &crate::core::identity::EntityId) -> Self {
+        LinkRef::Simple(id.to_string())
+    }
+}
+
+// Links are equal when they point at the same entity — metadata (title,
+// suspect state) is bookkeeping, not identity. This keeps `contains`-style
+// call sites working across the Simple/Extended representations.
+impl PartialEq for LinkRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.id() == other.id()
+    }
+}
+
+impl Eq for LinkRef {}
+
+impl PartialEq<crate::core::identity::EntityId> for LinkRef {
+    fn eq(&self, other: &crate::core::identity::EntityId) -> bool {
+        // EntityId's Display is its canonical string form
+        *self.id() == other.to_string()
+    }
+}
+
+impl PartialEq<str> for LinkRef {
+    fn eq(&self, other: &str) -> bool {
+        self.id() == other
+    }
+}
+
+impl PartialEq<String> for LinkRef {
+    fn eq(&self, other: &String) -> bool {
+        self.id() == other
+    }
+}
+
+impl PartialEq<&str> for LinkRef {
+    fn eq(&self, other: &&str) -> bool {
+        self.id() == *other
+    }
+}
+
+impl std::str::FromStr for LinkRef {
+    type Err = <crate::core::identity::EntityId as std::str::FromStr>::Err;
+
+    /// Parse a bare ID string into a simple link, validating it as an
+    /// EntityId first (same validation the previous `EntityId` fields had).
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let id: crate::core::identity::EntityId = s.parse()?;
+        Ok(LinkRef::from(id))
+    }
+}
+
+impl std::fmt::Display for LinkRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.id())
     }
 }
 

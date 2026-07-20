@@ -4,6 +4,7 @@ use clap::{Subcommand, ValueEnum};
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
+use tdt_core::core::suspect::LinkRef;
 
 use crate::cli::table::{CellValue, ColumnDef, TableConfig, TableFormatter, TableRow};
 use crate::cli::{GlobalOpts, OutputFormat};
@@ -549,7 +550,10 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
 
         // Load, modify, and save the hazard with the link
         let mut updated_hazard = hazard.clone();
-        updated_hazard.links.originates_from.push(source_id);
+        updated_hazard
+            .links
+            .originates_from
+            .push(LinkRef::from(source_id));
         let yaml = serde_yml::to_string(&updated_hazard).into_diagnostic()?;
         std::fs::write(&file_path, yaml).into_diagnostic()?;
     }

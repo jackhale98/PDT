@@ -1,5 +1,6 @@
 //! Assembly entity - Groups of components and sub-assemblies
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -57,39 +58,39 @@ pub struct Document {
 pub struct AssemblyLinks {
     /// Related entities
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_to: Vec<String>,
+    pub related_to: Vec<LinkRef>,
 
     /// Parent assembly ID if this is a sub-assembly
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub parent: Option<String>,
+    pub parent: Option<LinkRef>,
 
     /// Risks affecting this assembly (reciprocal of RISK.affects)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub risks: Vec<String>,
+    pub risks: Vec<LinkRef>,
 
     /// Requirements satisfied by this assembly (reciprocal of REQ.satisfied_by)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub requirements: Vec<String>,
+    pub requirements: Vec<LinkRef>,
 
     /// Features on this assembly (reciprocal of FEAT.component)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub features: Vec<String>,
+    pub features: Vec<LinkRef>,
 
     /// Tests for this assembly (reciprocal of TEST.assembly)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tests: Vec<String>,
+    pub tests: Vec<LinkRef>,
 
     /// Manufacturing processes (reciprocal of PROC.produces)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub processes: Vec<String>,
+    pub processes: Vec<LinkRef>,
 
     /// Hazards originating from this assembly (reciprocal of HAZ.originates_from)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub hazards: Vec<String>,
+    pub hazards: Vec<LinkRef>,
 
     /// Quotes for this assembly (reciprocal of QUOT.assembly)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub quotes: Vec<String>,
+    pub quotes: Vec<LinkRef>,
 }
 
 /// Assembly entity - collection of components and sub-assemblies

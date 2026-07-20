@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and safety analysis for hazards.
 
+use crate::core::suspect::LinkRef;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -489,8 +490,8 @@ impl<'a> HazardService<'a> {
     pub fn add_risk_link(&self, id: &str, risk_id: &EntityId) -> ServiceResult<Hazard> {
         let (_, mut hazard) = self.find_hazard(id)?;
 
-        if !hazard.links.causes.contains(risk_id) {
-            hazard.links.causes.push(risk_id.clone());
+        if !hazard.links.causes.iter().any(|l| *l == *risk_id) {
+            hazard.links.causes.push(LinkRef::from(risk_id));
         }
         hazard.revision += 1;
 
@@ -504,8 +505,8 @@ impl<'a> HazardService<'a> {
     pub fn add_control_link(&self, id: &str, control_id: &EntityId) -> ServiceResult<Hazard> {
         let (_, mut hazard) = self.find_hazard(id)?;
 
-        if !hazard.links.controlled_by.contains(control_id) {
-            hazard.links.controlled_by.push(control_id.clone());
+        if !hazard.links.controlled_by.iter().any(|l| *l == *control_id) {
+            hazard.links.controlled_by.push(LinkRef::from(control_id));
         }
         hazard.revision += 1;
 

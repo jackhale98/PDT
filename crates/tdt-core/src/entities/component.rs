@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 use crate::entities::assembly::ManufacturingConfig;
 use crate::entities::safety::{Asil, Dal, SwClass};
 
@@ -180,51 +181,51 @@ pub struct DatumFrame {
 pub struct ComponentLinks {
     /// Related entities (requirements, etc.)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_to: Vec<EntityId>,
+    pub related_to: Vec<LinkRef>,
 
     /// Assemblies that use this component
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub used_in: Vec<EntityId>,
+    pub used_in: Vec<LinkRef>,
 
     /// Components this replaces (supersedes)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub replaces: Vec<EntityId>,
+    pub replaces: Vec<LinkRef>,
 
     /// Components that replace this one (reciprocal of replaces)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub replaced_by: Vec<EntityId>,
+    pub replaced_by: Vec<LinkRef>,
 
     /// Interchangeable components (alternates)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub interchangeable_with: Vec<EntityId>,
+    pub interchangeable_with: Vec<LinkRef>,
 
     /// Risks affecting this component (reciprocal of RISK.affects)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub risks: Vec<EntityId>,
+    pub risks: Vec<LinkRef>,
 
     /// Requirements satisfied by this component (reciprocal of REQ.satisfied_by)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub requirements: Vec<EntityId>,
+    pub requirements: Vec<LinkRef>,
 
     /// Features on this component (reciprocal of FEAT.component)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub features: Vec<EntityId>,
+    pub features: Vec<LinkRef>,
 
     /// Tests for this component (reciprocal of TEST.component)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tests: Vec<EntityId>,
+    pub tests: Vec<LinkRef>,
 
     /// Manufacturing processes (reciprocal of PROC.produces)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub processes: Vec<EntityId>,
+    pub processes: Vec<LinkRef>,
 
     /// Hazards originating from this component (reciprocal of HAZ.originates_from)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub hazards: Vec<EntityId>,
+    pub hazards: Vec<LinkRef>,
 
     /// Quotes for this component (reciprocal of QUOT.component)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub quotes: Vec<String>,
+    pub quotes: Vec<LinkRef>,
 }
 
 /// A Component entity - individual part (purchased or manufactured)

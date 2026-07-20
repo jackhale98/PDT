@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// Process type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -181,31 +182,31 @@ fn default_min_approvals() -> u32 {
 pub struct ProcessLinks {
     /// Components produced by this process
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub produces: Vec<EntityId>,
+    pub produces: Vec<LinkRef>,
 
     /// Control plan items for this process
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub controls: Vec<EntityId>,
+    pub controls: Vec<LinkRef>,
 
     /// Work instructions for this process
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub work_instructions: Vec<EntityId>,
+    pub work_instructions: Vec<LinkRef>,
 
     /// Related risks
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub risks: Vec<EntityId>,
+    pub risks: Vec<LinkRef>,
 
     /// CAPAs that modified this process (reciprocal of CAPA.processes_modified)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub modified_by_capa: Vec<EntityId>,
+    pub modified_by_capa: Vec<LinkRef>,
 
     /// Supplier that performs this process (outsourced manufacturing)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supplier: Option<EntityId>,
+    pub supplier: Option<LinkRef>,
 
     /// Related entities
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_to: Vec<EntityId>,
+    pub related_to: Vec<LinkRef>,
 }
 
 /// A Process entity - manufacturing process definition

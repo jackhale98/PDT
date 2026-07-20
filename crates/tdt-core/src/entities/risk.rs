@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// Risk type - categorizes risk by source/domain
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -133,20 +134,20 @@ pub struct InitialRisk {
 pub struct RiskLinks {
     /// Related requirements or other entities
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_to: Vec<EntityId>,
+    pub related_to: Vec<LinkRef>,
 
     /// Design outputs that mitigate this risk
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mitigated_by: Vec<EntityId>,
+    pub mitigated_by: Vec<LinkRef>,
 
     /// Tests that verify risk mitigation
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub verified_by: Vec<EntityId>,
+    pub verified_by: Vec<LinkRef>,
 
     /// Entities affected by this risk (FEAT, CMP, ASM, PROC, etc.)
     /// Target type is inferred from the entity ID prefix
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub affects: Vec<EntityId>,
+    pub affects: Vec<LinkRef>,
 }
 
 /// A risk entity (FMEA item)
@@ -519,8 +520,8 @@ mod tests {
         let req_id = EntityId::new(EntityPrefix::Req);
         let test_id = EntityId::new(EntityPrefix::Test);
 
-        risk.links.related_to.push(req_id.clone());
-        risk.links.verified_by.push(test_id.clone());
+        risk.links.related_to.push(LinkRef::from(&req_id));
+        risk.links.verified_by.push(LinkRef::from(&test_id));
 
         let yaml = serde_yml::to_string(&risk).unwrap();
         let parsed: Risk = serde_yml::from_str(&yaml).unwrap();

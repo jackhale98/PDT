@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and analysis methods for tolerance stackups.
 
+use crate::core::suspect::LinkRef;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -737,8 +738,8 @@ impl<'a> StackupService<'a> {
     pub fn add_verifies_link(&self, id: &str, requirement_id: &str) -> ServiceResult<Stackup> {
         let (_, mut stackup) = self.find_stackup(id)?;
 
-        if !stackup.links.verifies.contains(&requirement_id.to_string()) {
-            stackup.links.verifies.push(requirement_id.to_string());
+        if !stackup.links.verifies.iter().any(|l| *l == requirement_id) {
+            stackup.links.verifies.push(LinkRef::from(requirement_id));
         }
         stackup.entity_revision += 1;
 
@@ -1103,12 +1104,12 @@ mod tests {
         let stackup = service
             .add_verifies_link(&stackup.id.to_string(), "REQ-001")
             .unwrap();
-        assert!(stackup.links.verifies.contains(&"REQ-001".to_string()));
+        assert!(stackup.links.verifies.iter().any(|l| *l == "REQ-001"));
 
         let stackup = service
             .remove_verifies_link(&stackup.id.to_string(), "REQ-001")
             .unwrap();
-        assert!(!stackup.links.verifies.contains(&"REQ-001".to_string()));
+        assert!(!stackup.links.verifies.iter().any(|l| *l == "REQ-001"));
     }
 
     #[test]

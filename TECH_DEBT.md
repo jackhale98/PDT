@@ -91,12 +91,13 @@ The exceptions:
 
 ## 6. Architectural
 
-- **Links are modeled as bare `EntityId` in typed entity structs**, so any
-  typed load→save collapses `{id, title, suspect…}` link objects. A merge
-  step in `ServiceBase::save` now restores the metadata (see
-  `preserve_link_metadata`), but the durable fix is a `LinkRef` type on all
-  Links structs. Note: `tol analyze` writes its stackup back with a raw
-  `fs::write`, bypassing that merge.
+- ~~Links modeled as bare `EntityId`/`String` in typed entity structs~~ —
+  **resolved**: all 21 `*Links` structs now use `LinkRef` (string-or-object,
+  with `title` + suspect fields), so typed round-trips preserve link metadata
+  natively. The `preserve_link_metadata` merge in `ServiceBase::save` was
+  deleted; the raw `fs::write` in `tol analyze` is safe for the same reason.
+  Bonus fix: `String`-typed links previously failed to *load* files whose
+  links carried titles.
 - The link cache normalizes YAML field names (`components`→`contains`,
   `parent`→`contained_in`, `created_ncr`→`ncrs`); suspect mark/clear now
   scan-fallback to cope. Storing the originating YAML field name in the

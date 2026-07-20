@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and test execution for test protocols.
 
+use crate::core::suspect::LinkRef;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -715,8 +716,8 @@ impl<'a> TestService<'a> {
     pub fn add_verifies_link(&self, id: &str, req_id: EntityId) -> ServiceResult<Test> {
         let (path, mut test) = self.find_test(id)?;
 
-        if !test.links.verifies.contains(&req_id) {
-            test.links.verifies.push(req_id);
+        if !test.links.verifies.iter().any(|l| *l == req_id) {
+            test.links.verifies.push(LinkRef::from(req_id));
             test.revision += 1;
 
             self.base.save(&test, &path, None)?;
@@ -729,8 +730,8 @@ impl<'a> TestService<'a> {
     pub fn add_mitigates_link(&self, id: &str, risk_id: EntityId) -> ServiceResult<Test> {
         let (path, mut test) = self.find_test(id)?;
 
-        if !test.links.mitigates.contains(&risk_id) {
-            test.links.mitigates.push(risk_id);
+        if !test.links.mitigates.iter().any(|l| *l == risk_id) {
+            test.links.mitigates.push(LinkRef::from(risk_id));
             test.revision += 1;
 
             self.base.save(&test, &path, None)?;

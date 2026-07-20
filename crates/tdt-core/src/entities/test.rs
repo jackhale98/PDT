@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Priority, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// Test type - verification or validation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -141,27 +142,27 @@ pub struct Environment {
 pub struct TestLinks {
     /// Requirements this test verifies
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub verifies: Vec<EntityId>,
+    pub verifies: Vec<LinkRef>,
 
     /// User needs this test validates
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub validates: Vec<EntityId>,
+    pub validates: Vec<LinkRef>,
 
     /// Risks whose mitigation this test verifies
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mitigates: Vec<EntityId>,
+    pub mitigates: Vec<LinkRef>,
 
     /// Tests that must pass before this one
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub depends_on: Vec<EntityId>,
+    pub depends_on: Vec<LinkRef>,
 
     /// Component under test
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub component: Option<EntityId>,
+    pub component: Option<LinkRef>,
 
     /// Assembly under test
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub assembly: Option<EntityId>,
+    pub assembly: Option<LinkRef>,
 }
 
 /// A test entity (verification/validation protocol)
@@ -447,8 +448,8 @@ mod tests {
         let req_id = EntityId::new(crate::core::EntityPrefix::Req);
         let risk_id = EntityId::new(crate::core::EntityPrefix::Risk);
 
-        test.links.verifies.push(req_id.clone());
-        test.links.mitigates.push(risk_id.clone());
+        test.links.verifies.push(LinkRef::from(&req_id));
+        test.links.mitigates.push(LinkRef::from(&risk_id));
 
         let yaml = serde_yml::to_string(&test).unwrap();
         let parsed: Test = serde_yml::from_str(&yaml).unwrap();
@@ -499,7 +500,7 @@ mod tests {
 
         test.links
             .verifies
-            .push(EntityId::new(crate::core::EntityPrefix::Req));
+            .push(LinkRef::from(EntityId::new(crate::core::EntityPrefix::Req)));
         assert!(test.has_verifications());
     }
 }

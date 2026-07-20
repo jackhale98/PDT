@@ -4,6 +4,7 @@
 //! Key distinction from NCR: NCR is reactive (something went wrong),
 //! DEV is proactive (intentionally doing something different, with approval).
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -271,27 +272,27 @@ pub struct DevApproval {
 pub struct DevLinks {
     /// Affected process entities
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub processes: Vec<String>,
+    pub processes: Vec<LinkRef>,
 
     /// LOT entities this applies to
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub lots: Vec<String>,
+    pub lots: Vec<LinkRef>,
 
     /// Affected component entities
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub components: Vec<String>,
+    pub components: Vec<LinkRef>,
 
     /// Requirement entities being deviated from
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub requirements: Vec<String>,
+    pub requirements: Vec<LinkRef>,
 
     /// Related NCRs (if deviation arose from NCR)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub ncrs: Vec<String>,
+    pub ncrs: Vec<LinkRef>,
 
     /// ECO/DCN reference if permanent
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub change_order: Option<String>,
+    pub change_order: Option<LinkRef>,
 }
 
 /// Process Deviation entity

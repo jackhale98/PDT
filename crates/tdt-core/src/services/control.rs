@@ -314,12 +314,7 @@ impl<'a> ControlService<'a> {
         let controls = self.load_all()?;
         Ok(controls
             .into_iter()
-            .filter(|c| {
-                c.links
-                    .process
-                    .as_ref()
-                    .is_some_and(|p| p.to_string() == process_id)
-            })
+            .filter(|c| c.links.process.as_ref().is_some_and(|p| *p == process_id))
             .collect())
     }
 

@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// Overall verdict for a test result
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -233,15 +234,15 @@ pub struct Attachment {
 pub struct ResultLinks {
     /// ID of the test protocol (same as test_id)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub test: Option<EntityId>,
+    pub test: Option<LinkRef>,
 
     /// IDs of action items created from this result
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub actions: Vec<EntityId>,
+    pub actions: Vec<LinkRef>,
 
     /// NCR created from a failed test result
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub created_ncr: Option<EntityId>,
+    pub created_ncr: Option<LinkRef>,
 }
 
 /// A test result entity (execution record)

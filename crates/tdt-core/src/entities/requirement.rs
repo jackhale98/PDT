@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Priority, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// Requirement type - design input or output
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -95,23 +96,23 @@ pub struct Source {
 pub struct Links {
     /// Design outputs that satisfy this input
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub satisfied_by: Vec<EntityId>,
+    pub satisfied_by: Vec<LinkRef>,
 
     /// Tests that verify this requirement
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub verified_by: Vec<EntityId>,
+    pub verified_by: Vec<LinkRef>,
 
     /// Parent requirements this derives from (requirement decomposition)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub derives_from: Vec<EntityId>,
+    pub derives_from: Vec<LinkRef>,
 
     /// Child requirements derived from this one (reciprocal of derives_from)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub derived_by: Vec<EntityId>,
+    pub derived_by: Vec<LinkRef>,
 
     /// Features this requirement is allocated to
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub allocated_to: Vec<EntityId>,
+    pub allocated_to: Vec<LinkRef>,
 }
 
 /// A requirement entity (design input or output)

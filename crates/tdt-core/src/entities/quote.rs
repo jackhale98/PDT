@@ -1,5 +1,6 @@
 //! Quote entity type - Supplier quotations for components and assemblies
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -112,7 +113,7 @@ pub struct NreCost {
 pub struct QuoteLinks {
     /// Related quotes (e.g., competing quotes)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_quotes: Vec<String>,
+    pub related_quotes: Vec<LinkRef>,
 }
 
 /// A Quote entity - supplier quotation for a component or assembly

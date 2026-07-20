@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// Control type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -175,23 +176,23 @@ pub struct ControlLimits {
 pub struct ControlLinks {
     /// Parent process (required for context)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub process: Option<EntityId>,
+    pub process: Option<LinkRef>,
 
     /// Feature being controlled (optional)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub feature: Option<EntityId>,
+    pub feature: Option<LinkRef>,
 
     /// Requirements verified by this control
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub verifies: Vec<EntityId>,
+    pub verifies: Vec<LinkRef>,
 
     /// CAPA that added this control (reciprocal of CAPA.controls_added)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub added_by_capa: Vec<EntityId>,
+    pub added_by_capa: Vec<LinkRef>,
 
     /// Risks this control mitigates (FMEA traceability)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub risks: Vec<EntityId>,
+    pub risks: Vec<LinkRef>,
 }
 
 /// A Control entity - control plan item

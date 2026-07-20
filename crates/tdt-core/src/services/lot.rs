@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and workflow management for manufacturing lots.
 
+use crate::core::suspect::LinkRef;
 use chrono::{NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -405,7 +406,7 @@ impl<'a> LotService<'a> {
             // Product filter
             if let Some(ref product) = filter.product {
                 if let Some(ref lot_product) = lot.links.product {
-                    if !lot_product.contains(product) {
+                    if !lot_product.id().contains(product.as_str()) {
                         return false;
                     }
                 } else {
@@ -465,7 +466,7 @@ impl<'a> LotService<'a> {
         lot.start_date = input.start_date;
 
         if let Some(product) = input.product {
-            lot.links.product = Some(product);
+            lot.links.product = Some(LinkRef::from(product));
         }
 
         if let Some(status) = input.status {
@@ -475,7 +476,7 @@ impl<'a> LotService<'a> {
         // Populate execution steps from routing if requested
         if input.from_routing {
             if let Some(ref product_id) = lot.links.product {
-                let routing = self.load_product_routing(product_id);
+                let routing = self.load_product_routing(product_id.id());
                 if let Some(routing) = routing {
                     if !routing.is_empty() {
                         let processes = self.load_processes();
@@ -557,7 +558,7 @@ impl<'a> LotService<'a> {
     pub fn set_product(&self, id: &str, product_id: &str) -> ServiceResult<Lot> {
         let (_, mut lot) = self.find_lot(id)?;
 
-        lot.links.product = Some(product_id.to_string());
+        lot.links.product = Some(LinkRef::from(product_id));
         lot.entity_revision += 1;
 
         let file_path = self.get_file_path(&lot.id);
@@ -824,8 +825,8 @@ impl<'a> LotService<'a> {
     pub fn add_ncr(&self, id: &str, ncr_id: &str) -> ServiceResult<Lot> {
         let (_, mut lot) = self.find_lot(id)?;
 
-        if !lot.links.ncrs.contains(&ncr_id.to_string()) {
-            lot.links.ncrs.push(ncr_id.to_string());
+        if !lot.links.ncrs.iter().any(|l| *l == *ncr_id) {
+            lot.links.ncrs.push(LinkRef::from(ncr_id));
         }
         lot.entity_revision += 1;
 
@@ -852,8 +853,8 @@ impl<'a> LotService<'a> {
     pub fn add_result(&self, id: &str, result_id: &str) -> ServiceResult<Lot> {
         let (_, mut lot) = self.find_lot(id)?;
 
-        if !lot.links.results.contains(&result_id.to_string()) {
-            lot.links.results.push(result_id.to_string());
+        if !lot.links.results.iter().any(|l| *l == *result_id) {
+            lot.links.results.push(LinkRef::from(result_id));
         }
         lot.entity_revision += 1;
 
@@ -1450,10 +1451,10 @@ mod tests {
         let lot = service.create(input).unwrap();
 
         let lot = service.add_ncr(&lot.id.to_string(), "NCR-001").unwrap();
-        assert!(lot.links.ncrs.contains(&"NCR-001".to_string()));
+        assert!(lot.links.ncrs.iter().any(|l| *l == "NCR-001"));
 
         let lot = service.remove_ncr(&lot.id.to_string(), "NCR-001").unwrap();
-        assert!(!lot.links.ncrs.contains(&"NCR-001".to_string()));
+        assert!(!lot.links.ncrs.iter().any(|l| *l == "NCR-001"));
     }
 
     #[test]

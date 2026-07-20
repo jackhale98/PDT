@@ -1,5 +1,6 @@
 //! SysML v2 import - parses SysML textual notation and converts to TDT entities
 
+use crate::core::suspect::LinkRef;
 use std::collections::HashMap;
 
 use chrono::Utc;
@@ -529,7 +530,7 @@ pub fn convert_to_entities(pkg: &SysmlPackage, author: &str) -> Result<ImportRes
         for sysml_vc in &pkg.verifications {
             if sysml_vc.verifies.contains(&sysml_req.name) {
                 if let Some(test_id) = test_name_to_id.get(&sysml_vc.name) {
-                    req.links.verified_by.push(test_id.clone());
+                    req.links.verified_by.push(LinkRef::from(test_id));
                 }
             }
         }
@@ -538,7 +539,7 @@ pub fn convert_to_entities(pkg: &SysmlPackage, author: &str) -> Result<ImportRes
         if let Some(satisfiers) = satisfy_map.get(&sysml_req.name) {
             for cmp_name in satisfiers {
                 if let Some(cmp_id) = cmp_name_to_id.get(cmp_name) {
-                    req.links.satisfied_by.push(cmp_id.clone());
+                    req.links.satisfied_by.push(LinkRef::from(cmp_id));
                 }
             }
         }
@@ -617,7 +618,7 @@ pub fn convert_to_entities(pkg: &SysmlPackage, author: &str) -> Result<ImportRes
         // Build verifies links
         for req_name in &sysml_vc.verifies {
             if let Some(req_id) = req_name_to_id.get(req_name) {
-                test.links.verifies.push(req_id.clone());
+                test.links.verifies.push(LinkRef::from(req_id));
             } else {
                 result.warnings.push(format!(
                     "Verification '{}' references unknown requirement '{}'",

@@ -1,5 +1,6 @@
 //! Supplier entity type - Approved suppliers for components and assemblies
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -149,11 +150,11 @@ impl std::fmt::Display for Currency {
 pub struct SupplierLinks {
     /// Components this supplier is approved for
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub approved_for: Vec<String>,
+    pub approved_for: Vec<LinkRef>,
 
     /// Quotes from this supplier (reciprocal of QUOT.supplier)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub quotes: Vec<String>,
+    pub quotes: Vec<LinkRef>,
 }
 
 /// A Supplier entity

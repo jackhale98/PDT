@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// CAPA type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -298,19 +299,19 @@ impl std::fmt::Display for CapaStatus {
 pub struct CapaLinks {
     /// Source NCRs
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub ncrs: Vec<EntityId>,
+    pub ncrs: Vec<LinkRef>,
 
     /// Related risks
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub risks: Vec<EntityId>,
+    pub risks: Vec<LinkRef>,
 
     /// Processes modified
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub processes_modified: Vec<EntityId>,
+    pub processes_modified: Vec<LinkRef>,
 
     /// Controls added
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub controls_added: Vec<EntityId>,
+    pub controls_added: Vec<LinkRef>,
 }
 
 /// A CAPA entity - Corrective/Preventive Action

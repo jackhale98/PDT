@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// PPE item requirement
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -300,11 +301,11 @@ pub struct QualityCheck {
 pub struct WorkInstructionLinks {
     /// Parent process
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub process: Option<EntityId>,
+    pub process: Option<LinkRef>,
 
     /// Control plan items referenced
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub controls: Vec<EntityId>,
+    pub controls: Vec<LinkRef>,
 }
 
 /// A Work Instruction entity - operator procedure

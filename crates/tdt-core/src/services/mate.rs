@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and fit calculation for mating features.
 
+use crate::core::suspect::LinkRef;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -579,8 +580,8 @@ impl<'a> MateService<'a> {
     pub fn add_verifies_link(&self, id: &str, requirement_id: &str) -> ServiceResult<Mate> {
         let (_, mut mate) = self.find_mate(id)?;
 
-        if !mate.links.verifies.contains(&requirement_id.to_string()) {
-            mate.links.verifies.push(requirement_id.to_string());
+        if !mate.links.verifies.iter().any(|l| *l == requirement_id) {
+            mate.links.verifies.push(LinkRef::from(requirement_id));
         }
         mate.entity_revision += 1;
 
@@ -771,12 +772,12 @@ mod tests {
         let mate = service
             .add_verifies_link(&mate.id.to_string(), "REQ-001")
             .unwrap();
-        assert!(mate.links.verifies.contains(&"REQ-001".to_string()));
+        assert!(mate.links.verifies.iter().any(|l| *l == "REQ-001"));
 
         let mate = service
             .remove_verifies_link(&mate.id.to_string(), "REQ-001")
             .unwrap();
-        assert!(!mate.links.verifies.contains(&"REQ-001".to_string()));
+        assert!(!mate.links.verifies.iter().any(|l| *l == "REQ-001"));
     }
 
     #[test]
@@ -837,7 +838,7 @@ mod tests {
             .join("tolerances/stackups")
             .join(format!("{}.tdt.yaml", stackup.id));
         let mut s: Stackup = crate::yaml::parse_yaml_file(&stackup_path).unwrap();
-        s.links.mates_used.push(mate.id.to_string());
+        s.links.mates_used.push(LinkRef::from(&mate.id));
         let yaml = serde_yml::to_string(&s).unwrap();
         std::fs::write(&stackup_path, yaml).unwrap();
 

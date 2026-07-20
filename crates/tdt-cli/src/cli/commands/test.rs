@@ -4,6 +4,7 @@ use clap::{Subcommand, ValueEnum};
 use console::style;
 use miette::{IntoDiagnostic, Result};
 use std::fs;
+use tdt_core::core::suspect::LinkRef;
 
 use crate::cli::commands::utils::format_link_with_title;
 use crate::cli::filters::StatusFilter;
@@ -1030,8 +1031,8 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             };
             let entity_id = EntityId::parse(&full_id)
                 .map_err(|_| miette::miette!("Invalid entity ID: {}", full_id))?;
-            if !test_entity.links.verifies.contains(&entity_id) {
-                test_entity.links.verifies.push(entity_id);
+            if !test_entity.links.verifies.iter().any(|l| *l == entity_id) {
+                test_entity.links.verifies.push(LinkRef::from(entity_id));
             }
         }
 
@@ -1046,8 +1047,8 @@ fn run_new(args: NewArgs, global: &GlobalOpts) -> Result<()> {
             };
             let entity_id = EntityId::parse(&full_id)
                 .map_err(|_| miette::miette!("Invalid entity ID: {}", full_id))?;
-            if !test_entity.links.mitigates.contains(&entity_id) {
-                test_entity.links.mitigates.push(entity_id);
+            if !test_entity.links.mitigates.iter().any(|l| *l == entity_id) {
+                test_entity.links.mitigates.push(LinkRef::from(entity_id));
             }
         }
 

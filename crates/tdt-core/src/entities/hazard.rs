@@ -16,6 +16,7 @@ use std::str::FromStr;
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 use crate::core::workflow::ApprovalRecord;
 
 /// Hazard category - type of hazard by energy/mechanism
@@ -127,23 +128,23 @@ impl FromStr for HazardSeverity {
 pub struct HazardLinks {
     /// Components/assemblies where this hazard originates
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub originates_from: Vec<EntityId>,
+    pub originates_from: Vec<LinkRef>,
 
     /// Risks caused by this hazard
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub causes: Vec<EntityId>,
+    pub causes: Vec<LinkRef>,
 
     /// Controls that address this hazard
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub controlled_by: Vec<EntityId>,
+    pub controlled_by: Vec<LinkRef>,
 
     /// Tests that verify hazard controls
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub verified_by: Vec<EntityId>,
+    pub verified_by: Vec<LinkRef>,
 
     /// Related requirements (safety requirements)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_to: Vec<EntityId>,
+    pub related_to: Vec<LinkRef>,
 }
 
 /// A hazard entity - potential source of harm

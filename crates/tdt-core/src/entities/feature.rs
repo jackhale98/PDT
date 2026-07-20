@@ -1,5 +1,6 @@
 //! Feature entity - Dimensional features on components
 
+use crate::core::suspect::LinkRef;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -390,19 +391,19 @@ pub struct DrawingRef {
 pub struct FeatureLinks {
     /// Mates using this feature
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub used_in_mates: Vec<String>,
+    pub used_in_mates: Vec<LinkRef>,
 
     /// Stackups using this feature
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub used_in_stackups: Vec<String>,
+    pub used_in_stackups: Vec<LinkRef>,
 
     /// Requirements allocated to this feature (reciprocal of REQ.allocated_to)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub allocated_from: Vec<EntityId>,
+    pub allocated_from: Vec<LinkRef>,
 
     /// Risks affecting this feature (reciprocal of RISK.affects)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub risks: Vec<EntityId>,
+    pub risks: Vec<LinkRef>,
 }
 
 /// Feature entity - dimensional feature on a component

@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and approval workflow for deviations.
 
+use crate::core::suspect::LinkRef;
 use chrono::{NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -724,8 +725,8 @@ impl<'a> DeviationService<'a> {
     pub fn add_process_link(&self, id: &str, process_id: String) -> ServiceResult<Dev> {
         let (_, mut dev) = self.find_deviation(id)?;
 
-        if !dev.links.processes.contains(&process_id) {
-            dev.links.processes.push(process_id);
+        if !dev.links.processes.iter().any(|l| *l == process_id) {
+            dev.links.processes.push(LinkRef::from(process_id));
             dev.entity_revision += 1;
 
             let file_path = self.get_file_path(&dev.id);
@@ -739,8 +740,8 @@ impl<'a> DeviationService<'a> {
     pub fn add_lot_link(&self, id: &str, lot_id: String) -> ServiceResult<Dev> {
         let (_, mut dev) = self.find_deviation(id)?;
 
-        if !dev.links.lots.contains(&lot_id) {
-            dev.links.lots.push(lot_id);
+        if !dev.links.lots.iter().any(|l| *l == lot_id) {
+            dev.links.lots.push(LinkRef::from(lot_id));
             dev.entity_revision += 1;
 
             let file_path = self.get_file_path(&dev.id);
@@ -754,8 +755,8 @@ impl<'a> DeviationService<'a> {
     pub fn add_component_link(&self, id: &str, component_id: String) -> ServiceResult<Dev> {
         let (_, mut dev) = self.find_deviation(id)?;
 
-        if !dev.links.components.contains(&component_id) {
-            dev.links.components.push(component_id);
+        if !dev.links.components.iter().any(|l| *l == component_id) {
+            dev.links.components.push(LinkRef::from(component_id));
             dev.entity_revision += 1;
 
             let file_path = self.get_file_path(&dev.id);

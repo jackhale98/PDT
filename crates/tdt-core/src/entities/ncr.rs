@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::entity::{Entity, Status};
 use crate::core::identity::EntityId;
+use crate::core::suspect::LinkRef;
 
 /// NCR type classification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -332,31 +333,31 @@ impl std::fmt::Display for NcrStatus {
 pub struct NcrLinks {
     /// Affected component
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub component: Option<EntityId>,
+    pub component: Option<LinkRef>,
 
     /// Process where found
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub process: Option<EntityId>,
+    pub process: Option<LinkRef>,
 
     /// Control that detected
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub control: Option<EntityId>,
+    pub control: Option<LinkRef>,
 
     /// Linked CAPA if opened
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub capa: Option<EntityId>,
+    pub capa: Option<LinkRef>,
 
     /// Test result that created this NCR (reciprocal of RSLT.created_ncr)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub from_result: Option<EntityId>,
+    pub from_result: Option<LinkRef>,
 
     /// Supplier responsible for the non-conformance (incoming inspection, SCAR)
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub supplier: Option<EntityId>,
+    pub supplier: Option<LinkRef>,
 
     /// Production lot(s) where non-conformance was found
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub lot: Vec<EntityId>,
+    pub lot: Vec<LinkRef>,
 }
 
 /// An NCR entity - Non-Conformance Report
@@ -562,5 +563,49 @@ mod tests {
         assert_eq!("internal".parse::<NcrType>().unwrap(), NcrType::Internal);
         assert_eq!("supplier".parse::<NcrType>().unwrap(), NcrType::Supplier);
         assert!("invalid".parse::<NcrType>().is_err());
+    }
+
+    /// The reason links are typed as LinkRef: a typed load→save round-trip
+    /// must preserve `{id, title, suspect, ...}` link metadata without any
+    /// YAML-merge safety net. This was the data-loss bug class where entity
+    /// updates silently erased suspect-tracking data.
+    #[test]
+    fn test_links_round_trip_preserves_metadata() {
+        let yaml = r#"
+component:
+  id: CMP-01ABC
+  title: Housing
+  suspect: true
+  suspect_reason: revision_changed
+capa: CAPA-01DEF
+lot:
+  - id: LOT-01GHI
+    title: Batch 42
+    verified_revision: 3
+  - LOT-01JKL
+"#;
+        let links: NcrLinks = serde_yml::from_str(yaml).unwrap();
+
+        // Typed access works across both representations
+        assert_eq!(links.component.as_ref().unwrap().id(), "CMP-01ABC");
+        assert!(links.component.as_ref().unwrap().is_suspect());
+        assert_eq!(links.capa.as_ref().unwrap().id(), "CAPA-01DEF");
+        assert!(!links.capa.as_ref().unwrap().is_suspect());
+        assert_eq!(links.lot.len(), 2);
+
+        // Round-trip: metadata and representation survive re-serialization
+        let out = serde_yml::to_string(&links).unwrap();
+        let reparsed: serde_yml::Value = serde_yml::from_str(&out).unwrap();
+        assert_eq!(reparsed["component"]["title"].as_str(), Some("Housing"));
+        assert_eq!(reparsed["component"]["suspect"].as_bool(), Some(true));
+        assert_eq!(
+            reparsed["component"]["suspect_reason"].as_str(),
+            Some("revision_changed")
+        );
+        // Simple links stay simple strings — no format churn
+        assert_eq!(reparsed["capa"].as_str(), Some("CAPA-01DEF"));
+        assert_eq!(reparsed["lot"][0]["title"].as_str(), Some("Batch 42"));
+        assert_eq!(reparsed["lot"][0]["verified_revision"].as_u64(), Some(3));
+        assert_eq!(reparsed["lot"][1].as_str(), Some("LOT-01JKL"));
     }
 }

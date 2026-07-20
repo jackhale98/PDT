@@ -2,6 +2,7 @@
 //!
 //! Provides CRUD operations and step/tool/material management for work instructions.
 
+use crate::core::suspect::LinkRef;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -263,12 +264,8 @@ impl<'a> WorkInstructionService<'a> {
         let id = EntityId::new(EntityPrefix::Work);
 
         let links = WorkInstructionLinks {
-            process: input.process.map(|p| {
-                p.parse().unwrap_or_else(|_| {
-                    // If parsing fails, create a dummy ID - the link will be invalid but stored
-                    EntityId::new(EntityPrefix::Proc)
-                })
-            }),
+            // Store the reference as given; validation happens via `tdt validate`
+            process: input.process.map(LinkRef::from),
             controls: Vec::new(),
         };
 

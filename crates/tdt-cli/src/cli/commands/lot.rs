@@ -1143,7 +1143,9 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                 println!("{}", style("Links:").bold());
 
                 if let Some(ref prod) = lot.links.product {
-                    let display = short_ids.get_short_id(prod).unwrap_or_else(|| prod.clone());
+                    let display = short_ids
+                        .get_short_id(prod.id())
+                        .unwrap_or_else(|| prod.id().to_string());
                     println!("  {}: {}", style("Product").dim(), style(&display).cyan());
                 }
                 if !lot.links.processes.is_empty() {
@@ -1151,7 +1153,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         .links
                         .processes
                         .iter()
-                        .map(|p| short_ids.get_short_id(p).unwrap_or_else(|| p.clone()))
+                        .map(|p| {
+                            short_ids
+                                .get_short_id(p.id())
+                                .unwrap_or_else(|| p.id().to_string())
+                        })
                         .collect();
                     println!(
                         "  {}: {}",
@@ -1164,7 +1170,11 @@ fn run_show(args: ShowArgs, global: &GlobalOpts) -> Result<()> {
                         .links
                         .ncrs
                         .iter()
-                        .map(|n| short_ids.get_short_id(n).unwrap_or_else(|| n.clone()))
+                        .map(|n| {
+                            short_ids
+                                .get_short_id(n.id())
+                                .unwrap_or_else(|| n.id().to_string())
+                        })
                         .collect();
                     println!(
                         "  {}: {}",

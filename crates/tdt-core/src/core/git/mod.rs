@@ -1,16 +1,27 @@
-//! Git abstraction layer using gitoxide (gix) with shell fallback
+//! Git abstraction layer: shell `git` on desktop, gix on mobile
 //!
-//! Uses the pure-Rust `gix` library for local operations (open, status, stage,
-//! commit, log, branch/tag info). Falls back to `git` CLI for operations that
-//! require network access (push/pull/fetch), GPG signing, stash, merge, and
-//! working-tree checkout. On mobile (iOS/Android) where no `git` binary exists,
-//! the gix-based operations work natively while shell-only operations return
-//! `GitError::ShellNotAvailable`.
+//! Desktop/CLI builds shell out to the `git` binary for everything and never
+//! compile `gix` (129 fewer crates in the build). Mobile targets (iOS/Android)
+//! have no `git` binary, so local operations (status, stage, commit, log,
+//! branch/tag info) are compiled from the pure-Rust `gix` implementations
+//! instead; operations that inherently need the CLI (network, GPG signing,
+//! stash, merge, checkout) return `GitError::ShellNotAvailable` there.
+//!
+//! Both implementations expose an identical API on `Git`; the `gix-vc` cargo
+//! feature compiles the gix path on desktop for CI compile-checking only.
 
+// gix-backed local operations: compiled only where no `git` binary exists
+// (mobile) or when explicitly requested for compile-checking (`gix-vc`).
+#[cfg(any(target_os = "ios", target_os = "android", feature = "gix-vc"))]
 mod commit;
+#[cfg(any(target_os = "ios", target_os = "android", feature = "gix-vc"))]
 mod index;
+#[cfg(any(target_os = "ios", target_os = "android", feature = "gix-vc"))]
 mod repo;
 mod shell;
+// Shell-backed local operations: the only implementation on desktop/CLI.
+#[cfg(not(any(target_os = "ios", target_os = "android", feature = "gix-vc")))]
+mod shell_local;
 
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -98,6 +109,7 @@ pub enum GitError {
 // ============================================================================
 
 /// Convert any gix error to GitError::CommandFailed
+#[cfg(any(target_os = "ios", target_os = "android", feature = "gix-vc"))]
 fn gix_err(e: impl std::fmt::Display) -> GitError {
     GitError::CommandFailed {
         message: e.to_string(),
@@ -130,10 +142,18 @@ fn parse_log_output(stdout: &str) -> Vec<CommitLogEntry> {
 }
 
 /// Simple glob pattern matching (supports `*` and `?`)
+#[cfg(any(
+    any(target_os = "ios", target_os = "android", feature = "gix-vc"),
+    test
+))]
 fn glob_match(pattern: &str, text: &str) -> bool {
     glob_match_inner(pattern.as_bytes(), text.as_bytes())
 }
 
+#[cfg(any(
+    any(target_os = "ios", target_os = "android", feature = "gix-vc"),
+    test
+))]
 fn glob_match_inner(pattern: &[u8], text: &[u8]) -> bool {
     let mut pi = 0;
     let mut ti = 0;
@@ -164,6 +184,7 @@ fn glob_match_inner(pattern: &[u8], text: &[u8]) -> bool {
 }
 
 /// Format a gix time as ISO 8601
+#[cfg(any(target_os = "ios", target_os = "android", feature = "gix-vc"))]
 fn format_gix_time(time: gix::date::Time) -> String {
     let secs = time.seconds;
     // gix-date's offset is already in seconds (OffsetInSeconds).
@@ -178,13 +199,19 @@ fn format_gix_time(time: gix::date::Time) -> String {
 }
 
 /// Check if file metadata indicates executable permission
-#[cfg(unix)]
+#[cfg(all(
+    unix,
+    any(target_os = "ios", target_os = "android", feature = "gix-vc")
+))]
 fn is_executable(metadata: &std::fs::Metadata) -> bool {
     use std::os::unix::fs::PermissionsExt;
     metadata.permissions().mode() & 0o111 != 0
 }
 
-#[cfg(not(unix))]
+#[cfg(all(
+    not(unix),
+    any(target_os = "ios", target_os = "android", feature = "gix-vc")
+))]
 fn is_executable(_metadata: &std::fs::Metadata) -> bool {
     false
 }
@@ -202,6 +229,7 @@ impl Git {
     }
 
     /// Open the repository with gix
+    #[cfg(any(target_os = "ios", target_os = "android", feature = "gix-vc"))]
     fn open_repo(&self) -> Result<gix::Repository, GitError> {
         gix::open(&self.repo_root).map_err(|_| GitError::NotARepo)
     }

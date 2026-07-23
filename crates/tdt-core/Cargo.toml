@@ -53,7 +53,10 @@ sha2.workspace = true
 csv.workspace = true
 
 # Git (pure-Rust, works on mobile)
-gix.workspace = true
+# gix backs local git operations ONLY on mobile targets (no `git` binary
+# there); desktop/CLI builds use shell git and never compile gix.
+# The `gix-vc` feature exists so CI/desktop can compile-check the gix path.
+gix = { workspace = true, optional = true }
 
 # CLI deps temporarily in core (TODO: refactor wizard module to CLI)
 clap.workspace = true
@@ -63,3 +66,9 @@ console.workspace = true
 [dev-dependencies]
 tempfile.workspace = true
 insta.workspace = true
+
+[features]
+gix-vc = ["dep:gix"]
+
+[target.'cfg(any(target_os = "ios", target_os = "android"))'.dependencies]
+gix = { workspace = true }

@@ -14,7 +14,7 @@ pub type CommitMetadata = (String, String, String, String, Option<String>, Strin
 
 impl Git {
     /// Execute a git CLI command and return the output
-    fn run_shell(&self, args: &[&str]) -> Result<GitOutput, GitError> {
+    pub(super) fn run_shell(&self, args: &[&str]) -> Result<GitOutput, GitError> {
         let output = Command::new("git")
             .args(args)
             .current_dir(&self.repo_root)

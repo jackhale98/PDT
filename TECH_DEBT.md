@@ -42,11 +42,14 @@ they differ meaningfully per entity.
 
 ## 2. Dual git implementations
 
-`core/git/` uses **both** gix (repo.rs, index.rs, commit.rs — ~90 call sites)
-and shell-out `git` (shell.rs — 35 call sites). Two code paths, two failure
-modes (several shell-parsing bugs were fixed in this review). Pick one:
-gix avoids subprocess/locale issues; shell is simpler to extend. Either way,
-route new features through a single layer.
+**Resolved (feature-gated):** desktop/CLI builds now use shell `git`
+exclusively — `gix` is not compiled at all (129 crates dropped from the
+build, debug binary 74.2 → 62.7 MB). Mobile targets keep the gix-backed
+local operations via a target-conditional dependency, since iOS/Android
+have no `git` binary. The `gix-vc` cargo feature compile-checks the gix
+path on desktop CI. Both implementations expose an identical `Git` API
+(`shell_local.rs` vs `repo.rs`/`index.rs`/`commit.rs`); behavior parity is
+covered by the git test suite, which now runs against the shell path.
 
 ## 3. Two table renderers
 

@@ -61,6 +61,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --package tessera-design-toolkit --package tessera-design-toolkit-core --package tdt-tauri-commands
 
+      # The gix-backed git implementations only compile for mobile targets;
+      # this keeps them from rotting silently on desktop-only CI.
+      - name: Compile-check mobile git path (gix)
+        run: cargo check --package tessera-design-toolkit-core --features gix-vc
+
   # Verify frontend builds
   frontend:
     name: Frontend Build

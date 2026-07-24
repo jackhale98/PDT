@@ -15,6 +15,7 @@ mod rslt;
 mod sup;
 mod sysml;
 mod test;
+mod update;
 
 use console::style;
 use miette::Result;
@@ -55,7 +56,10 @@ pub struct ImportArgs {
     #[arg(long)]
     pub skip_errors: bool,
 
-    /// Update existing entities if ID column matches (not yet implemented)
+    /// Update existing entities instead of creating new ones. Every row
+    /// must have an 'id' column identifying the entity (full or short ID);
+    /// non-empty cells overwrite the matching YAML fields after schema
+    /// validation. Rows without an id are errors.
     #[arg(long)]
     pub update: bool,
 
@@ -104,14 +108,6 @@ fn parse_import_target(s: &str) -> Result<ImportTarget, String> {
 }
 
 pub fn run(args: ImportArgs) -> Result<()> {
-    // --update is declared but not wired up yet; fail loudly instead of
-    // silently re-importing (which would duplicate every row).
-    if args.update {
-        return Err(miette::miette!(
-            "--update is not yet implemented. Remove the flag to import rows as new entities."
-        ));
-    }
-
     // Handle template generation
     if args.template {
         let target = args.target.ok_or_else(|| {
@@ -161,7 +157,7 @@ pub fn run(args: ImportArgs) -> Result<()> {
         );
         println!();
 
-        let stats = sysml::import(&project, &file_path, args.dry_run)?;
+        let stats = sysml::import(&project, &file_path, args.dry_run, args.update)?;
 
         // Print summary
         println!();
@@ -173,6 +169,12 @@ pub fn run(args: ImportArgs) -> Result<()> {
             "  Entities created: {}",
             style(stats.entities_created).green()
         );
+        if stats.entities_updated > 0 {
+            println!(
+                "  Entities updated: {}",
+                style(stats.entities_updated).yellow()
+            );
+        }
 
         if args.dry_run {
             println!();
@@ -192,6 +194,52 @@ pub fn run(args: ImportArgs) -> Result<()> {
         ImportTarget::EntityType(et) => et,
         ImportTarget::Sysml => unreachable!(),
     };
+
+    if args.update {
+        println!(
+            "{} Updating {} entities from {}{}",
+            style("->").blue(),
+            style(entity_type.as_str()).cyan(),
+            style(file_path.display()).yellow(),
+            if args.dry_run {
+                style(" (dry run)").dim().to_string()
+            } else {
+                String::new()
+            }
+        );
+        println!();
+
+        let stats = update::import_update(
+            &project,
+            entity_type,
+            &file_path,
+            args.dry_run,
+            args.skip_errors,
+        )?;
+
+        println!();
+        println!("{}", style("─".repeat(50)).dim());
+        println!("{}", style("Import Summary").bold());
+        println!("{}", style("─".repeat(50)).dim());
+        println!("  Rows processed:   {}", style(stats.rows_processed).cyan());
+        println!(
+            "  Entities updated: {}",
+            style(stats.entities_updated).green()
+        );
+        if stats.errors > 0 {
+            println!("  Errors:           {}", style(stats.errors).red());
+        }
+        if args.dry_run {
+            println!();
+            println!(
+                "{}",
+                style("Dry run complete. No files were changed.").yellow()
+            );
+        } else if stats.entities_updated > 0 {
+            super::utils::sync_cache(&project);
+        }
+        return Ok(());
+    }
 
     println!(
         "{} Importing {} entities from {}{}",

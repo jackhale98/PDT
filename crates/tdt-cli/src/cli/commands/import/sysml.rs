@@ -11,7 +11,12 @@ use tdt_core::sysml::import::{convert_to_entities, parse_sysml};
 
 use super::common::ImportStats;
 
-pub fn import(project: &Project, file_path: &PathBuf, dry_run: bool) -> Result<ImportStats> {
+pub fn import(
+    project: &Project,
+    file_path: &PathBuf,
+    dry_run: bool,
+    update: bool,
+) -> Result<ImportStats> {
     let mut stats = ImportStats::default();
 
     let content = fs::read_to_string(file_path).into_diagnostic()?;
@@ -57,27 +62,52 @@ pub fn import(project: &Project, file_path: &PathBuf, dry_run: bool) -> Result<I
 
     for entity in &import_result.entities {
         let output_dir = get_entity_dir(project, &entity.prefix);
+        let entity_path = output_dir.join(format!("{}.tdt.yaml", entity.id));
+
+        // A SysML round-trip is lossy (links other than satisfy/verify,
+        // acceptance criteria, revision history are not represented in
+        // SysML). Never overwrite an existing entity unless --update was
+        // explicitly requested.
+        let exists = entity_path.exists();
+        if exists && !update {
+            println!(
+                "  {} Skipped {} - already exists (use --update to overwrite;                  SysML overwrite loses non-SysML fields)",
+                style("!").yellow(),
+                style(&entity.id).cyan(),
+            );
+            continue;
+        }
+
+        let (verb_dry, verb_done) = if exists {
+            ("Would update", "Updated")
+        } else {
+            ("Would create", "Created")
+        };
 
         if dry_run {
             println!(
-                "  {} Would create {} - {}",
+                "  {} {} {} - {}",
                 style("+").green(),
+                verb_dry,
                 style(&entity.id).cyan(),
                 entity.title,
             );
-            stats.entities_created += 1;
         } else {
             if !output_dir.exists() {
                 fs::create_dir_all(&output_dir).into_diagnostic()?;
             }
-            let file_path = output_dir.join(format!("{}.tdt.yaml", entity.id));
-            fs::write(&file_path, &entity.yaml).into_diagnostic()?;
+            fs::write(&entity_path, &entity.yaml).into_diagnostic()?;
             println!(
-                "  {} Created {} - {}",
+                "  {} {} {} - {}",
                 style("+").green(),
+                verb_done,
                 style(&entity.id).cyan(),
                 entity.title,
             );
+        }
+        if exists {
+            stats.entities_updated += 1;
+        } else {
             stats.entities_created += 1;
         }
     }

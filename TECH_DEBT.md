@@ -114,8 +114,11 @@ The exceptions:
 
 ## 7. Known gaps deliberately left (with rationale)
 
-- `tdt import --update` errors as "not yet implemented" (previously a silent
-  no-op that duplicated every row). Implement ID-matched updates.
+- ~~`tdt import --update` unimplemented~~ — **resolved**: one generic
+  ID-matched update path serves all CSV entity types (schema-validated
+  patches, revision bump, dry-run support); SysML re-import now skips
+  existing entities unless `--update` is passed (closing the silent
+  lossy-overwrite gap).
 - ~~3D Monte Carlo not seedable~~ — **resolved**: `--seed` now drives the
   3D run too and the seed is persisted in `analysis_results_3d.mc_seed`.
 - 3D staleness hash now covers `functional_direction`; linked feature

@@ -873,6 +873,12 @@ tdt import risk risks.csv                    # Import risks/FMEA items
 # Preview without creating files
 tdt import req requirements.csv --dry-run
 
+# Update existing entities from a CSV: every row needs an `id` column
+# (full or short ID); non-empty cells overwrite the matching fields after
+# schema validation, and the entity revision is bumped
+tdt import req corrections.csv --update
+tdt import req corrections.csv --update --dry-run   # preview the updates
+
 # Continue past errors instead of stopping on first failure
 tdt import req requirements.csv --skip-errors
 
@@ -901,7 +907,7 @@ tdt export sysml --package MyProject      # Custom package name
 # Import from a SysML v2 file
 tdt import sysml model.sysml             # Create entities from SysML
 tdt import sysml model.sysml --dry-run   # Preview without creating files
-tdt import sysml model.sysml --update    # Update existing entities
+tdt import sysml model.sysml --update    # Overwrite existing entities (lossy: non-SysML fields are lost)
 ```
 
 **Export** generates SysML v2 textual notation with:

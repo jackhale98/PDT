@@ -279,6 +279,12 @@ impl EntityCache {
                 source_id TEXT NOT NULL,
                 target_id TEXT NOT NULL,
                 link_type TEXT NOT NULL,
+                -- The YAML field this link was extracted from, when it came
+                -- from a plain links field. NULL for synthetic links (BOM
+                -- items, mate feature refs) that live in nested structures.
+                -- link_type is sometimes a normalized alias (components ->
+                -- contains); field_name is what's actually in the file.
+                field_name TEXT,
                 PRIMARY KEY (source_id, target_id, link_type)
             );
             CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_id);

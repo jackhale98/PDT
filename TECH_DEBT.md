@@ -101,10 +101,10 @@ The exceptions:
   deleted; the raw `fs::write` in `tol analyze` is safe for the same reason.
   Bonus fix: `String`-typed links previously failed to *load* files whose
   links carried titles.
-- The link cache normalizes YAML field names (`components`→`contains`,
-  `parent`→`contained_in`, `created_ncr`→`ncrs`); suspect mark/clear now
-  scan-fallback to cope. Storing the originating YAML field name in the
-  cache `links` table removes the guesswork.
+- ~~Cache normalizes link field names with no record of the original~~ —
+  **resolved**: the `links` table now stores `field_name` (the actual YAML
+  field), suspect marking uses it first, and the scan fallback remains only
+  for caches built before the schema bump (v14 forces a rebuild).
 - YAML mutation paths (`link add`, suspect mark/clear) strip the guidance
   comments that `new` writes, and their formatting differs from service
   saves (churny diffs). A comment/format-preserving YAML editor would fix

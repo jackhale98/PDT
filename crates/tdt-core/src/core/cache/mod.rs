@@ -35,7 +35,7 @@ use crate::core::project::Project;
 const CACHE_FILE: &str = ".tdt/cache.db";
 
 /// Current schema version - cache is rebuilt on version mismatch
-const SCHEMA_VERSION: i32 = 13;
+const SCHEMA_VERSION: i32 = 14;
 
 /// The entity cache backed by SQLite
 pub struct EntityCache {
@@ -613,10 +613,9 @@ impl EntityCache {
 
     /// Get all outgoing links from an entity (what it links TO)
     pub fn get_links_from(&self, source_id: &str) -> Vec<CachedLink> {
-        let mut stmt = match self
-            .conn
-            .prepare("SELECT source_id, target_id, link_type FROM links WHERE source_id = ?1")
-        {
+        let mut stmt = match self.conn.prepare(
+            "SELECT source_id, target_id, link_type, field_name FROM links WHERE source_id = ?1",
+        ) {
             Ok(s) => s,
             Err(_) => return vec![],
         };
@@ -626,6 +625,7 @@ impl EntityCache {
                 source_id: row.get(0)?,
                 target_id: row.get(1)?,
                 link_type: row.get(2)?,
+                field_name: row.get(3)?,
             })
         }) {
             Ok(r) => r,
@@ -637,10 +637,9 @@ impl EntityCache {
 
     /// Get all incoming links to an entity (what links TO it)
     pub fn get_links_to(&self, target_id: &str) -> Vec<CachedLink> {
-        let mut stmt = match self
-            .conn
-            .prepare("SELECT source_id, target_id, link_type FROM links WHERE target_id = ?1")
-        {
+        let mut stmt = match self.conn.prepare(
+            "SELECT source_id, target_id, link_type, field_name FROM links WHERE target_id = ?1",
+        ) {
             Ok(s) => s,
             Err(_) => return vec![],
         };
@@ -650,6 +649,7 @@ impl EntityCache {
                 source_id: row.get(0)?,
                 target_id: row.get(1)?,
                 link_type: row.get(2)?,
+                field_name: row.get(3)?,
             })
         }) {
             Ok(r) => r,

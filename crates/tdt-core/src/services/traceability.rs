@@ -962,6 +962,7 @@ mod tests {
     #[test]
     fn test_trace_link_from_cached() {
         let cached = CachedLink {
+            field_name: None,
             source_id: "REQ-001".into(),
             target_id: "TEST-001".into(),
             link_type: "verified_by".into(),

@@ -527,8 +527,12 @@ pub fn mark_dependents_suspect(
             continue;
         }
 
-        // Mark the link suspect; ignore LinkNotFound (cache may be stale)
-        match mark_link_suspect(&source_path, &link.link_type, target_id, reason.clone()) {
+        // Mark the link suspect using the YAML field the cache recorded it
+        // under; fall back to the (possibly alias-normalized) link type for
+        // caches built before field names were stored. mark_link_suspect
+        // itself scans all fields as a last resort.
+        let yaml_field = link.field_name.as_deref().unwrap_or(&link.link_type);
+        match mark_link_suspect(&source_path, yaml_field, target_id, reason.clone()) {
             Ok(()) => {
                 marked.push(MarkedDependent {
                     source_id: link.source_id.clone(),

@@ -72,7 +72,11 @@ impl LinkType {
 pub struct CachedLink {
     pub source_id: String,
     pub target_id: String,
+    /// Normalized link type (aliases like `components` map to `contains`)
     pub link_type: String,
+    /// The YAML field the link actually lives in, when known. Prefer this
+    /// over `link_type` when mutating the source file.
+    pub field_name: Option<String>,
 }
 
 // =========================================================================

@@ -433,12 +433,12 @@ impl EntityCache {
         for (field, link_type) in link_fields {
             // Check at top level
             for (target_id, ltype) in extract_links(value, field, link_type) {
-                self.insert_link(source_id, &target_id, &ltype)?;
+                self.insert_link(source_id, &target_id, &ltype, Some(field))?;
             }
             // Also check nested under "links" object
             if let Some(links_obj) = value.get("links") {
                 for (target_id, ltype) in extract_links(links_obj, field, link_type) {
-                    self.insert_link(source_id, &target_id, &ltype)?;
+                    self.insert_link(source_id, &target_id, &ltype, Some(field))?;
                 }
             }
         }
@@ -447,12 +447,12 @@ impl EntityCache {
         if source_id.starts_with("MATE-") {
             if let Some(feature_a) = value.get("feature_a") {
                 if let Some(feature_id) = feature_a.get("id").and_then(|v| v.as_str()) {
-                    self.insert_link(source_id, feature_id, "feature_a")?;
+                    self.insert_link(source_id, feature_id, "feature_a", None)?;
                 }
             }
             if let Some(feature_b) = value.get("feature_b") {
                 if let Some(feature_id) = feature_b.get("id").and_then(|v| v.as_str()) {
-                    self.insert_link(source_id, feature_id, "feature_b")?;
+                    self.insert_link(source_id, feature_id, "feature_b", None)?;
                 }
             }
         }
@@ -467,6 +467,7 @@ impl EntityCache {
                                 source_id,
                                 feature_id,
                                 &format!("contributor[{}]", i),
+                                None,
                             )?;
                         }
                     }
@@ -496,7 +497,7 @@ impl EntityCache {
                     // Subassemblies can be either a simple string ID or an object with id and quantity
                     if let Some(subasm_id) = subasm.as_str() {
                         // Simple string format: assume quantity = 1
-                        self.insert_link(source_id, subasm_id, "contains_subassembly")?;
+                        self.insert_link(source_id, subasm_id, "contains_subassembly", None)?;
                         self.insert_subassembly_item(source_id, subasm_id, 1)?;
                     } else if let Some(subasm_obj) = subasm.as_mapping() {
                         // Object format: {id: "ASM-...", quantity: N}
@@ -508,7 +509,7 @@ impl EntityCache {
                                 .get(serde_yml::Value::String("quantity".to_string()))
                                 .and_then(|v| v.as_u64())
                                 .unwrap_or(1) as u32;
-                            self.insert_link(source_id, subasm_id, "contains_subassembly")?;
+                            self.insert_link(source_id, subasm_id, "contains_subassembly", None)?;
                             self.insert_subassembly_item(source_id, subasm_id, quantity)?;
                         }
                     }
@@ -531,7 +532,7 @@ impl EntityCache {
                                 .unwrap_or_default()
                             });
 
-                        self.insert_link(source_id, component_id, "contains_component")?;
+                        self.insert_link(source_id, component_id, "contains_component", None)?;
                         self.insert_bom_item(
                             source_id,
                             component_id,
@@ -551,11 +552,12 @@ impl EntityCache {
         source_id: &str,
         target_id: &str,
         link_type: &str,
+        field_name: Option<&str>,
     ) -> Result<()> {
         self.conn
             .execute(
-                "INSERT OR IGNORE INTO links (source_id, target_id, link_type) VALUES (?1, ?2, ?3)",
-                params![source_id, target_id, link_type],
+                "INSERT OR IGNORE INTO links (source_id, target_id, link_type, field_name)                  VALUES (?1, ?2, ?3, ?4)",
+                params![source_id, target_id, link_type, field_name],
             )
             .into_diagnostic()?;
         Ok(())
@@ -948,6 +950,41 @@ mod tests {
             fs::create_dir_all(parent).unwrap();
         }
         fs::write(&full_path, content).unwrap();
+    }
+
+    #[test]
+    fn test_link_field_name_recorded_for_aliases() {
+        let (_tmp, project) = create_test_project();
+
+        // `components` is alias-normalized to link_type `contains` in the
+        // cache; field_name must record the real YAML field so suspect
+        // marking can find the link in the file.
+        write_test_entity(
+            &project,
+            "bom/components/CMP-01AA.tdt.yaml",
+            r#"
+id: CMP-01AA
+title: Parent component
+status: draft
+author: Test
+created: 2024-01-15T10:30:00Z
+links:
+  components:
+    - id: CMP-01BB
+      title: Child component
+"#,
+        );
+
+        let mut cache = EntityCache::open_without_sync(&project).unwrap();
+        cache.rebuild().unwrap();
+
+        let links = cache.get_links_from("CMP-01AA");
+        let link = links
+            .iter()
+            .find(|l| l.target_id == "CMP-01BB")
+            .expect("child link cached");
+        assert_eq!(link.link_type, "contains");
+        assert_eq!(link.field_name.as_deref(), Some("components"));
     }
 
     #[test]

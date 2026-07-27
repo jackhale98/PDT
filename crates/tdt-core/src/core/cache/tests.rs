@@ -1565,3 +1565,43 @@ fn test_bom_items_nonexistent_assembly() {
     let flattened = cache.get_flattened_bom("ASM-NONEXISTENT");
     assert!(flattened.is_empty());
 }
+
+#[test]
+fn test_auto_sync_detects_older_mtime_modification() {
+    // A file restored from backup (rsync -a, cp -p) carries an mtime OLDER
+    // than what the cache saw. The old global max-mtime heuristic never
+    // detected this; the per-file comparison must.
+    let (_tmp, project) = create_test_project();
+    let rel = "requirements/inputs/REQ-01MTIME.tdt.yaml";
+
+    write_test_entity(
+        &project,
+        rel,
+        "id: REQ-01MTIME\ntitle: Original\nstatus: draft\nauthor: T\ncreated: 2024-01-15T10:30:00Z\n",
+    );
+
+    {
+        let mut cache = EntityCache::open_without_sync(&project).unwrap();
+        cache.rebuild().unwrap();
+        assert_eq!(cache.get_entity("REQ-01MTIME").unwrap().title, "Original");
+    }
+
+    // Modify content but set the mtime to well in the past
+    let full = project.root().join(rel);
+    fs::write(
+        &full,
+        "id: REQ-01MTIME\ntitle: Restored from backup\nstatus: draft\nauthor: T\ncreated: 2024-01-15T10:30:00Z\n",
+    )
+    .unwrap();
+    let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+    let f = fs::File::options().write(true).open(&full).unwrap();
+    f.set_times(fs::FileTimes::new().set_modified(old)).unwrap();
+    drop(f);
+
+    // open() runs auto_sync — the change must be picked up
+    let cache = EntityCache::open(&project).unwrap();
+    assert_eq!(
+        cache.get_entity("REQ-01MTIME").unwrap().title,
+        "Restored from backup"
+    );
+}

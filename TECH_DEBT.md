@@ -88,9 +88,9 @@ The exceptions:
   cache lookup.
 - `link suspect list` reads every entity YAML file; fine at hundreds of
   entities, consider indexing suspect flags in the SQLite cache at thousands.
-- Cache `auto_sync` staleness uses a global max-mtime heuristic — a file
-  restored with a preserved mtime (rsync -a, Syncthing) is never detected as
-  changed. Compare per-file mtimes against per-file cached values.
+- ~~`auto_sync` global max-mtime heuristic~~ — **resolved**: per-file mtime
+  comparison in a single walk (also catches added/deleted files in the same
+  pass); a content change carrying an older mtime is now detected.
 
 ## 6. Architectural
 

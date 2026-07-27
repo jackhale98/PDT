@@ -138,34 +138,43 @@ impl EntityCache {
 
     /// Auto-sync: quickly check if any files changed and sync if needed
     fn auto_sync(&mut self) -> Result<()> {
-        // Get the most recent file mtime from cache
-        let cached_max_mtime: Option<i64> = self
-            .conn
-            .query_row("SELECT MAX(file_mtime) FROM entities", [], |row| row.get(0))
-            .optional()
-            .into_diagnostic()?
-            .flatten();
-
-        // Quick check: scan for any file newer than cached max mtime
-        let needs_sync = self.has_newer_files(cached_max_mtime.unwrap_or(0))?;
-
-        if needs_sync {
+        if self.needs_sync()? {
             self.sync()?;
         }
-
         Ok(())
     }
 
-    /// Check if any entity files are newer than the given mtime
-    fn has_newer_files(&self, max_cached_mtime: i64) -> Result<bool> {
-        let entity_dirs = Self::entity_directories();
+    /// Compare every entity file's mtime against its cached per-file value.
+    ///
+    /// A single walk detects added files (not in cache), modified files
+    /// (mtime differs in EITHER direction — a restore with a preserved older
+    /// mtime, e.g. `cp -p`/rsync/Syncthine, must not be missed), and deleted
+    /// files (cache has entries the walk didn't see). `sync()` then does the
+    /// precise content-hash comparison per file.
+    fn needs_sync(&self) -> Result<bool> {
+        let mut cached: HashMap<String, i64> = HashMap::new();
+        {
+            let mut stmt = self
+                .conn
+                .prepare("SELECT file_path, file_mtime FROM entities")
+                .into_diagnostic()?;
+            let rows = stmt
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+                })
+                .into_diagnostic()?;
+            for row in rows {
+                let (path, mtime) = row.into_diagnostic()?;
+                cached.insert(path, mtime);
+            }
+        }
 
-        for dir in entity_dirs {
+        let mut seen = 0usize;
+        for dir in Self::entity_directories() {
             let full_path = self.project_root.join(dir);
             if !full_path.exists() {
                 continue;
             }
-
             for entry in WalkDir::new(&full_path)
                 .into_iter()
                 .filter_map(|e| e.ok())
@@ -175,41 +184,25 @@ impl EntityCache {
                 if !path.to_string_lossy().ends_with(".tdt.yaml") {
                     continue;
                 }
-
-                let mtime = get_file_mtime(path)?;
-                if mtime > max_cached_mtime {
-                    return Ok(true);
-                }
-            }
-        }
-
-        // Also check if any cached files were deleted
-        let cached_count: i64 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM entities", [], |row| row.get(0))
-            .into_diagnostic()?;
-
-        let mut actual_count = 0i64;
-        for dir in entity_dirs {
-            let full_path = self.project_root.join(dir);
-            if full_path.exists() {
-                for entry in WalkDir::new(&full_path)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    if entry.path().to_string_lossy().ends_with(".tdt.yaml") {
-                        actual_count += 1;
+                let rel_path = path
+                    .strip_prefix(&self.project_root)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .to_string();
+                match cached.get(&rel_path) {
+                    None => return Ok(true), // new file
+                    Some(&cached_mtime) => {
+                        if get_file_mtime(path)? != cached_mtime {
+                            return Ok(true); // modified (any direction)
+                        }
+                        seen += 1;
                     }
                 }
             }
         }
 
-        if actual_count != cached_count {
-            return Ok(true);
-        }
-
-        Ok(false)
+        // Fewer files seen than cached → deletions
+        Ok(seen != cached.len())
     }
 
     /// Get the list of entity directories to scan.

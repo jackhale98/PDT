@@ -1,10 +1,10 @@
 //! FMEA (Failure Mode and Effects Analysis) report
 
+use crate::cli::helpers::MarkdownTableBuilder;
 use chrono::Utc;
 use miette::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tabled::{builder::Builder, settings::Style};
 
 use crate::cli::GlobalOpts;
 use tdt_core::core::project::Project;
@@ -220,7 +220,7 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
 
     // Summary
     output.push_str("## Summary\n\n");
-    let mut summary = Builder::default();
+    let mut summary = MarkdownTableBuilder::default();
     summary.push_record(["Metric", "Value"]);
     summary.push_record(["Total Risks", &risks.len().to_string()]);
     if !risks.is_empty() {
@@ -240,12 +240,12 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
     let unmitigated = risks.iter().filter(|r| r.mitigations.is_empty()).count();
     summary.push_record(["Unmitigated Risks", &unmitigated.to_string()]);
     summary.push_record(["Overdue Mitigations", &overdue_rows.len().to_string()]);
-    output.push_str(&summary.build().with(Style::markdown()).to_string());
+    output.push_str(&summary.build_markdown());
 
     // Risk Reduction Summary
     if !reduction_rows.is_empty() {
         output.push_str("\n## Risk Reduction Summary\n\n");
-        let mut reduction_table = Builder::default();
+        let mut reduction_table = MarkdownTableBuilder::default();
         reduction_table.push_record([
             "ID",
             "Failure Mode",
@@ -263,7 +263,7 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
                 format!("{:+}", row.reduction),
             ]);
         }
-        output.push_str(&reduction_table.build().with(Style::markdown()).to_string());
+        output.push_str(&reduction_table.build_markdown());
 
         if risks_with_initial > 0 && total_initial_rpn > 0 {
             let reduction_pct =
@@ -279,7 +279,7 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
     // Overdue Mitigations
     if !overdue_rows.is_empty() {
         output.push_str("\n## Overdue Mitigations\n\n");
-        let mut overdue_table = Builder::default();
+        let mut overdue_table = MarkdownTableBuilder::default();
         overdue_table.push_record(["Risk ID", "Mitigation", "Owner", "Due Date", "Days Overdue"]);
 
         for row in &overdue_rows {
@@ -291,12 +291,12 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
                 row.days_overdue.to_string(),
             ]);
         }
-        output.push_str(&overdue_table.build().with(Style::markdown()).to_string());
+        output.push_str(&overdue_table.build_markdown());
     }
 
     // Main FMEA table
     output.push_str("\n## Risk Register\n\n");
-    let mut builder = Builder::default();
+    let mut builder = MarkdownTableBuilder::default();
     builder.push_record([
         "ID",
         "Failure Mode",
@@ -324,12 +324,12 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
             &row.mitigations,
         ]);
     }
-    output.push_str(&builder.build().with(Style::markdown()).to_string());
+    output.push_str(&builder.build_markdown());
 
     // Mitigation Tracking
     if !mitigation_rows.is_empty() {
         output.push_str("\n## Mitigation Tracking\n\n");
-        let mut mit_table = Builder::default();
+        let mut mit_table = MarkdownTableBuilder::default();
         mit_table.push_record([
             "Risk ID",
             "Mitigation",
@@ -349,7 +349,7 @@ pub fn run(args: FmeaArgs, _global: &GlobalOpts) -> Result<()> {
                 row.status.clone(),
             ]);
         }
-        output.push_str(&mit_table.build().with(Style::markdown()).to_string());
+        output.push_str(&mit_table.build_markdown());
     }
 
     // Output

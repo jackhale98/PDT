@@ -4,8 +4,8 @@ use miette::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use crate::cli::helpers::MarkdownTableBuilder;
 use crate::cli::GlobalOpts;
-use tabled::{builder::Builder, settings::Style};
 use tdt_core::core::project::Project;
 use tdt_core::core::shortid::ShortIdIndex;
 use tdt_core::entities::assembly::Assembly;
@@ -301,7 +301,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
         if let Some(feats) = feats {
             if !feats.is_empty() {
                 output.push_str("#### Features\n\n");
-                let mut builder = Builder::default();
+                let mut builder = MarkdownTableBuilder::default();
                 builder.push_record([
                     "ID",
                     "Title",
@@ -365,7 +365,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
                     }
                     _total_features += 1;
                 }
-                output.push_str(&builder.build().with(Style::markdown()).to_string());
+                output.push_str(&builder.build_markdown());
                 output.push('\n');
             }
         }
@@ -375,7 +375,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
         if let Some(mates_list) = mates_for_cmp {
             if !mates_list.is_empty() {
                 output.push_str("#### Mates\n\n");
-                let mut builder = Builder::default();
+                let mut builder = MarkdownTableBuilder::default();
                 builder.push_record([
                     "ID",
                     "Title",
@@ -453,7 +453,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
                     ]);
                     _total_mates += 1;
                 }
-                output.push_str(&builder.build().with(Style::markdown()).to_string());
+                output.push_str(&builder.build_markdown());
                 output.push('\n');
             }
         }
@@ -463,7 +463,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
         if let Some(contribs) = stackup_contribs {
             if !contribs.is_empty() {
                 output.push_str("#### Stackup Contributions\n\n");
-                let mut builder = Builder::default();
+                let mut builder = MarkdownTableBuilder::default();
                 builder.push_record(["Stackup", "Title", "Contributor", "Direction"]);
 
                 for (stackup, indices) in contribs {
@@ -502,7 +502,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
                         _total_stackup_refs += 1;
                     }
                 }
-                output.push_str(&builder.build().with(Style::markdown()).to_string());
+                output.push_str(&builder.build_markdown());
                 output.push('\n');
             }
         }
@@ -542,7 +542,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
 
             // Show stackup contributions
             if let Some(contribs) = component_stackup_contribs.get(ext_cmp_id) {
-                let mut builder = Builder::default();
+                let mut builder = MarkdownTableBuilder::default();
                 builder.push_record(["Stackup", "Contributor", "Direction"]);
 
                 for (stackup, indices) in contribs {
@@ -571,7 +571,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
                         ]);
                     }
                 }
-                output.push_str(&builder.build().with(Style::markdown()).to_string());
+                output.push_str(&builder.build_markdown());
                 output.push('\n');
             }
         }
@@ -605,7 +605,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
             ));
 
             // Contributors table
-            let mut builder = Builder::default();
+            let mut builder = MarkdownTableBuilder::default();
             builder.push_record([
                 "#",
                 "Contributor",
@@ -659,7 +659,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
                     dir.to_string(),
                 ]);
             }
-            output.push_str(&builder.build().with(Style::markdown()).to_string());
+            output.push_str(&builder.build_markdown());
 
             if args.assembly.is_some()
                 && external_components.iter().any(|ext| {
@@ -679,7 +679,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
 
             // Analysis results
             output.push_str("**Analysis:**\n\n");
-            let mut analysis_builder = Builder::default();
+            let mut analysis_builder = MarkdownTableBuilder::default();
             analysis_builder.push_record(["Method", "Result", "Value"]);
 
             if let Some(ref wc) = stackup.analysis_results.worst_case {
@@ -711,7 +711,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
                 ]);
             }
 
-            output.push_str(&analysis_builder.build().with(Style::markdown()).to_string());
+            output.push_str(&analysis_builder.build_markdown());
             output.push_str("\n---\n\n");
         }
     }
@@ -721,7 +721,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
 
     // Components overview
     output.push_str("### Components\n\n");
-    let mut summary_builder = Builder::default();
+    let mut summary_builder = MarkdownTableBuilder::default();
     summary_builder.push_record([
         "Part Number",
         "Title",
@@ -766,7 +766,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
             ]);
         }
     }
-    output.push_str(&summary_builder.build().with(Style::markdown()).to_string());
+    output.push_str(&summary_builder.build_markdown());
     output.push('\n');
 
     // Stackup results summary
@@ -816,7 +816,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
             0.0
         };
 
-        let mut results_builder = Builder::default();
+        let mut results_builder = MarkdownTableBuilder::default();
         results_builder.push_record(["Result", "Count", "Percentage"]);
         results_builder.push_record([
             "Pass".to_string(),
@@ -833,7 +833,7 @@ pub fn run(args: ToleranceArgs, _global: &GlobalOpts) -> Result<()> {
             fail_count.to_string(),
             format!("{:.1}%", fail_pct),
         ]);
-        output.push_str(&results_builder.build().with(Style::markdown()).to_string());
+        output.push_str(&results_builder.build_markdown());
         output.push('\n');
 
         // Averages

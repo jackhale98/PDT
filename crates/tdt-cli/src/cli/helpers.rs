@@ -311,3 +311,58 @@ mod tests {
         assert_eq!(determine_decimal_places(0.0), 4); // Default
     }
 }
+
+/// Minimal markdown table builder (first pushed record is the header row).
+///
+/// Replaces the `tabled` crate for report generation — markdown output with
+/// per-column width padding is all the reports need.
+#[derive(Default)]
+pub struct MarkdownTableBuilder {
+    rows: Vec<Vec<String>>,
+}
+
+impl MarkdownTableBuilder {
+    /// Append a record; the first record becomes the header.
+    pub fn push_record<I, S>(&mut self, record: I)
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.rows.push(record.into_iter().map(Into::into).collect());
+    }
+
+    /// Render as a markdown table with padded columns.
+    pub fn build_markdown(&self) -> String {
+        if self.rows.is_empty() {
+            return String::new();
+        }
+        let cols = self.rows.iter().map(|r| r.len()).max().unwrap_or(0);
+        let mut widths = vec![0usize; cols];
+        for row in &self.rows {
+            for (i, cell) in row.iter().enumerate() {
+                widths[i] = widths[i].max(cell.chars().count());
+            }
+        }
+        let render_row = |row: &[String]| {
+            let cells: Vec<String> = (0..cols)
+                .map(|i| {
+                    let cell = row.get(i).map(String::as_str).unwrap_or("");
+                    let pad = widths[i].saturating_sub(cell.chars().count());
+                    format!(" {}{} ", cell, " ".repeat(pad))
+                })
+                .collect();
+            format!("|{}|", cells.join("|"))
+        };
+
+        let mut out = String::new();
+        out.push_str(&render_row(&self.rows[0]));
+        out.push('\n');
+        let sep: Vec<String> = widths.iter().map(|w| "-".repeat(w + 2)).collect();
+        out.push_str(&format!("|{}|", sep.join("|")));
+        for row in &self.rows[1..] {
+            out.push('\n');
+            out.push_str(&render_row(row));
+        }
+        out
+    }
+}

@@ -53,11 +53,12 @@ covered by the git test suite, which now runs against the shell path.
 
 ## 3. Two table renderers
 
-The custom `cli/table.rs` (SHORT-column tables, wrapping) coexists with the
-`tabled` crate (used by `report/rvm.rs`, `report/fmea.rs`,
-`report/test_status.rs`). Converge on one. Note: `table.rs` width math is
-byte-based, not display-width — CJK/emoji titles misalign columns (cosmetic;
-the panic cases were fixed).
+**Resolved:** the `tabled` dependency is dropped. Report generation (rvm,
+fmea, test_status, open_issues, bom, tolerance) uses a ~50-line
+`MarkdownTableBuilder` in `cli/helpers.rs` — markdown output with padded
+columns was all the reports needed. `cli/table.rs` remains the interactive
+list renderer. Residual note: `table.rs` width math is char-count-based,
+not display-width — CJK/emoji titles can misalign columns (cosmetic).
 
 ## 4. Reserved / unreachable code
 

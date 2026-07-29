@@ -1,9 +1,9 @@
 //! Test Status report
 
+use crate::cli::helpers::MarkdownTableBuilder;
 use miette::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tabled::{builder::Builder, settings::Style};
 
 use crate::cli::helpers::format_date_local;
 use crate::cli::GlobalOpts;
@@ -158,7 +158,7 @@ pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
 
     // Overall Summary
     output.push_str("## Summary\n\n");
-    let mut summary = Builder::default();
+    let mut summary = MarkdownTableBuilder::default();
     summary.push_record(["Metric", "Count"]);
     summary.push_record(["Total Protocols", &tests.len().to_string()]);
     summary.push_record(["Executed", &executed.to_string()]);
@@ -171,11 +171,11 @@ pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
         let pass_rate = (passed as f64 / executed as f64) * 100.0;
         summary.push_record(["Pass Rate", &format!("{:.1}%", pass_rate)]);
     }
-    output.push_str(&summary.build().with(Style::markdown()).to_string());
+    output.push_str(&summary.build_markdown());
 
     // Breakdown by Test Type
     output.push_str("\n## By Test Type\n\n");
-    let mut type_table = Builder::default();
+    let mut type_table = MarkdownTableBuilder::default();
     type_table.push_record(["Type", "Total", "Executed", "Pass", "Fail", "Pass Rate"]);
 
     let calc_pass_rate = |stats: &TypeStats| -> String {
@@ -205,12 +205,12 @@ pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
         validation_stats.failed.to_string(),
         calc_pass_rate(&validation_stats),
     ]);
-    output.push_str(&type_table.build().with(Style::markdown()).to_string());
+    output.push_str(&type_table.build_markdown());
 
     // Breakdown by Level
     if !level_stats.is_empty() {
         output.push_str("\n## By Test Level\n\n");
-        let mut level_table = Builder::default();
+        let mut level_table = MarkdownTableBuilder::default();
         level_table.push_record(["Level", "Total", "Executed", "Pass", "Fail", "Pass Rate"]);
 
         // Sort levels in order: unit, integration, system, acceptance
@@ -227,13 +227,13 @@ pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
                 ]);
             }
         }
-        output.push_str(&level_table.build().with(Style::markdown()).to_string());
+        output.push_str(&level_table.build_markdown());
     }
 
     // Breakdown by Category
     if !category_stats.is_empty() && category_stats.len() > 1 {
         output.push_str("\n## By Category\n\n");
-        let mut cat_table = Builder::default();
+        let mut cat_table = MarkdownTableBuilder::default();
         cat_table.push_record(["Category", "Total", "Executed", "Pass", "Fail", "Pass Rate"]);
 
         // Sort categories by total count descending
@@ -250,13 +250,13 @@ pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
                 calc_pass_rate(stats),
             ]);
         }
-        output.push_str(&cat_table.build().with(Style::markdown()).to_string());
+        output.push_str(&cat_table.build_markdown());
     }
 
     // Recent Failures
     if !recent_failures.is_empty() {
         output.push_str("\n## Recent Failures\n\n");
-        let mut failures = Builder::default();
+        let mut failures = MarkdownTableBuilder::default();
         failures.push_record(["Test ID", "Title", "Type", "Level", "Execution Date"]);
         for (test, result) in &recent_failures {
             let test_short = if args.full_ids {
@@ -276,7 +276,7 @@ pub fn run(args: TestStatusArgs, _global: &GlobalOpts) -> Result<()> {
                 format_date_local(&result.executed_date),
             ]);
         }
-        output.push_str(&failures.build().with(Style::markdown()).to_string());
+        output.push_str(&failures.build_markdown());
     }
 
     write_output(&output, args.file)?;

@@ -29,7 +29,6 @@ tdt-core = { package = "tessera-design-toolkit-core", version = "0.7", path = ".
 clap.workspace = true
 dialoguer.workspace = true
 console.workspace = true
-tabled.workspace = true
 clap_complete.workspace = true
 drawille.workspace = true
 

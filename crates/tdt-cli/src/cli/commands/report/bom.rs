@@ -1,9 +1,9 @@
 //! BOM (Bill of Materials) report
 
+use crate::cli::helpers::MarkdownTableBuilder;
 use miette::Result;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use tabled::{builder::Builder, settings::Style};
 
 use crate::cli::GlobalOpts;
 use tdt_core::core::project::Project;
@@ -231,7 +231,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
         flat_items.sort_by(|a, b| a.component_id.cmp(&b.component_id));
 
         // Build table
-        let mut table = Builder::default();
+        let mut table = MarkdownTableBuilder::default();
         let mut headers = vec!["Component", "Part #", "Title", "Qty"];
         if args.with_cost {
             headers.push("Unit $");
@@ -276,7 +276,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
             table.push_record(row);
         }
 
-        output.push_str(&table.build().with(Style::markdown()).to_string());
+        output.push_str(&table.build_markdown());
         output.push('\n');
 
         // Summary
@@ -551,7 +551,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
     if !supply_risks.is_empty() {
         output.push_str("\n## Supply Chain Risk Analysis\n\n");
 
-        let mut risk_table = Builder::default();
+        let mut risk_table = MarkdownTableBuilder::default();
         risk_table.push_record(["Component", "Title", "Risk Type", "Details"]);
 
         // Sort by risk type then by ID
@@ -576,7 +576,7 @@ pub fn run(args: BomArgs, _global: &GlobalOpts) -> Result<()> {
                 risk.details.clone(),
             ]);
         }
-        output.push_str(&risk_table.build().with(Style::markdown()).to_string());
+        output.push_str(&risk_table.build_markdown());
 
         // Summary
         let no_supplier = supply_risks

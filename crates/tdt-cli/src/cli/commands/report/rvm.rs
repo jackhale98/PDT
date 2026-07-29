@@ -1,9 +1,9 @@
 //! Requirements Verification Matrix (RVM) report
 
+use crate::cli::helpers::MarkdownTableBuilder;
 use miette::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tabled::{builder::Builder, settings::Style};
 
 use crate::cli::GlobalOpts;
 use tdt_core::core::project::Project;
@@ -220,7 +220,7 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     output.push_str("# Requirements Verification Matrix (RVM)\n\n");
 
     // Build table with tabled
-    let mut builder = Builder::default();
+    let mut builder = MarkdownTableBuilder::default();
     builder.push_record([
         "REQ ID",
         "REQ Title",
@@ -240,7 +240,7 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
             row.verdict.clone(),
         ]);
     }
-    output.push_str(&builder.build().with(Style::markdown()).to_string());
+    output.push_str(&builder.build_markdown());
 
     // Summary
     output.push_str("\n## Summary\n\n");
@@ -251,7 +251,7 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
         0.0
     };
 
-    let mut summary = Builder::default();
+    let mut summary = MarkdownTableBuilder::default();
     summary.push_record(["Metric", "Count", "Percentage"]);
     summary.push_record(["Total Requirements", &total.to_string(), "-"]);
     summary.push_record([
@@ -263,7 +263,7 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     summary.push_record(["Unverified", &unverified_count.to_string(), "-"]);
     summary.push_record(["Tests Passed", &passed_tests.len().to_string(), "-"]);
     summary.push_record(["Tests Failed", &failed_tests.len().to_string(), "-"]);
-    output.push_str(&summary.build().with(Style::markdown()).to_string());
+    output.push_str(&summary.build_markdown());
 
     // Coverage by Priority
     #[derive(Default)]
@@ -327,7 +327,7 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
     // Coverage by Priority
     if !priority_stats.is_empty() {
         output.push_str("\n## Coverage by Priority\n\n");
-        let mut priority_table = Builder::default();
+        let mut priority_table = MarkdownTableBuilder::default();
         priority_table.push_record(["Priority", "Total", "Verified", "Coverage"]);
 
         // Sort by priority order
@@ -350,13 +350,13 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
                 ]);
             }
         }
-        output.push_str(&priority_table.build().with(Style::markdown()).to_string());
+        output.push_str(&priority_table.build_markdown());
     }
 
     // Coverage by Category
     if !category_stats.is_empty() && category_stats.len() > 1 {
         output.push_str("\n## Coverage by Category\n\n");
-        let mut category_table = Builder::default();
+        let mut category_table = MarkdownTableBuilder::default();
         category_table.push_record(["Category", "Total", "Verified", "Coverage"]);
 
         // Sort by total count descending
@@ -379,7 +379,7 @@ pub fn run(args: RvmArgs, _global: &GlobalOpts) -> Result<()> {
                 coverage_pct,
             ]);
         }
-        output.push_str(&category_table.build().with(Style::markdown()).to_string());
+        output.push_str(&category_table.build_markdown());
     }
 
     // Output

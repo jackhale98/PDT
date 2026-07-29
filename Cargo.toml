@@ -61,7 +61,6 @@ gix = { version = "0.72", default-features = false, features = ["basic", "revisi
 clap = { version = "4", features = ["derive", "env", "string"] }
 dialoguer = "0.11"
 console = "0.15"
-tabled = "0.20"
 clap_complete = "4.5"
 drawille = "0.3"
 

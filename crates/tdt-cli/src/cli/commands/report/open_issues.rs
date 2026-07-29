@@ -1,10 +1,10 @@
 //! Open Issues report
 
+use crate::cli::helpers::MarkdownTableBuilder;
 use chrono::Utc;
 use miette::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tabled::{builder::Builder, settings::Style};
 
 use crate::cli::GlobalOpts;
 use tdt_core::core::project::Project;
@@ -114,18 +114,18 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
 
     // Summary
     output.push_str("## Summary\n\n");
-    let mut summary = Builder::default();
+    let mut summary = MarkdownTableBuilder::default();
     summary.push_record(["Category", "Count"]);
     summary.push_record(["Open NCRs", &open_ncrs.len().to_string()]);
     summary.push_record(["Open CAPAs", &open_capas.len().to_string()]);
     summary.push_record(["Failed Tests", &failed_tests.len().to_string()]);
     summary.push_record(["Overdue CAPA Actions", &overdue_actions.len().to_string()]);
-    output.push_str(&summary.build().with(Style::markdown()).to_string());
+    output.push_str(&summary.build_markdown());
 
     // NCR Aging Analysis
     if !open_ncrs.is_empty() {
         output.push_str("\n## NCR Aging Analysis\n\n");
-        let mut ncr_table = Builder::default();
+        let mut ncr_table = MarkdownTableBuilder::default();
         ncr_table.push_record(["ID", "Title", "Severity", "Days Open", "Cost Impact"]);
 
         // Sort by days open (oldest first)
@@ -178,7 +178,7 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
                 cost,
             ]);
         }
-        output.push_str(&ncr_table.build().with(Style::markdown()).to_string());
+        output.push_str(&ncr_table.build_markdown());
 
         // Aging summary
         output.push('\n');
@@ -192,7 +192,7 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
     // Cost Impact Summary
     if total_rework_cost > 0.0 || total_scrap_cost > 0.0 {
         output.push_str("\n## Cost Impact\n\n");
-        let mut cost_table = Builder::default();
+        let mut cost_table = MarkdownTableBuilder::default();
         cost_table.push_record(["Category", "Amount"]);
         cost_table.push_record(["Total Rework Cost", &format!("${:.2}", total_rework_cost)]);
         cost_table.push_record(["Total Scrap Cost", &format!("${:.2}", total_scrap_cost)]);
@@ -200,13 +200,13 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
             "**Total Impact**",
             &format!("**${:.2}**", total_rework_cost + total_scrap_cost),
         ]);
-        output.push_str(&cost_table.build().with(Style::markdown()).to_string());
+        output.push_str(&cost_table.build_markdown());
     }
 
     // Overdue CAPA Actions
     if !overdue_actions.is_empty() {
         output.push_str("\n## Overdue CAPA Actions\n\n");
-        let mut action_table = Builder::default();
+        let mut action_table = MarkdownTableBuilder::default();
         action_table.push_record(["CAPA ID", "Action", "Owner", "Due Date", "Days Overdue"]);
 
         for (capa, action, days_overdue) in &overdue_actions {
@@ -229,13 +229,13 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
                 days_overdue.to_string(),
             ]);
         }
-        output.push_str(&action_table.build().with(Style::markdown()).to_string());
+        output.push_str(&action_table.build_markdown());
     }
 
     // Open CAPAs
     if !open_capas.is_empty() {
         output.push_str("\n## Open CAPAs\n\n");
-        let mut capa_table = Builder::default();
+        let mut capa_table = MarkdownTableBuilder::default();
         capa_table.push_record(["ID", "Title", "Type", "Status", "Open Actions"]);
         for capa in &open_capas {
             let capa_short = if args.full_ids {
@@ -262,13 +262,13 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
                 open_action_count.to_string(),
             ]);
         }
-        output.push_str(&capa_table.build().with(Style::markdown()).to_string());
+        output.push_str(&capa_table.build_markdown());
     }
 
     // Failed Tests
     if !failed_tests.is_empty() {
         output.push_str("\n## Failed Tests\n\n");
-        let mut test_table = Builder::default();
+        let mut test_table = MarkdownTableBuilder::default();
         test_table.push_record(["ID", "Title", "Type"]);
         for test in &failed_tests {
             let test_short = if args.full_ids {
@@ -280,7 +280,7 @@ pub fn run(args: OpenIssuesArgs, _global: &GlobalOpts) -> Result<()> {
             };
             test_table.push_record([test_short, test.title.clone(), test.test_type.to_string()]);
         }
-        output.push_str(&test_table.build().with(Style::markdown()).to_string());
+        output.push_str(&test_table.build_markdown());
     }
 
     write_output(&output, args.file)?;

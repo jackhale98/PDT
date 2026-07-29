@@ -1326,6 +1326,7 @@ tdt tol analyze TOL@1 --3d --visualize
 
 # 3D Monte Carlo simulation
 tdt tol analyze TOL@1 --3d --iterations 50000
+tdt tol analyze TOL@1 --seed 12345      # Reproducible Monte Carlo (seed recorded in results)
 ```
 
 ### Test Verdicts

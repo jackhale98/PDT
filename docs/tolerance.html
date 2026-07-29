@@ -1021,6 +1021,7 @@ tdt tol analyze TOL@1 --verbose
 
 <span class="comment"># Include GD&T position tolerances in calculations</span>
 tdt tol analyze TOL@1 --gdt   # include GD&T position tolerances (--no-gdt to exclude)
+tdt tol analyze TOL@1 --seed 12345   # reproducible Monte Carlo (seed recorded in results)
 
 <span class="comment"># Custom sigma level (4σ = more conservative)</span>
 tdt tol analyze TOL@1 --sigma 4.0

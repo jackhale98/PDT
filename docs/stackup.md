@@ -383,6 +383,13 @@ tdt tol analyze TOL@1
 # Custom Monte Carlo iterations
 tdt tol analyze TOL@1 --iterations 50000
 
+# Reproducible Monte Carlo: same seed + same chain = identical results,
+# bit for bit (1D and 3D). The seed used is always recorded in the results
+# (`tdt tol show` displays it) — required for regulated audit trails
+# (FDA, ISO 13485)
+tdt tol analyze TOL@1 --seed 12345
+tdt tol analyze TOL@1 --3d --seed 12345
+
 # Verbose output (shows Cp, Cpk, Pp, Ppk, sensitivity)
 tdt tol analyze TOL@1 --verbose
 

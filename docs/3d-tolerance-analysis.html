@@ -538,6 +538,7 @@
             <li><a href="#features">Feature Setup</a></li>
             <li><a href="#datums">Datums</a></li>
             <li><a href="#analysis">Running Analysis</a></li>
+            <li><a href="#worked-example">Worked Example</a></li>
             <li><a href="#theory">Theory Deep Dive</a></li>
             <li><a href="#limitations">Model Limitations</a></li>
             <li><a href="#reference">Reference</a></li>
@@ -578,8 +579,8 @@
                   <td class="gdt-symbol">&#x2316;</td>
                   <td><code>position</code></td>
                   <td>cylinder</td>
-                  <td>u, v</td>
-                  <td>±(tol / 2)</td>
+                  <td>u, v (circular zone)</td>
+                  <td>&#x221A;(u²+v²) ≤ tol / 2</td>
                 </tr>
                 <tr>
                   <td class="gdt-symbol">&#x2316;</td>
@@ -599,7 +600,7 @@
                   <td class="gdt-symbol">&#x25CE;</td>
                   <td><code>concentricity</code></td>
                   <td>cylinder, sphere</td>
-                  <td>u, v</td>
+                  <td>u, v (circular zone)</td>
                   <td>±(tol / 2)</td>
                 </tr>
                 <tr>
@@ -622,8 +623,8 @@
                   <td class="gdt-symbol">&#x27C2;</td>
                   <td><code>perpendicularity</code></td>
                   <td>cylinder, cone</td>
-                  <td>&#x03B1;, &#x03B2;</td>
-                  <td>±(tol / length)</td>
+                  <td>&#x03B1;, &#x03B2; (conical zone)</td>
+                  <td>&#x221A;(&#x03B1;²+&#x03B2;²) ≤ tol / length</td>
                 </tr>
                 <tr>
                   <td class="gdt-symbol">&#x27C2;</td>
@@ -666,8 +667,8 @@
                   <td class="gdt-symbol">&#x23E5;</td>
                   <td><code>flatness</code></td>
                   <td>plane</td>
-                  <td>w</td>
-                  <td>±(tol / 2)</td>
+                  <td>w, &#x03B1;, &#x03B2;</td>
+                  <td>w: ±(tol / 2); tilt: ±(tol / extent), conical</td>
                 </tr>
                 <tr>
                   <td class="gdt-symbol">&#x25CB;</td>
@@ -1067,9 +1068,11 @@ datum_label: A</code></pre>
               </thead>
               <tbody>
                 <tr><td><code>--3d</code></td><td>Enable 6-DOF SDT analysis</td></tr>
+                <tr><td><code>--measurement-point "x,y,z"</code></td><td>Where the result is evaluated (put it at the functional gap). Persisted on the stackup; defaults to the assembly origin</td></tr>
+                <tr><td><code>--seed N</code></td><td>Reproducible Monte Carlo — same seed, same chain, identical results (seed is recorded in the results for audit trails)</td></tr>
                 <tr><td><code>--visualize</code></td><td>Show ASCII chain diagram</td></tr>
                 <tr><td><code>--iterations N</code></td><td>Monte Carlo iterations (default: 10000)</td></tr>
-                <tr><td><code>--no-gdt</code></td><td>Ignore GD&T position tolerances</td></tr>
+                <tr><td><code>--no-gdt</code></td><td>1D analysis only: exclude GD&T position tolerances (3D always uses the full GD&T model)</td></tr>
               </tbody>
             </table>
 
@@ -1080,6 +1083,85 @@ datum_label: A</code></pre>
               <li><strong>Cp/Cpk</strong> - Process capability indices</li>
               <li><strong>Zero DOFs</strong> - Fully constrained by geometry or datums</li>
             </ul>
+          </section>
+
+          <section id="worked-example" class="tutorial-section">
+            <h2>Worked Example: Rotated Bore + Face</h2>
+            <p>A complete example you can follow end to end — and check by hand. A manifold block has a dowel-pin bore drilled <em>along the X axis</em> and a locating face on top. We want the deviation at the bore's location, normal to the face (Z).</p>
+
+            <h3>1. The features</h3>
+            <p>The bore: Ø6 H7, true-position Ø0.2 (M) to |A|B|, axis along X at (30, 0, 10):</p>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml — FEAT@1 (excerpt)</span></div>
+              <pre><code>geometry_class: cylinder
+geometry_3d:
+  origin: [30.0, 0.0, 10.0]
+  axis: [1.0, 0.0, 0.0]      # bore drilled along X
+  length: 12.0
+dimensions:
+  - name: bore_diameter
+    nominal: 6.0
+    plus_tol: 0.012          # H7
+    minus_tol: 0.0
+gdt:
+  - symbol: position
+    value: 0.2
+    units: mm
+    datum_refs: ["A", "B"]
+    material_condition: mmc</code></pre>
+            </div>
+            <p>The locating face: plane, normal Z at height 20, flatness 0.05 over its 40&nbsp;mm extent:</p>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">yaml — FEAT@2 (excerpt)</span></div>
+              <pre><code>geometry_class: plane
+geometry_3d:
+  origin: [0.0, 0.0, 20.0]
+  axis: [0.0, 0.0, 1.0]
+  length: 40.0               # extent, used for the tilt bound
+gdt:
+  - symbol: flatness
+    value: 0.05
+    units: mm
+    datum_refs: []           # flatness is a form control — no datum needed</code></pre>
+            </div>
+
+            <h3>2. Compute bounds, build the stackup, analyze</h3>
+            <div class="code-block">
+              <div class="code-header"><span class="code-lang">bash</span></div>
+              <pre><code><span class="cmd">tdt feat compute-bounds</span> FEAT@1 <span class="flag">--actual-size</span> 6.006 <span class="flag">--update</span>   <span style="color: var(--text-muted)"># MMC bonus from measured size</span>
+<span class="cmd">tdt feat compute-bounds</span> FEAT@2 <span class="flag">--update</span>
+<span class="cmd">tdt tol new</span> <span class="flag">-t</span> "Pin-to-face gap" <span class="flag">--target-name</span> gap <span class="flag">--target-nominal</span> 10 <span class="flag">--target-upper</span> 10.3 <span class="flag">--target-lower</span> 9.7 <span class="flag">--no-edit</span>
+<span class="cmd">tdt tol add</span> TOL@1 +FEAT@1 ~FEAT@2
+<span class="cmd">tdt tol analyze</span> TOL@1 <span class="flag">--3d</span> <span class="flag">--seed</span> 777 <span class="flag">--measurement-point</span> "30,0,10"</code></pre>
+            </div>
+            <p>(Set <code>functional_direction: [0, 0, 1]</code> on the stackup — we care about the Z gap.)</p>
+
+            <h3>3. What comes out, and why</h3>
+            <div class="output-block">
+   3D SDT Analysis (6-DOF Torsor):
+     Translations (mm):
+       u: WC [-0.013, 0.013]     ← face tilt × 10 mm Z lever only
+       v: WC [-0.115, 0.115]     ← bore radial (0.103) + face tilt × 10 mm
+       w: WC [-0.165, 0.165]     ← see the arithmetic below
+     Rotations (mrad):
+       α, β: WC [-1.250, 1.250]  ← flatness tilt: 0.05 / 40 = 1.25 mrad
+
+   Functional Deviation (projected onto [0,0,1]):
+     Worst Case: PASS (range: -0.165 to 0.165)
+     Capability: Cp=2.67, Cpk=2.67, Yield=100.00%</div>
+
+            <p>Every number is checkable by hand:</p>
+            <ul>
+              <li><strong>Bore radial zone: ±0.103.</strong> Ø0.2 position zone → radius 0.1, plus MMC bonus (6.006 − 6.000 = 0.006 diameter) → radius 0.103. Because the bore points along X, its radial zone lands in the global <strong>(Y, Z)</strong> plane — the rotated frame puts the tolerance where the physics puts it. Nothing deviates along the bore's own axis (u ≈ 0 from this feature).</li>
+              <li><strong>Face flatness: ±0.025 translation, ±1.25 mrad tilt.</strong> The substitute plane can sit anywhere in the 0.05 zone (±t/2) and tilt up to t/extent = 0.05/40 = 1.25 mrad about any in-plane axis (a conical, coupled zone).</li>
+              <li><strong>Lever arm.</strong> The face sits at (0, 0, 20); the measurement point is (30, 0, 10), so d = (30, 0, −10). The tilt contributes |d| × tilt to translation at the measurement point: 30 mm × 1.25 mrad = <strong>0.0375 mm</strong> to w, and 10 mm × 1.25 mrad = 0.0125 mm to u and v.</li>
+              <li><strong>Total w worst case:</strong> 0.103 (bore, rotated into Z) + 0.025 (flatness translation) + 0.0375 (tilt × lever arm) = <strong>0.1655 ✓</strong></li>
+            </ul>
+
+            <div class="info-box">
+              <strong>Reading the result</strong>
+              <p>The functional deviation is a <em>deviation from nominal</em>: WC ±0.165 against a ±0.3 spec band → PASS with margin. Re-run with <code>--seed 777</code> and you get bit-identical Monte Carlo numbers — the seed is stored in the results for audit trails. Add <code>mean_shift_k: 1.5</code> to the stackup and Cpk drops from 2.67 to 2.17: the Bender shift models long-term process drift toward the nearest limit.</p>
+            </div>
           </section>
 
           <section id="theory" class="tutorial-section">
@@ -1121,15 +1203,30 @@ datum_label: A</code></pre>
             </table>
 
             <h3>Jacobian Propagation</h3>
-            <p>Tessera uses Jacobian matrices to propagate deviations through the tolerance chain. For each contributor, the deviation at position <strong>P</strong> is:</p>
+            <p>Tessera uses Jacobian matrices to propagate deviations through the tolerance chain. Each feature's torsor lives in its <em>local frame</em>: local w lies along the feature's <code>geometry_3d.axis</code>, and the frame is the minimal (smallest-angle) rotation <strong>R</strong> taking the assembly +Z axis onto that axis — a feature pointing along +Z has exactly the assembly frame. The deviation contributed at the measurement point <strong>P</strong> is:</p>
             <div class="output-block">
-δP = δT + δR × (P - O)
+δP = R·δT + (R·δR) × (P − p)          (translation at P)
+δΩ = R·δR                             (rotation)
+
+    | R   −[d]×·R |
+J = |             |     with d = P − p
+    | 0      R    |
 
 where:
-  δT = [u, v, w]           (translation deviation)
-  δR = [α, β, γ]           (rotation deviation)
-  O  = feature origin
-  P  = point of interest</div>
+  δT = [u, v, w]           (translation deviation, local frame)
+  δR = [α, β, γ]           (rotation deviation, local frame)
+  p  = feature position (geometry_3d.origin)
+  P  = measurement point (stackup measurement_point; default origin)</div>
+            <p>Because of the lever arm <code>d = P − p</code>, a small tilt at a feature far from the measurement point produces a large translation there — put <code>measurement_point</code> where the functional gap physically is, or the tilt contributions will be attributed to the wrong place.</p>
+
+            <h3>Circular vs Square Zones</h3>
+            <p>A Ø position zone is a <em>circle</em>: the axis deviation satisfies &#x221A;(u² + v²) ≤ t/2, and the corner of the bounding square (u = v = t/2 simultaneously) is not a legal part. Tessera tracks this with <code>uv_circular</code> on the stored bounds:</p>
+            <ul>
+              <li><strong>Worst case</strong> uses the exact extreme of a circular zone: ρ·&#x221A;(j&#x1D64;² + j&#x1D65;²) instead of the square's ρ·(|j&#x1D64;| + |j&#x1D65;|) — up to &#x221A;2 tighter with no loss of conservatism.</li>
+              <li><strong>Monte Carlo</strong> samples uniform/triangular pairs inside the disc (a normal pair is rotationally symmetric already).</li>
+              <li>The same treatment applies to conical orientation zones via <code>ab_circular</code>: total axis tilt &#x221A;(&#x03B1;² + &#x03B2;²) ≤ t/L.</li>
+              <li>When a circular and a square control merge on the same DOF pair, the square (conservative) interpretation wins.</li>
+            </ul>
 
             <h3>GD&T to Torsor Mapping</h3>
             <p>The <code>compute-bounds</code> command applies these rules:</p>
@@ -1143,17 +1240,14 @@ where:
           </section>
 
           <section id="limitations" class="tutorial-section">
-            <h2>Model Limitations</h2>
-            <p>The SDT model makes deliberate simplifications. Know these before trusting a 3D result on a real drawing:</p>
+            <h2>Model Scope &amp; Limitations</h2>
+            <p>The 3D engine models rotated feature frames, a configurable measurement point, circular/conical tolerance zones, chain direction, and Bender mean shift natively. What remains out of scope:</p>
             <ul>
-              <li><strong>Axis-aligned local frames.</strong> Feature local frames are assumed parallel to the assembly frame (feature axis <code>[0, 0, 1]</code>). A contributor whose <code>geometry_3d.axis</code> points elsewhere triggers a runtime warning and its zone directions are approximate.</li>
-              <li><strong>Result evaluated at the assembly origin.</strong> There is no measurement-target point; rotational contributions are lever-armed by each feature's own coordinates, and the functional projection uses translations only.</li>
-              <li><strong>Circular zones are boxed.</strong> A &#x2300;t position zone becomes independent u, v &#x2208; ±t/2 bounds. Worst case is conservative by up to &#x221A;2 on diagonal directions.</li>
-              <li><strong>Orientation zones bound both &#x03B1; and &#x03B2; independently</strong>, allowing a combined tilt of &#x221A;2·(tol/length); per Y14.5 the axis tilt magnitude is &#x2264; tol/length.</li>
-              <li><strong>Flatness contributes w translation only</strong> (±t/2) — the substitute-plane tilt within the flatness zone is not modeled.</li>
-              <li><strong>Datum modeling is partial.</strong> The 3-2-1 analysis only selects which DOFs receive derived bounds (and only from the first GD&amp;T control); datum feature geometry, datum precedence effects, and MMC datum shift are not modeled.</li>
-              <li><strong>1D-only options are ignored in 3D.</strong> Per-contributor <code>direction</code>, <code>mean_shift_k</code> (Bender), and <code>include_gdt</code> do not affect the 3D path; nominal chain closure is assumed rather than checked.</li>
-              <li><strong>Staleness detection covers stackup-level 3D inputs</strong> (<code>functional_direction</code> is hashed) but not linked feature files — re-run <code>tdt tol analyze --3d</code> after changing a feature's <code>geometry_3d</code> or <code>torsor_bounds</code>.</li>
+              <li><strong>Datum modeling is partial.</strong> The 3-2-1 analysis selects which DOFs receive derived bounds (and only from the first GD&amp;T control); datum feature geometry, datum precedence effects, and MMC datum <em>shift</em> (bonus from datum features of size) are not modeled. <code>tdt validate</code> warns when a datum-dependent control (position, orientation, runout) has no <code>datum_refs</code>.</li>
+              <li><strong><code>include_gdt</code> is a 1D-only switch.</strong> The 3D path always uses the full GD&amp;T model — that is its purpose — so the flag has no effect there.</li>
+              <li><strong>Nominal chain closure is assumed, not checked.</strong> The 3D result is a <em>deviation</em> from nominal; verify your nominal dimension chain closes with the 1D analysis.</li>
+              <li><strong>Staleness detection covers stackup-level 3D inputs</strong> (<code>functional_direction</code> and <code>measurement_point</code> are hashed) but not linked feature files — re-run <code>tdt tol analyze --3d</code> after changing a feature's <code>geometry_3d</code> or <code>torsor_bounds</code>.</li>
+              <li><strong>Small-displacement assumption.</strong> Like all SDT methods, rotations are linearized (sin θ ≈ θ); fine for tolerance-scale deviations, wrong for mechanisms.</li>
             </ul>
           </section>
 

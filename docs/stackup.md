@@ -46,6 +46,7 @@ Stackups represent tolerance chain analyses with multiple dimensional contributo
 | `mean_shift_k` | number | Bender k-factor for process drift modeling (default: 0.0) |
 | `include_gdt` | boolean | Include GD&T position tolerances in calculations (default: false) |
 | `functional_direction` | array[number] | Functional direction [dx, dy, dz] for 3D analysis |
+| `measurement_point` | array[number] | Point [x, y, z] where the 3D result is evaluated (put it at the functional gap); rotations lever-arm about the distance from each feature to this point. Default: origin |
 | `analysis_3d` | Analysis3DConfig | 3D analysis configuration |
 | `analysis_results` | AnalysisResults | Auto-calculated results (1D) |
 | `analysis_results_3d` | Analysis3DResults | Auto-calculated 3D results |
@@ -390,6 +391,10 @@ tdt tol analyze TOL@1 --iterations 50000
 tdt tol analyze TOL@1 --seed 12345
 tdt tol analyze TOL@1 --3d --seed 12345
 
+# 3D: evaluate the result where the functional gap physically is
+# (persisted on the stackup; rotations lever-arm about this point)
+tdt tol analyze TOL@1 --3d --measurement-point "30,0,10"
+
 # Verbose output (shows Cp, Cpk, Pp, Ppk, sensitivity)
 tdt tol analyze TOL@1 --verbose
 
@@ -613,6 +618,8 @@ where [r]× is the skew-symmetric matrix of position vector r
 - Features must have `geometry_3d` defined (origin, axis)
 - Features must have `geometry_class` specified
 - Result projection uses the stackup's `functional_direction` (defaults to `[1, 0, 0]` when not set)
+- Contributor `direction` (+/−) and `mean_shift_k` (Bender) are honored in 3D exactly as in 1D; `include_gdt` is 1D-only (3D always uses the full GD&T model)
+- Feature axes are handled exactly: each contributor's tolerance zone acts in its own local frame (minimal rotation from +Z onto `geometry_3d.axis`)
 
 **Torsor Bounds Source**:
 

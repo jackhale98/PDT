@@ -142,6 +142,8 @@ Tessera's 3D tolerance analysis is designed to work seamlessly with ASME Y14.5 G
 |-------------|----------------|---------------------|
 | **Position** (⊕) | Cylinder | u, v (radial position) |
 | **Position** (⊕) | Plane | w (normal to plane) |
+
+Diameter zones (position/concentricity on cylinders) are stored with `uv_circular: true` — worst case and Monte Carlo treat the (u, v) pair as a circle, not a square box. Orientation zones set `ab_circular: true` (total axis tilt √(α²+β²) ≤ t/L). Flatness contributes both ±t/2 translation and ±t/extent substitute-plane tilt when the feature has a known extent (`geometry_3d.length` or `length_ref`).
 | **Perpendicularity** (⟂) | Cylinder | α, β (angular deviation) |
 | **Parallelism** (//) | Plane | α, β (angular deviation) |
 | **Flatness** (⏥) | Plane | w (out-of-plane) |

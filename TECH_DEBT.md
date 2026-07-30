@@ -135,9 +135,12 @@ The exceptions:
   and remove or wire.
 - `asm list --columns short` is accepted but renders nothing (SHORT is
   implicit); drop the enum value at the next CLI-breaking release.
-- Datum geometry/precedence and MMC datum shift are not modeled in 3D
-  (documented); position/orientation controls without `datum_refs` are
-  accepted silently — add a validation warning.
+- ~~3D model limitations (7 items)~~ — **resolved**: rotated feature frames
+  (full rotation Jacobian), measurement point, circular/conical zone
+  coupling, flatness tilt, datum-refs validation warning, and 3D
+  direction/Bender parity all landed. Remaining by design: partial datum
+  modeling (no datum shift), small-displacement linearization — documented
+  in the 3D guide's Scope section.
 
 ## Tooling recommendations
 

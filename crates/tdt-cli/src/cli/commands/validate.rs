@@ -1216,6 +1216,28 @@ fn check_feature_values(
     }
 
     // Skip torsor bounds check if no GD&T controls or dimensions (nothing to compute)
+    // Datum-dependent GD&T controls without datum references: per Y14.5,
+    // position, orientation, and runout controls are defined relative to a
+    // datum reference frame. Accepting them silently hides drawing errors.
+    for gdt in &feat.gdt {
+        use tdt_core::entities::feature::GdtSymbol;
+        let needs_datum = matches!(
+            gdt.symbol,
+            GdtSymbol::Position
+                | GdtSymbol::Perpendicularity
+                | GdtSymbol::Parallelism
+                | GdtSymbol::Angularity
+                | GdtSymbol::Runout
+                | GdtSymbol::TotalRunout
+        );
+        if needs_datum && gdt.datum_refs.is_empty() {
+            issues.push(format!(
+                "{:?} control has no datum_refs — datum-dependent controls need a datum reference frame (e.g. datum_refs: [\"A\", \"B\"]) per ASME Y14.5",
+                gdt.symbol
+            ));
+        }
+    }
+
     let check_torsor = !feat.gdt.is_empty() || !feat.dimensions.is_empty();
 
     // Skip if no geometry_class defined (can't compute bounds without knowing geometry type)

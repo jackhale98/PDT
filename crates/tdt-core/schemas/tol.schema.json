@@ -158,7 +158,7 @@
       "minimum": 1,
       "maximum": 12,
       "default": 6.0,
-      "description": "Sigma level for statistical analysis (tolerance = sigma_level × σ). Default 6.0 means tolerance band spans ±3σ."
+      "description": "Sigma level for statistical analysis (tolerance = sigma_level \u00d7 \u03c3). Default 6.0 means tolerance band spans \u00b13\u03c3."
     },
     "mean_shift_k": {
       "type": "number",
@@ -179,6 +179,15 @@
       "minItems": 3,
       "maxItems": 3,
       "description": "Functional measurement direction [dx, dy, dz] for 3D analysis"
+    },
+    "measurement_point": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Assembly-coordinate point [x,y,z] where the 3D result is evaluated (put it at the functional gap); rotational deviations lever-arm about the distance from each feature to this point. Defaults to the origin."
     },
     "analysis_3d": {
       "type": "object",
@@ -250,7 +259,7 @@
                 },
                 "minItems": 6,
                 "maxItems": 6,
-                "description": "Variance contribution per DOF [u, v, w, α, β, γ] as percentages"
+                "description": "Variance contribution per DOF [u, v, w, \u03b1, \u03b2, \u03b3] as percentages"
               }
             }
           },
@@ -278,6 +287,64 @@
           "type": "string",
           "format": "date-time",
           "description": "Analysis timestamp"
+        },
+        "functional_result": {
+          "type": "object",
+          "description": "Scalar deviation projected onto the functional direction, with capability indices",
+          "properties": {
+            "direction": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "wc_range": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "rss_mean": {
+              "type": "number"
+            },
+            "rss_3sigma": {
+              "type": "number"
+            },
+            "mc_mean": {
+              "type": "number"
+            },
+            "mc_std_dev": {
+              "type": "number"
+            },
+            "cp": {
+              "type": "number",
+              "description": "Capability index Cp"
+            },
+            "cpk": {
+              "type": "number",
+              "description": "Capability index Cpk (Bender-shifted when mean_shift_k > 0)"
+            },
+            "yield_percent": {
+              "type": "number",
+              "description": "Estimated yield percentage"
+            },
+            "shifted_mean": {
+              "type": "number",
+              "description": "Bender-shifted mean used for Cpk when mean_shift_k > 0"
+            },
+            "wc_result": {
+              "type": "string"
+            }
+          }
+        },
+        "mc_seed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seed used for the 3D Monte Carlo run; rerun with --seed to reproduce bit-for-bit"
         }
       },
       "description": "3D analysis results"
@@ -316,19 +383,19 @@
             },
             "sigma_3": {
               "type": "number",
-              "description": "3-sigma spread (±3σ)"
+              "description": "3-sigma spread (\u00b13\u03c3)"
             },
             "margin": {
               "type": "number",
-              "description": "Margin to specification limits at 3σ"
+              "description": "Margin to specification limits at 3\u03c3"
             },
             "cp": {
               "type": "number",
-              "description": "Process capability index (Cp) - ignores centering. Cp = (USL - LSL) / (6σ)"
+              "description": "Process capability index (Cp) - ignores centering. Cp = (USL - LSL) / (6\u03c3)"
             },
             "cpk": {
               "type": "number",
-              "description": "Process capability index (Cpk) - accounts for centering. Cpk = min(USL-μ, μ-LSL) / (3σ)"
+              "description": "Process capability index (Cpk) - accounts for centering. Cpk = min(USL-\u03bc, \u03bc-LSL) / (3\u03c3)"
             },
             "yield_percent": {
               "type": "number",
@@ -380,7 +447,7 @@
             },
             "ppk": {
               "type": "number",
-              "description": "Process performance index (Ppk) - uses sample std_dev, accounts for centering. Ppk = min(USL-μ, μ-LSL) / (3s)"
+              "description": "Process performance index (Ppk) - uses sample std_dev, accounts for centering. Ppk = min(USL-\u03bc, \u03bc-LSL) / (3s)"
             }
           }
         }

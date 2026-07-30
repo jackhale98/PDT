@@ -342,6 +342,18 @@ pub struct TorsorBounds {
     /// Rotation about local Z [min, max] in radians
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gamma: Option<[f64; 2]>,
+
+    /// The (u, v) bounds describe a circular zone (e.g. a Ø position zone):
+    /// the deviation point satisfies u² + v² ≤ r², not a square box.
+    /// Worst-case and Monte Carlo treat the pair jointly when set.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub uv_circular: bool,
+
+    /// The (alpha, beta) bounds describe a circular (conical) zone:
+    /// total axis tilt √(α² + β²) is limited, not each component
+    /// independently (e.g. perpendicularity of an axis).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ab_circular: bool,
 }
 
 impl TorsorBounds {

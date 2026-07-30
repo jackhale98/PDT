@@ -367,6 +367,13 @@ pub struct AnalyzeArgs {
     #[arg(long = "3d", short = '3')]
     pub three_d: bool,
 
+    /// Where the 3D result is measured, as "x,y,z" in assembly coordinates.
+    /// Put this at the functional gap; rotational deviations lever-arm about
+    /// the distance from each feature to this point. Persisted on the
+    /// stackup (measurement_point). Defaults to the assembly origin.
+    #[arg(long, value_parser = parse_point3)]
+    pub measurement_point: Option<[f64; 3]>,
+
     /// Show visualization of tolerance chain
     /// Mode: terminal (default), ascii (3D isometric), svg (save to file)
     #[arg(long, value_enum)]
@@ -375,6 +382,23 @@ pub struct AnalyzeArgs {
     /// Path to save SVG output (only used with --visualize svg)
     #[arg(long)]
     pub svg_output: Option<String>,
+}
+
+fn parse_point3(s: &str) -> Result<[f64; 3], String> {
+    let parts: Vec<&str> = s.split(',').map(str::trim).collect();
+    if parts.len() != 3 {
+        return Err(format!(
+            "expected three comma-separated numbers \"x,y,z\", got '{}'",
+            s
+        ));
+    }
+    let mut out = [0.0; 3];
+    for (i, p) in parts.iter().enumerate() {
+        out[i] = p
+            .parse::<f64>()
+            .map_err(|_| format!("'{}' is not a number", p))?;
+    }
+    Ok(out)
 }
 
 #[derive(clap::Args, Debug)]
@@ -1081,6 +1105,12 @@ fn run_analyze(args: AnalyzeArgs) -> Result<()> {
             ));
         }
         stackup.mean_shift_k = mean_shift;
+    }
+
+    // Persist an explicitly-passed measurement point on the stackup (it is
+    // an analysis input, hashed for staleness like the spec limits).
+    if let Some(p) = args.measurement_point {
+        stackup.measurement_point = Some(p);
     }
 
     // Only override the GD&T setting when --gdt/--no-gdt is explicitly
@@ -2126,6 +2156,7 @@ fn run_add(args: AddArgs) -> Result<()> {
             gdt: false,
             no_gdt: false,
             three_d: false,
+            measurement_point: None,
             visualize: None,
             svg_output: None,
         })?;
@@ -2457,21 +2488,9 @@ fn run_3d_analysis(
             }
         };
 
-        // The 3D propagators currently assume every contributor's local frame
-        // is parallel to the assembly frame (no rotation-matrix Jacobian yet),
-        // so warn when a feature axis is not the assembly Z axis.
-        let axis_eps = 1e-6;
-        if axis[0].abs() > axis_eps || axis[1].abs() > axis_eps || (axis[2] - 1.0).abs() > axis_eps
-        {
-            eprintln!(
-                "{} warning: feature {} axis [{}, {}, {}] is not the assembly Z axis; 3D analysis currently assumes axis-aligned local frames and may misattribute tolerance zones — results for this contributor are approximate",
-                style("⚠").yellow(),
-                axis_feature_id,
-                axis[0],
-                axis[1],
-                axis[2],
-            );
-        }
+        // Non-Z axes are handled exactly: the Jacobian carries the minimal
+        // rotation from +Z onto the feature axis, so local tolerance zones
+        // land in the correct global directions.
 
         // Check if we have geometry_3d data
         if feat_opt.is_some() && feat_opt.unwrap().geometry_3d.is_none() {
@@ -2532,6 +2551,10 @@ fn run_3d_analysis(
             distribution,
             sigma_level: stackup.sigma_level,
             length_info: None, // TODO: Populate from resolved length for cross-term variance
+            sign: match contrib.direction {
+                tdt_core::entities::stackup::Direction::Positive => 1.0,
+                tdt_core::entities::stackup::Direction::Negative => -1.0,
+            },
         });
     }
 
@@ -2622,7 +2645,14 @@ fn run_3d_analysis(
     }
 
     // Run 3D analysis (always includes Monte Carlo)
-    let result = sdt::analyze_chain_3d_seeded(&contributors_3d, true, monte_carlo_iterations, seed);
+    let measurement_point = stackup.measurement_point.unwrap_or([0.0, 0.0, 0.0]);
+    let result = sdt::analyze_chain_3d_seeded(
+        &contributors_3d,
+        true,
+        monte_carlo_iterations,
+        seed,
+        measurement_point,
+    );
 
     // Build sensitivity entries
     let sensitivity_3d: Vec<Sensitivity3DEntry> = contributors_3d
@@ -2643,6 +2673,7 @@ fn run_3d_analysis(
         stackup.target.lower_limit,
         stackup.target.upper_limit,
         stackup.sigma_level,
+        stackup.mean_shift_k,
     );
 
     // Store results
@@ -2700,6 +2731,7 @@ fn calculate_functional_projection(
     lsl: f64,
     usl: f64,
     _sigma_level: f64,
+    mean_shift_k: f64,
 ) -> FunctionalProjection {
     // Normalize direction vector
     let [dx, dy, dz] = direction;
@@ -2771,9 +2803,25 @@ fn calculate_functional_projection(
         None
     };
 
+    // Bender mean shift (matches the 1D convention): when mean_shift_k > 0,
+    // Cpk is computed against a mean shifted k·σ toward the NEAREST limit,
+    // modeling long-term process drift.
+    let (cpk_mean, shifted_mean) = if mean_shift_k > 0.0 && sigma_projected > 0.0 {
+        let upper_margin = dev_usl - rss_mean;
+        let lower_margin = rss_mean - dev_lsl;
+        let shifted = if upper_margin < lower_margin {
+            rss_mean + mean_shift_k * sigma_projected
+        } else {
+            rss_mean - mean_shift_k * sigma_projected
+        };
+        (shifted, Some(shifted))
+    } else {
+        (rss_mean, None)
+    };
+
     let cpk = if sigma_projected > 0.0 {
-        let cpu = (dev_usl - rss_mean) / (3.0 * sigma_projected);
-        let cpl = (rss_mean - dev_lsl) / (3.0 * sigma_projected);
+        let cpu = (dev_usl - cpk_mean) / (3.0 * sigma_projected);
+        let cpl = (cpk_mean - dev_lsl) / (3.0 * sigma_projected);
         Some(cpu.min(cpl))
     } else {
         None
@@ -2818,6 +2866,7 @@ fn calculate_functional_projection(
         cp,
         cpk,
         yield_percent,
+        shifted_mean,
         wc_result,
     }
 }

@@ -575,6 +575,10 @@ pub struct FunctionalProjection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub yield_percent: Option<f64>,
 
+    /// Bender-shifted mean used for Cpk when mean_shift_k > 0
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shifted_mean: Option<f64>,
+
     /// Pass/fail result based on worst-case
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wc_result: Option<String>,
@@ -688,6 +692,13 @@ pub struct Stackup {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub functional_direction: Option<[f64; 3]>,
 
+    /// Point (assembly coordinates) where the 3D result is evaluated — put
+    /// this where the functional gap physically is. Rotational deviations
+    /// lever-arm about the distance from each feature to this point.
+    /// Defaults to the assembly origin [0, 0, 0].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub measurement_point: Option<[f64; 3]>,
+
     /// 3D analysis configuration
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub analysis_3d: Option<Analysis3DConfig>,
@@ -784,6 +795,7 @@ impl Default for Stackup {
             mean_shift_k: 0.0,
             include_gdt: false,
             functional_direction: None,
+            measurement_point: None,
             analysis_3d: None,
             analysis_results_3d: None,
             analysis_results: AnalysisResults::default(),
@@ -860,6 +872,12 @@ impl Stackup {
         if let Some(dir) = self.functional_direction {
             hasher.update(b"fdir:");
             for c in dir {
+                hasher.update(c.to_le_bytes());
+            }
+        }
+        if let Some(p) = self.measurement_point {
+            hasher.update(b"mpoint:");
+            for c in p {
                 hasher.update(c.to_le_bytes());
             }
         }

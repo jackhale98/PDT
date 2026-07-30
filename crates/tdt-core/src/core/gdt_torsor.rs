@@ -290,10 +290,12 @@ fn compute_bounds_for_control(
             match geometry_class {
                 GeometryClass::Cylinder | GeometryClass::Cone => {
                     // Cylindrical position zone: u, v (radial position)
-                    // Position tolerance is diameter, so radius = tol/2
+                    // Position tolerance is diameter, so radius = tol/2.
+                    // The zone is CIRCULAR: √(u² + v²) ≤ tol/2.
                     let radial_bound = effective_tol / 2.0;
                     bounds.u = Some([-radial_bound, radial_bound]);
                     bounds.v = Some([-radial_bound, radial_bound]);
+                    bounds.uv_circular = true;
                 }
                 GeometryClass::Sphere | GeometryClass::Point => {
                     // Spherical position zone: u, v, w
@@ -334,12 +336,14 @@ fn compute_bounds_for_control(
                     compute_angular_bound_with_length_tolerance(effective_tol, length);
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else if let Some(g) = geometry_3d {
                 // Fallback to simple calculation if no resolved length
                 let length = g.length.unwrap_or(10.0);
                 let angular_bound = effective_tol / length;
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else {
                 warnings.push(
                     "Perpendicularity GD&T requires geometry_3d.length for angular bound calculation"
@@ -355,11 +359,13 @@ fn compute_bounds_for_control(
                     compute_angular_bound_with_length_tolerance(effective_tol, length);
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else if let Some(g) = geometry_3d {
                 let length = g.length.unwrap_or(10.0);
                 let angular_bound = effective_tol / length;
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else {
                 warnings.push(
                     "Parallelism GD&T requires geometry_3d.length for angular bound calculation"
@@ -375,11 +381,13 @@ fn compute_bounds_for_control(
                     compute_angular_bound_with_length_tolerance(effective_tol, length);
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else if let Some(g) = geometry_3d {
                 let length = g.length.unwrap_or(10.0);
                 let angular_bound = effective_tol / length;
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else {
                 warnings.push(
                     "Angularity GD&T requires geometry_3d.length for angular bound calculation"
@@ -392,13 +400,29 @@ fn compute_bounds_for_control(
             // Flatness affects w (out-of-plane) for planar features
             let bound = effective_tol / 2.0;
             bounds.w = Some([-bound, bound]);
+            // The substitute plane can also TILT within the zone: a plane of
+            // extent L inside two parallel planes distance t apart can tilt
+            // up to t/L about any in-plane axis (conical zone, so α,β are
+            // coupled). Requires a known extent; without one only w is bounded.
+            let extent = resolved_length
+                .map(|l| l.min_length())
+                .or_else(|| geometry_3d.and_then(|g| g.length));
+            if let Some(extent) = extent {
+                if extent > 0.0 {
+                    let tilt = effective_tol / extent;
+                    bounds.alpha = Some([-tilt, tilt]);
+                    bounds.beta = Some([-tilt, tilt]);
+                    bounds.ab_circular = true;
+                }
+            }
         }
 
         GdtSymbol::Concentricity => {
-            // Concentricity affects radial position (u, v)
+            // Concentricity affects radial position (u, v); circular zone
             let bound = effective_tol / 2.0;
             bounds.u = Some([-bound, bound]);
             bounds.v = Some([-bound, bound]);
+            bounds.uv_circular = true;
         }
 
         GdtSymbol::Runout => {
@@ -412,11 +436,13 @@ fn compute_bounds_for_control(
                     compute_angular_bound_with_length_tolerance(effective_tol, length);
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else if let Some(geo) = geometry_3d {
                 let length = geo.length.unwrap_or(10.0);
                 let angular_bound = effective_tol / length;
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             }
         }
 
@@ -431,11 +457,13 @@ fn compute_bounds_for_control(
                     compute_angular_bound_with_length_tolerance(effective_tol, length);
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else if let Some(geo) = geometry_3d {
                 let length = geo.length.unwrap_or(10.0);
                 let angular_bound = effective_tol / length;
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             }
         }
 
@@ -483,11 +511,13 @@ fn compute_bounds_for_control(
                     compute_angular_bound_with_length_tolerance(effective_tol, length);
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             } else if let Some(geo) = geometry_3d {
                 let length = geo.length.unwrap_or(10.0);
                 let angular_bound = effective_tol / length;
                 bounds.alpha = Some([-angular_bound, angular_bound]);
                 bounds.beta = Some([-angular_bound, angular_bound]);
+                bounds.ab_circular = true;
             }
         }
 
@@ -579,6 +609,28 @@ fn compute_bounds_from_dimension(
 
 /// Merge two TorsorBounds, taking the tighter (intersected) bounds for each DOF
 fn merge_bounds(a: TorsorBounds, b: TorsorBounds) -> TorsorBounds {
+    // Circularity of a pair survives a merge when every control that bounds
+    // the pair declared a circular zone (or the other side doesn't bound the
+    // pair at all). Mixing a circular and a square zone falls back to the
+    // square interpretation — conservative for worst case.
+    let uv_circular = match (
+        a.u.is_some() || a.v.is_some(),
+        b.u.is_some() || b.v.is_some(),
+    ) {
+        (true, true) => a.uv_circular && b.uv_circular,
+        (true, false) => a.uv_circular,
+        (false, true) => b.uv_circular,
+        (false, false) => false,
+    };
+    let ab_circular = match (
+        a.alpha.is_some() || a.beta.is_some(),
+        b.alpha.is_some() || b.beta.is_some(),
+    ) {
+        (true, true) => a.ab_circular && b.ab_circular,
+        (true, false) => a.ab_circular,
+        (false, true) => b.ab_circular,
+        (false, false) => false,
+    };
     TorsorBounds {
         u: merge_dof(a.u, b.u),
         v: merge_dof(a.v, b.v),
@@ -586,6 +638,8 @@ fn merge_bounds(a: TorsorBounds, b: TorsorBounds) -> TorsorBounds {
         alpha: merge_dof(a.alpha, b.alpha),
         beta: merge_dof(a.beta, b.beta),
         gamma: merge_dof(a.gamma, b.gamma),
+        uv_circular,
+        ab_circular,
     }
 }
 
@@ -1394,5 +1448,50 @@ mod tests {
 
         let expected = linear_tol / 50.0; // 0.002
         assert!((angular - expected).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_position_cylinder_zone_is_circular() {
+        let mut feat = create_test_feature();
+        feat.geometry_class = Some(GeometryClass::Cylinder);
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Position,
+            value: 0.4,
+            units: "mm".to_string(),
+            datum_refs: vec!["A".to_string()],
+            material_condition: MaterialCondition::Rfs,
+        });
+        let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, None, None);
+        assert!(
+            result.bounds.uv_circular,
+            "Ø position zone must be circular"
+        );
+        assert_eq!(result.bounds.u, Some([-0.2, 0.2]));
+    }
+
+    #[test]
+    fn test_flatness_adds_tilt_when_extent_known() {
+        let mut feat = create_test_feature();
+        feat.geometry_class = Some(GeometryClass::Plane);
+        feat.geometry_3d = Some(crate::entities::feature::Geometry3D {
+            origin: [0.0, 0.0, 0.0],
+            axis: [0.0, 0.0, 1.0],
+            length: Some(50.0),
+            length_ref: None,
+        });
+        feat.gdt.push(GdtControl {
+            symbol: GdtSymbol::Flatness,
+            value: 0.05,
+            units: "mm".to_string(),
+            datum_refs: vec![],
+            material_condition: MaterialCondition::Rfs,
+        });
+        let result = compute_torsor_bounds::<fn(&str) -> Option<Feature>>(&feat, None, None);
+        // w = ±t/2 as before, plus substitute-plane tilt ±t/extent (conical)
+        assert_eq!(result.bounds.w, Some([-0.025, 0.025]));
+        let tilt = 0.05 / 50.0;
+        let alpha = result.bounds.alpha.expect("tilt bounds");
+        assert!((alpha[1] - tilt).abs() < 1e-12);
+        assert!(result.bounds.ab_circular);
     }
 }

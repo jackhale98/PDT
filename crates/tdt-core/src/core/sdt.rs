@@ -335,24 +335,78 @@ pub fn get_tolerance_dofs(
 ///        | -ry   rx   0  |
 /// ```
 pub fn build_jacobian(position: [f64; 3]) -> JacobianMatrix {
-    let [rx, ry, rz] = position;
+    build_jacobian_at(position, [0.0, 0.0, 1.0], [0.0, 0.0, 0.0])
+}
 
-    // Start with identity
+/// Minimal rotation matrix taking the local +Z axis onto `axis`.
+///
+/// This defines each feature's local frame: local w lies along the feature
+/// axis, and local u, v are the images of global X, Y under the same
+/// (smallest-angle) rotation — for a +Z axis the frame is exactly the global
+/// frame, so axis-aligned models behave identically to the pre-rotation
+/// implementation.
+pub fn rotation_from_z(axis: [f64; 3]) -> nalgebra::Matrix3<f64> {
+    let len = (axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]).sqrt();
+    if len < 1e-10 {
+        return nalgebra::Matrix3::identity();
+    }
+    let a = [axis[0] / len, axis[1] / len, axis[2] / len];
+
+    // Rodrigues: rotate about z × a by angle acos(z · a)
+    let cos_t = a[2]; // z · a
+    if cos_t > 1.0 - 1e-12 {
+        return nalgebra::Matrix3::identity();
+    }
+    if cos_t < -1.0 + 1e-12 {
+        // axis = −Z: 180° about X (u stays, v and w flip)
+        return nalgebra::Matrix3::new(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0);
+    }
+    // k = (z × a) normalized; z × a = (−a_y, a_x, 0)
+    let k_raw = [-a[1], a[0], 0.0];
+    let k_len = (k_raw[0] * k_raw[0] + k_raw[1] * k_raw[1]).sqrt();
+    let k = [k_raw[0] / k_len, k_raw[1] / k_len, 0.0];
+    let sin_t = k_len; // |z × a| = sin(angle)
+
+    let kx = nalgebra::Matrix3::new(0.0, -k[2], k[1], k[2], 0.0, -k[0], -k[1], k[0], 0.0);
+    nalgebra::Matrix3::identity() + kx * sin_t + kx * kx * (1.0 - cos_t)
+}
+
+/// Build the full Jacobian for a feature with local frame rotation R (from
+/// `axis`) at `position`, evaluating the result at `measurement_point`.
+///
+/// Local torsor (δt, δω) → deviation at measurement point P:
+///
+/// ```text
+/// δP = R·δt + (R·δω) × (P − p)     (translations, lever-armed rotations)
+/// δΩ = R·δω                        (rotations)
+///
+/// J = | R   −[d]×·R |    with d = P − p
+///     | 0      R    |
+/// ```
+pub fn build_jacobian_at(
+    position: [f64; 3],
+    axis: [f64; 3],
+    measurement_point: [f64; 3],
+) -> JacobianMatrix {
+    let r = rotation_from_z(axis);
+    let d = [
+        measurement_point[0] - position[0],
+        measurement_point[1] - position[1],
+        measurement_point[2] - position[2],
+    ];
+    // (R·δω) × d = [Rω]× d = −[d]× (R·δω)  →  upper-right block = −[d]×·R
+    let dx = nalgebra::Matrix3::new(0.0, -d[2], d[1], d[2], 0.0, -d[0], -d[1], d[0], 0.0);
+    let upper_right = -dx * r;
+
     let mut j = Matrix6::identity();
-
-    // Add −[r]× to the upper-right 3×3 block (u_out = u − ω × r).
-    // This captures the effect of rotations producing translations at a distance:
-    // J[0,4] = -rz (rotation about Y at height rz produces -X translation at origin)
-    // J[0,5] = ry  (rotation about Z at offset ry produces +X translation at origin)
-    // J[2,4] = rx  (rotation about Y at offset rx produces +Z translation at origin)
-    // etc.
-    j[(0, 4)] = -rz;
-    j[(0, 5)] = ry;
-    j[(1, 3)] = rz;
-    j[(1, 5)] = -rx;
-    j[(2, 3)] = -ry;
-    j[(2, 4)] = rx;
-
+    for row in 0..3 {
+        for col in 0..3 {
+            j[(row, col)] = r[(row, col)];
+            j[(row, col + 3)] = upper_right[(row, col)];
+            j[(row + 3, col + 3)] = r[(row, col)];
+            j[(row + 3, col)] = 0.0;
+        }
+    }
     j
 }
 
@@ -432,6 +486,10 @@ pub struct ChainContributor3D {
     /// Optional length tolerance info for cross-term variance in angular DOFs
     /// Only applicable when angular bounds are derived from linear tolerance over a length
     pub length_info: Option<LengthToleranceInfo>,
+
+    /// Chain direction: +1.0 for positive contributors, −1.0 for negative
+    /// (mirrors the 1D contributor `direction` field)
+    pub sign: f64,
 }
 
 /// Result of 3D chain propagation
@@ -466,12 +524,15 @@ fn bounds_or_zero(bounds: &Option<[f64; 2]>) -> [f64; 2] {
 /// result_min[j] = Σ min(J[j,k] * bounds[k].min, J[j,k] * bounds[k].max)
 /// result_max[j] = Σ max(J[j,k] * bounds[k].min, J[j,k] * bounds[k].max)
 /// ```
-pub fn propagate_worst_case(contributors: &[ChainContributor3D]) -> TorsorBounds {
+pub fn propagate_worst_case(
+    contributors: &[ChainContributor3D],
+    measurement_point: [f64; 3],
+) -> TorsorBounds {
     let mut result_min = [0.0f64; 6];
     let mut result_max = [0.0f64; 6];
 
     for contrib in contributors {
-        let j = build_jacobian(contrib.position);
+        let j = build_jacobian_at(contrib.position, contrib.axis, measurement_point);
         let bounds_array = [
             bounds_or_zero(&contrib.bounds.u),
             bounds_or_zero(&contrib.bounds.v),
@@ -481,19 +542,46 @@ pub fn propagate_worst_case(contributors: &[ChainContributor3D]) -> TorsorBounds
             bounds_or_zero(&contrib.bounds.gamma),
         ];
 
-        // For each output DOF
-        for out_dof in 0..6 {
-            // Sum contributions from all input DOFs
-            for in_dof in 0..6 {
-                let j_val = j[(out_dof, in_dof)];
-                let [b_min, b_max] = bounds_array[in_dof];
+        // Circular pairs are bounded jointly: the extreme of
+        // j_u·u + j_v·v over u² + v² ≤ ρ² is ρ·√(j_u² + j_v²), not
+        // ρ·(|j_u| + |j_v|) — the corner of the box isn't in the zone.
+        let circular_pairs: &[(usize, usize, bool)] = &[
+            (0, 1, contrib.bounds.uv_circular),
+            (3, 4, contrib.bounds.ab_circular),
+        ];
+        let in_circular = |dof: usize| {
+            circular_pairs
+                .iter()
+                .any(|&(a, b, c)| c && (dof == a || dof == b))
+        };
 
-                // Worst case: take min/max considering sign of Jacobian element
+        for out_dof in 0..6 {
+            // Independent DOFs: interval arithmetic per element
+            for in_dof in 0..6 {
+                if in_circular(in_dof) {
+                    continue;
+                }
+                let j_val = contrib.sign * j[(out_dof, in_dof)];
+                let [b_min, b_max] = bounds_array[in_dof];
                 let contrib_1 = j_val * b_min;
                 let contrib_2 = j_val * b_max;
-
                 result_min[out_dof] += contrib_1.min(contrib_2);
                 result_max[out_dof] += contrib_1.max(contrib_2);
+            }
+            // Circular pairs: center linearly, radius via the row norm
+            for &(a, b, circ) in circular_pairs {
+                if !circ {
+                    continue;
+                }
+                let ja = contrib.sign * j[(out_dof, a)];
+                let jb = contrib.sign * j[(out_dof, b)];
+                let [a_min, a_max] = bounds_array[a];
+                let [b_min, b_max] = bounds_array[b];
+                let center = ja * (a_min + a_max) / 2.0 + jb * (b_min + b_max) / 2.0;
+                let radius = ((a_max - a_min) / 2.0).max((b_max - b_min) / 2.0);
+                let extent = radius * (ja * ja + jb * jb).sqrt();
+                result_min[out_dof] += center - extent;
+                result_max[out_dof] += center + extent;
             }
         }
     }
@@ -505,6 +593,8 @@ pub fn propagate_worst_case(contributors: &[ChainContributor3D]) -> TorsorBounds
         alpha: Some([result_min[3], result_max[3]]),
         beta: Some([result_min[4], result_max[4]]),
         gamma: Some([result_min[5], result_max[5]]),
+        uv_circular: false,
+        ab_circular: false,
     }
 }
 
@@ -521,13 +611,16 @@ pub fn propagate_worst_case(contributors: &[ChainContributor3D]) -> TorsorBounds
 /// ```text
 /// σ²(angular)_cross = (t/L²)² × σ²(L)
 /// ```
-pub fn propagate_rss(contributors: &[ChainContributor3D]) -> (ResultTorsor, Vec<[f64; 6]>) {
+pub fn propagate_rss(
+    contributors: &[ChainContributor3D],
+    measurement_point: [f64; 3],
+) -> (ResultTorsor, Vec<[f64; 6]>) {
     let mut mean = [0.0f64; 6];
     let mut variance = [0.0f64; 6];
     let mut individual_variances: Vec<[f64; 6]> = Vec::with_capacity(contributors.len());
 
     for contrib in contributors {
-        let j = build_jacobian(contrib.position);
+        let j = build_jacobian_at(contrib.position, contrib.axis, measurement_point);
         let bounds_array = [
             bounds_or_zero(&contrib.bounds.u),
             bounds_or_zero(&contrib.bounds.v),
@@ -544,9 +637,10 @@ pub fn propagate_rss(contributors: &[ChainContributor3D]) -> (ResultTorsor, Vec<
                 let j_val = j[(out_dof, in_dof)];
                 let [b_min, b_max] = bounds_array[in_dof];
 
-                // Mean is center of bounds
+                // Mean is center of bounds (sign flips negative-direction
+                // contributions; variance is sign-invariant)
                 let b_mean = (b_min + b_max) / 2.0;
-                mean[out_dof] += j_val * b_mean;
+                mean[out_dof] += contrib.sign * j_val * b_mean;
 
                 // Variance: σ = range / sigma_level, then J² * σ²
                 let range = b_max - b_min;
@@ -666,13 +760,10 @@ fn sample_torsor<R: Rng>(
         bounds_or_zero(&bounds.gamma),
     ];
 
-    let mut result = Torsor::zeros();
-
-    for (dof, [b_min, b_max]) in bounds_array.iter().enumerate() {
+    let sample_dof = |rng: &mut R, b_min: f64, b_max: f64| -> f64 {
         let range = b_max - b_min;
         let center = (b_min + b_max) / 2.0;
-
-        result[dof] = match distribution {
+        match distribution {
             Distribution::Normal => {
                 // Box-Muller transform
                 let sigma = range / sigma_level;
@@ -684,21 +775,60 @@ fn sample_torsor<R: Rng>(
                 rng.random_range((center - half_range)..=(center + half_range))
             }
             Distribution::Triangular => {
-                let min = *b_min;
-                let max = *b_max;
-                if (max - min).abs() < f64::EPSILON {
+                if range.abs() < f64::EPSILON {
                     center
                 } else {
                     let u: f64 = rng.random();
-                    let fc = (center - min) / (max - min);
+                    let fc = (center - b_min) / range;
                     if u < fc {
-                        min + (u * (max - min) * (center - min)).sqrt()
+                        b_min + (u * range * (center - b_min)).sqrt()
                     } else {
-                        max - ((1.0 - u) * (max - min) * (max - center)).sqrt()
+                        b_max - ((1.0 - u) * range * (b_max - center)).sqrt()
                     }
                 }
             }
-        };
+        }
+    };
+
+    let mut result = Torsor::zeros();
+    for (dof, [b_min, b_max]) in bounds_array.iter().enumerate() {
+        result[dof] = sample_dof(rng, *b_min, *b_max);
+    }
+
+    // Circular zones: the (u,v) / (α,β) pair must land inside the circle,
+    // not just the bounding box. Normal samples are isotropic (a 2D gaussian
+    // is rotationally symmetric) so they pass through; bounded distributions
+    // are rejection-sampled into the disc — up to a fixed attempt cap, then
+    // radially clamped, keeping the loop deterministic per seed.
+    for (a, b, circ) in [
+        (0usize, 1usize, bounds.uv_circular),
+        (3, 4, bounds.ab_circular),
+    ] {
+        if !circ || matches!(distribution, Distribution::Normal) {
+            continue;
+        }
+        let [a_min, a_max] = bounds_array[a];
+        let [b_min, b_max] = bounds_array[b];
+        let (ca, cb) = ((a_min + a_max) / 2.0, (b_min + b_max) / 2.0);
+        let radius = ((a_max - a_min) / 2.0).max((b_max - b_min) / 2.0);
+        if radius <= f64::EPSILON {
+            continue;
+        }
+        let mut attempts = 0;
+        while ((result[a] - ca).powi(2) + (result[b] - cb).powi(2)).sqrt() > radius {
+            if attempts >= 16 {
+                // Clamp radially onto the circle
+                let da = result[a] - ca;
+                let db = result[b] - cb;
+                let len = (da * da + db * db).sqrt();
+                result[a] = ca + da / len * radius;
+                result[b] = cb + db / len * radius;
+                break;
+            }
+            result[a] = sample_dof(rng, a_min, a_max);
+            result[b] = sample_dof(rng, b_min, b_max);
+            attempts += 1;
+        }
     }
 
     result
@@ -709,7 +839,7 @@ fn sample_torsor<R: Rng>(
 pub fn monte_carlo_3d(contributors: &[ChainContributor3D], iterations: u32) -> (ResultTorsor, u64) {
     let seed: u64 = rand::Rng::random(&mut rand::rng());
     (
-        monte_carlo_3d_with_seed(contributors, iterations, seed),
+        monte_carlo_3d_with_seed(contributors, iterations, seed, [0.0, 0.0, 0.0]),
         seed,
     )
 }
@@ -721,6 +851,7 @@ pub fn monte_carlo_3d_with_seed(
     contributors: &[ChainContributor3D],
     iterations: u32,
     seed: u64,
+    measurement_point: [f64; 3],
 ) -> ResultTorsor {
     use rand::SeedableRng;
     let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
@@ -735,7 +866,7 @@ pub fn monte_carlo_3d_with_seed(
         let mut result_torsor = Torsor::zeros();
 
         for contrib in contributors {
-            let j = build_jacobian(contrib.position);
+            let j = build_jacobian_at(contrib.position, contrib.axis, measurement_point);
             let sample = sample_torsor(
                 &contrib.bounds,
                 contrib.distribution,
@@ -743,8 +874,8 @@ pub fn monte_carlo_3d_with_seed(
                 &mut rng,
             );
 
-            // Transform through Jacobian
-            result_torsor += j * sample;
+            // Transform through Jacobian (sign flips negative-direction chains)
+            result_torsor += (j * sample) * contrib.sign;
         }
 
         for dof in 0..6 {
@@ -869,7 +1000,13 @@ pub fn analyze_chain_3d(
     run_monte_carlo: bool,
     monte_carlo_iterations: u32,
 ) -> Chain3DResult {
-    analyze_chain_3d_seeded(contributors, run_monte_carlo, monte_carlo_iterations, None)
+    analyze_chain_3d_seeded(
+        contributors,
+        run_monte_carlo,
+        monte_carlo_iterations,
+        None,
+        [0.0, 0.0, 0.0],
+    )
 }
 
 /// Like [`analyze_chain_3d`], with an optional caller-provided Monte Carlo
@@ -880,12 +1017,13 @@ pub fn analyze_chain_3d_seeded(
     run_monte_carlo: bool,
     monte_carlo_iterations: u32,
     seed: Option<u64>,
+    measurement_point: [f64; 3],
 ) -> Chain3DResult {
     // Worst-case analysis
-    let wc_bounds = propagate_worst_case(contributors);
+    let wc_bounds = propagate_worst_case(contributors, measurement_point);
 
     // RSS analysis with sensitivity
-    let (mut rss_stats, sensitivity) = propagate_rss(contributors);
+    let (mut rss_stats, sensitivity) = propagate_rss(contributors, measurement_point);
 
     // Merge worst-case into RSS stats
     merge_wc_into_result(&mut rss_stats, &wc_bounds);
@@ -893,7 +1031,12 @@ pub fn analyze_chain_3d_seeded(
     // Optional Monte Carlo
     let (mc_stats, mc_seed) = if run_monte_carlo && !contributors.is_empty() {
         let seed = seed.unwrap_or_else(|| rand::Rng::random(&mut rand::rng()));
-        let mc = monte_carlo_3d_with_seed(contributors, monte_carlo_iterations, seed);
+        let mc = monte_carlo_3d_with_seed(
+            contributors,
+            monte_carlo_iterations,
+            seed,
+            measurement_point,
+        );
         merge_mc_into_result(&mut rss_stats, &mc);
         (Some(mc), Some(seed))
     } else {
@@ -959,12 +1102,15 @@ mod tests {
     #[test]
     fn test_propagate_worst_case_single() {
         let contrib = ChainContributor3D {
+            sign: 1.0,
             name: "Test".to_string(),
             feature_id: None,
             geometry_class: GeometryClass::Plane,
             position: [0.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             bounds: TorsorBounds {
+                uv_circular: false,
+                ab_circular: false,
                 u: Some([-0.1, 0.1]),
                 v: Some([-0.1, 0.1]),
                 w: Some([-0.05, 0.05]),
@@ -977,7 +1123,7 @@ mod tests {
             length_info: None,
         };
 
-        let result = propagate_worst_case(&[contrib]);
+        let result = propagate_worst_case(&[contrib], [0.0, 0.0, 0.0]);
 
         // At origin with identity Jacobian, result should match input
         assert!((result.u.unwrap()[0] - (-0.1)).abs() < 1e-10);
@@ -990,12 +1136,15 @@ mod tests {
         // beta ∈ [0, +0.01] rad at x = 10 must produce w ∈ [0, +0.1]
         // at the assembly origin (u_out = u − ω × r).
         let contrib = ChainContributor3D {
+            sign: 1.0,
             name: "Lever".to_string(),
             feature_id: None,
             geometry_class: GeometryClass::Cylinder,
             position: [10.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             bounds: TorsorBounds {
+                uv_circular: false,
+                ab_circular: false,
                 u: None,
                 v: None,
                 w: None,
@@ -1008,7 +1157,7 @@ mod tests {
             length_info: None,
         };
 
-        let result = propagate_worst_case(&[contrib]);
+        let result = propagate_worst_case(&[contrib], [0.0, 0.0, 0.0]);
 
         let [w_min, w_max] = result.w.unwrap();
         assert!(
@@ -1026,12 +1175,15 @@ mod tests {
     #[test]
     fn test_propagate_rss() {
         let contrib = ChainContributor3D {
+            sign: 1.0,
             name: "Test".to_string(),
             feature_id: None,
             geometry_class: GeometryClass::Plane,
             position: [0.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             bounds: TorsorBounds {
+                uv_circular: false,
+                ab_circular: false,
                 u: Some([-0.1, 0.1]),
                 v: None,
                 w: None,
@@ -1044,7 +1196,7 @@ mod tests {
             length_info: None,
         };
 
-        let (result, sensitivity) = propagate_rss(&[contrib]);
+        let (result, sensitivity) = propagate_rss(&[contrib], [0.0, 0.0, 0.0]);
 
         // Mean should be 0 for symmetric bounds
         assert!(result.u.rss_mean.abs() < 1e-10);
@@ -1106,12 +1258,15 @@ mod tests {
     fn test_propagate_rss_with_length_tolerance() {
         // Test that cross-term variance is added for angular DOFs
         let contrib_no_length = ChainContributor3D {
+            sign: 1.0,
             name: "NoLength".to_string(),
             feature_id: None,
             geometry_class: GeometryClass::Cylinder,
             position: [0.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             bounds: TorsorBounds {
+                uv_circular: false,
+                ab_circular: false,
                 u: None,
                 v: None,
                 w: None,
@@ -1125,12 +1280,15 @@ mod tests {
         };
 
         let contrib_with_length = ChainContributor3D {
+            sign: 1.0,
             name: "WithLength".to_string(),
             feature_id: None,
             geometry_class: GeometryClass::Cylinder,
             position: [0.0, 0.0, 0.0],
             axis: [0.0, 0.0, 1.0],
             bounds: TorsorBounds {
+                uv_circular: false,
+                ab_circular: false,
                 u: None,
                 v: None,
                 w: None,
@@ -1147,8 +1305,8 @@ mod tests {
             }),
         };
 
-        let (result_no_len, _) = propagate_rss(&[contrib_no_length]);
-        let (result_with_len, _) = propagate_rss(&[contrib_with_length]);
+        let (result_no_len, _) = propagate_rss(&[contrib_no_length], [0.0, 0.0, 0.0]);
+        let (result_with_len, _) = propagate_rss(&[contrib_with_length], [0.0, 0.0, 0.0]);
 
         // With length tolerance, the alpha 3-sigma should be larger
         assert!(
@@ -1156,6 +1314,156 @@ mod tests {
             "With length tolerance should have >= 3sigma: {} vs {}",
             result_with_len.alpha.rss_3sigma,
             result_no_len.alpha.rss_3sigma
+        );
+    }
+
+    fn basic_contrib(bounds: TorsorBounds, axis: [f64; 3]) -> ChainContributor3D {
+        ChainContributor3D {
+            sign: 1.0,
+            name: "t".to_string(),
+            feature_id: None,
+            geometry_class: GeometryClass::Cylinder,
+            position: [0.0, 0.0, 0.0],
+            axis,
+            bounds,
+            distribution: Distribution::Normal,
+            sigma_level: 6.0,
+            length_info: None,
+        }
+    }
+
+    fn uv_bounds(r: f64, circular: bool) -> TorsorBounds {
+        TorsorBounds {
+            u: Some([-r, r]),
+            v: Some([-r, r]),
+            w: None,
+            alpha: None,
+            beta: None,
+            gamma: None,
+            uv_circular: circular,
+            ab_circular: false,
+        }
+    }
+
+    #[test]
+    fn test_rotation_identity_for_z_axis() {
+        let r = rotation_from_z([0.0, 0.0, 1.0]);
+        assert!((r - nalgebra::Matrix3::identity()).norm() < 1e-12);
+    }
+
+    #[test]
+    fn test_rotated_axis_maps_radial_zone_to_transverse_plane() {
+        // A pin along global X: its radial position zone (local u,v) must
+        // land in the global (Y,Z) plane — deviations perpendicular to the
+        // pin axis. The old axis-ignoring implementation put them in (X,Y).
+        let contrib = basic_contrib(uv_bounds(0.1, false), [1.0, 0.0, 0.0]);
+        let wc = propagate_worst_case(&[contrib], [0.0, 0.0, 0.0]);
+        let u = wc.u.unwrap();
+        let v = wc.v.unwrap();
+        let w = wc.w.unwrap();
+        // No deviation along the pin axis (global X)
+        assert!(
+            u[0].abs() < 1e-9 && u[1].abs() < 1e-9,
+            "axis dir clean: {:?}",
+            u
+        );
+        // Full radial deviation transverse to the axis
+        assert!((v[1] - 0.1).abs() < 1e-9, "global Y: {:?}", v);
+        assert!((w[1] - 0.1).abs() < 1e-9, "global Z: {:?}", w);
+    }
+
+    #[test]
+    fn test_measurement_point_lever_arm() {
+        // Feature at origin with β = ±0.01 rad; measured at P = [10, 0, 0].
+        // δΩ × d with d = P − p = (10,0,0): (0,β,0) × (10,0,0) = (0,0,−10β),
+        // so w at the measurement point spans ±0.1.
+        let bounds = TorsorBounds {
+            u: None,
+            v: None,
+            w: None,
+            alpha: None,
+            beta: Some([-0.01, 0.01]),
+            gamma: None,
+            uv_circular: false,
+            ab_circular: false,
+        };
+        let contrib = basic_contrib(bounds, [0.0, 0.0, 1.0]);
+        let wc = propagate_worst_case(&[contrib], [10.0, 0.0, 0.0]);
+        let w = wc.w.unwrap();
+        assert!(
+            (w[0] + 0.1).abs() < 1e-9 && (w[1] - 0.1).abs() < 1e-9,
+            "{:?}",
+            w
+        );
+        // At the origin the same rotation contributes nothing
+        let contrib = basic_contrib(
+            TorsorBounds {
+                beta: Some([-0.01, 0.01]),
+                ..uv_bounds(0.0, false)
+            },
+            [0.0, 0.0, 1.0],
+        );
+        let wc0 = propagate_worst_case(&[contrib], [0.0, 0.0, 0.0]);
+        let w0 = wc0.w.unwrap();
+        assert!(w0[0].abs() < 1e-9 && w0[1].abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_circular_zone_tighter_than_box() {
+        // With the frame rotated so a result row mixes u and v, a circular
+        // zone's worst case is ρ·√(j_u²+j_v²) — strictly tighter than the
+        // box's ρ·(|j_u|+|j_v|).
+        let axis = [1.0, 1.0, 1.0];
+        let boxy = propagate_worst_case(
+            &[basic_contrib(uv_bounds(0.1, false), axis)],
+            [0.0, 0.0, 0.0],
+        );
+        let circ = propagate_worst_case(
+            &[basic_contrib(uv_bounds(0.1, true), axis)],
+            [0.0, 0.0, 0.0],
+        );
+        let (bu, cu) = (boxy.u.unwrap(), circ.u.unwrap());
+        assert!(cu[1] < bu[1] - 1e-12, "circular {:?} !< box {:?}", cu, bu);
+        // And the circular extent matches the row norm times the radius
+        let j = build_jacobian_at([0.0, 0.0, 0.0], axis, [0.0, 0.0, 0.0]);
+        let expected = 0.1 * (j[(0, 0)].powi(2) + j[(0, 1)].powi(2)).sqrt();
+        assert!((cu[1] - expected).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_direction_sign_flips_contribution() {
+        let bounds = TorsorBounds {
+            w: Some([0.0, 0.2]),
+            ..uv_bounds(0.0, false)
+        };
+        let mut contrib = basic_contrib(bounds, [0.0, 0.0, 1.0]);
+        contrib.sign = -1.0;
+        let wc = propagate_worst_case(&[contrib.clone()], [0.0, 0.0, 0.0]);
+        let w = wc.w.unwrap();
+        assert!((w[0] + 0.2).abs() < 1e-9 && w[1].abs() < 1e-9, "{:?}", w);
+        let (rss, _) = propagate_rss(&[contrib], [0.0, 0.0, 0.0]);
+        assert!((rss.w.rss_mean + 0.1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_uniform_circular_sampling_stays_in_disc() {
+        // Uniform-in-disc per-axis std is ρ/2; independent-uniform is ρ/√3.
+        // 50k samples distinguish them decisively.
+        let rho = 0.1;
+        let mk = |circ| {
+            let mut c = basic_contrib(uv_bounds(rho, circ), [0.0, 0.0, 1.0]);
+            c.distribution = Distribution::Uniform;
+            c
+        };
+        let disc = monte_carlo_3d_with_seed(&[mk(true)], 50_000, 42, [0.0, 0.0, 0.0]);
+        let boxy = monte_carlo_3d_with_seed(&[mk(false)], 50_000, 42, [0.0, 0.0, 0.0]);
+        let sd_disc = disc.u.mc_std_dev.unwrap();
+        let sd_box = boxy.u.mc_std_dev.unwrap();
+        assert!((sd_disc - rho / 2.0).abs() < 0.003, "disc std {}", sd_disc);
+        assert!(
+            (sd_box - rho / 3.0f64.sqrt()).abs() < 0.003,
+            "box std {}",
+            sd_box
         );
     }
 }

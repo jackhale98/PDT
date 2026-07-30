@@ -1,152 +1,88 @@
 # Technical Debt Register
 
-Compiled 2026-07-16 during a full codebase review. Measurements taken on a
-160-entity test project with a debug build. Ordered by leverage: what most
-reduces code size, defect rate, and maintenance cost.
+Compiled 2026-07-16 during a full codebase review; last updated 2026-07-30.
+Every item from the original register has been resolved except those listed
+under **Remaining** below. The resolved-work summary at the bottom records
+what was done and where, for archaeology.
 
-## 1. Entity-command duplication (highest leverage)
+## Remaining
 
-`crates/tdt-cli/src/cli/commands/` is **42.8k lines**, and 21 entity command
-files (req, risk, test, cmp, asm, sup, quote, feat, mate, tol, proc, ctrl,
-work, ncr, capa, lot, dev, haz, rslt, ...) each re-implement the same shape:
+Ordered by recommended priority.
 
-- 12 hand-copied `output_cached_*` functions
-- 20 copies of the `can_use_cache` fast-path predicate
-- 8 local `find_entity`/`find_entity_file` lookup helpers
-- 14 files carrying their own entity-directory tables (the canonical source
-  is `Project::entity_directory` / `risk_directory` / `test_directory`)
+### Worth doing when touched
 
-This duplication is where this review found whole classes of copy-drift bugs
-(`-o path` panics in 22 places, wrong directory tables in bulk ops, a wrong
-`QUOTE` prefix, `risk new` writing to a different directory than it printed).
+- **`LengthToleranceInfo` cross-term path is unreachable in production**
+  (`core/sdt.rs`): every production caller passes `None`; only tests
+  exercise it. Wire the feature lookup (so length tolerance feeds angular
+  variance) or delete the path.
+- **YAML mutation paths strip guidance comments** (`link add`, suspect
+  mark/clear): entities are created with helpful comments, and the first
+  link operation rewrites the file without them; formatting also differs
+  from service saves, producing churny git diffs. A comment/format-
+  preserving YAML editor would fix both.
+- **`bulk.rs` edits YAML via string surgery**: now line-anchored and safe,
+  but parse-modify-serialize would be structurally robust.
+- **1D RSS `yield`/`margin` use the unshifted mean while Cpk uses the
+  Bender-shifted mean** when `mean_shift_k > 0` (3D shifts consistently);
+  consider shifting all three for a coherent story.
+- **`risk.schema.json` documents a `links.controls` field** written by
+  neither the struct nor the link registry (Risk→Ctrl uses `mitigated_by`);
+  decide: remove from schema or wire it.
 
-**Progress:**
-- ~~output_cached_* duplication~~ — **resolved**: one generic
-  (`entity_cmd::output_cached_list`) serves 10 entities.
-- ~~slow-path output_* duplication~~ — **resolved**: one generic
-  (`entity_cmd::output_entity_list`) serves 15 entities (lot/dev keep their
-  custom CSV renderers; haz has a fixed column set).
-- ~~entity-directory tables~~ — **resolved**:
-  `Project::entity_search_directories` is the single source.
-- ~~Auto→TSV format resolution~~ — **resolved**: `GlobalOpts::list_format()`
-  replaced 26 copies.
+### Scale-dependent (act when projects grow)
 
-- ~~per-entity `ListColumn` enums/impls~~ — **resolved**: `list_columns!`
-  macro generates enum + clap value names + `key()` + `Display` consistently
-  (help output verified byte-identical).
+- **`link suspect list` reads every entity YAML file**: fine at hundreds of
+  entities; index suspect flags in the SQLite cache at thousands.
+- **`cli/table.rs` width math is char-count-based**, not display-width:
+  CJK/emoji titles can misalign columns (cosmetic; the old byte-slicing
+  panics are fixed).
 
-**Remaining in this area:** the `run_list` filter-building and dispatch
-(mostly entity-specific — generifying further has poor risk/reward) and
-`new`/`show` ceremony. Generifying `new`/`show` displays is NOT recommended:
-they differ meaningfully per entity.
+### Parked for the next CLI-breaking release
 
-## 2. Dual git implementations
+- **Short-flag polarity differs between entity commands** (`req new -T
+  title -t type` vs `proc`/`ncr new -t title -T type`). Align on one
+  convention.
+- **`asm list --columns short`** is accepted but renders nothing (SHORT is
+  implicit); drop the enum value.
 
-**Resolved (feature-gated):** desktop/CLI builds now use shell `git`
-exclusively — `gix` is not compiled at all (129 crates dropped from the
-build, debug binary 74.2 → 62.7 MB). Mobile targets keep the gix-backed
-local operations via a target-conditional dependency, since iOS/Android
-have no `git` binary. The `gix-vc` cargo feature compile-checks the gix
-path on desktop CI. Both implementations expose an identical `Git` API
-(`shell_local.rs` vs `repo.rs`/`index.rs`/`commit.rs`); behavior parity is
-covered by the git test suite, which now runs against the shell path.
+### Out of scope by design (documented, revisit only on demand)
 
-## 3. Two table renderers
+- **3D datum modeling is partial**: the 3-2-1 analysis selects derived-
+  bound DOFs (first GD&T control only); datum feature geometry, precedence
+  effects, and MMC datum *shift* are not modeled. `tdt validate` warns on
+  datumless datum-dependent controls. See the 3D guide's Scope section.
+- **3D staleness hash covers stackup-level inputs** (`functional_direction`,
+  `measurement_point`) but not linked feature files — re-analyze after
+  editing a feature's `geometry_3d`/`torsor_bounds`.
+- **Small-displacement linearization** (inherent to SDT).
+- **Further entity-command generification** (`run_list` filter building,
+  `new`/`show` displays): what remains is genuinely entity-specific;
+  generifying it is abstraction for its own sake. The list/output pipeline
+  is already fully consolidated.
 
-**Resolved:** the `tabled` dependency is dropped. Report generation (rvm,
-fmea, test_status, open_issues, bom, tolerance) uses a ~50-line
-`MarkdownTableBuilder` in `cli/helpers.rs` — markdown output with padded
-columns was all the reports needed. `cli/table.rs` remains the interactive
-list renderer. Residual note: `table.rs` width math is char-count-based,
-not display-width — CJK/emoji titles can misalign columns (cosmetic).
+### CI/tooling recommendations (not yet adopted)
 
-## 4. Reserved / unreachable code
+- `cargo clippy --all-targets -D warnings` and `cargo machete` in CI (both
+  currently clean; the gate would keep them so).
+- A docs-example checker in CI: extract ```bash blocks from README/docs and
+  validate each `tdt` command's flags against `--help` output. The original
+  review found 50+ drifted examples this way; the script pattern is proven.
 
-- ~~`Analysis3DConfig` never read~~ — **resolved**: `enabled: true` now
-  triggers 3D analysis without `--3d`, and `monte_carlo_iterations` is used
-  when `--iterations` is left at its default. `method` remains reserved.
-- `LengthToleranceInfo` cross-term path (`core/sdt.rs:386`) — every
-  production caller passes `None` (`run_3d_analysis` hardcodes it,
-  `feat compute-bounds`/`validate` pass `None`). Only tests exercise it.
-  Wire the feature lookup or delete the path.
-- ~~Blanket `#![allow(dead_code)]` suppressions~~ — **resolved**: the six
-  module-level allows are gone; 17 dead functions/items deleted (incl. the
-  empty `cli/output.rs` module and `MarkdownTable`). Remaining targeted
-  allows carry rationale comments tied to the consolidation.
-- ~~`schemas/` (repo root) duplicate directory~~ — **resolved**: deleted; the
-  embedded `crates/tdt-core/schemas/` copies are the single source, browsable
-  via `tdt schema show <type>`.
+## Resolved (2026-07-16 → 2026-07-30)
 
-## 5. Performance
+For history; details in the commit messages on `main`.
 
-Measured (debug build, 160 entities): `--help` 4ms, `req list` 10ms,
-`search` 10ms, `trace matrix` 10ms, `status` 10ms — **fast, no action**.
-The exceptions:
-
-- ~~`tdt validate` upfront schema compilation~~ — **resolved**: lazy per-
-  prefix compilation; 120ms/143MB → 70ms/82MB on the 160-entity project.
-- ~~`tol add` per-feature directory rescan~~ — **resolved**: O(1) entity
-  cache lookup.
-- `link suspect list` reads every entity YAML file; fine at hundreds of
-  entities, consider indexing suspect flags in the SQLite cache at thousands.
-- ~~`auto_sync` global max-mtime heuristic~~ — **resolved**: per-file mtime
-  comparison in a single walk (also catches added/deleted files in the same
-  pass); a content change carrying an older mtime is now detected.
-
-## 6. Architectural
-
-- ~~Links modeled as bare `EntityId`/`String` in typed entity structs~~ —
-  **resolved**: all 21 `*Links` structs now use `LinkRef` (string-or-object,
-  with `title` + suspect fields), so typed round-trips preserve link metadata
-  natively. The `preserve_link_metadata` merge in `ServiceBase::save` was
-  deleted; the raw `fs::write` in `tol analyze` is safe for the same reason.
-  Bonus fix: `String`-typed links previously failed to *load* files whose
-  links carried titles.
-- ~~Cache normalizes link field names with no record of the original~~ —
-  **resolved**: the `links` table now stores `field_name` (the actual YAML
-  field), suspect marking uses it first, and the scan fallback remains only
-  for caches built before the schema bump (v14 forces a rebuild).
-- YAML mutation paths (`link add`, suspect mark/clear) strip the guidance
-  comments that `new` writes, and their formatting differs from service
-  saves (churny diffs). A comment/format-preserving YAML editor would fix
-  both.
-- `bulk.rs` edits YAML via string surgery (now line-anchored, but still
-  string-based). Parse-modify-serialize would be robust.
-
-## 7. Known gaps deliberately left (with rationale)
-
-- ~~`tdt import --update` unimplemented~~ — **resolved**: one generic
-  ID-matched update path serves all CSV entity types (schema-validated
-  patches, revision bump, dry-run support); SysML re-import now skips
-  existing entities unless `--update` is passed (closing the silent
-  lossy-overwrite gap).
-- ~~3D Monte Carlo not seedable~~ — **resolved**: `--seed` now drives the
-  3D run too and the seed is persisted in `analysis_results_3d.mc_seed`.
-- 3D staleness hash now covers `functional_direction`; linked feature
-  files (`geometry_3d`/`torsor_bounds`) are still uncovered (documented).
-- 1D RSS `yield`/`margin` use the unshifted mean while Cpk uses the
-  Bender-shifted mean (code comments show this is intentional; the pair
-  reads inconsistently — consider shifting both under `mean_shift_k > 0`).
-- Short-flag polarity differs between entity commands (`req new -T title
-  -t type` vs `proc/ncr new -t title -T type`). Breaking change; align in
-  the next major version.
-- `risk.schema.json` documents a `links.controls` field written by neither
-  the struct nor the link registry (Risk→Ctrl uses `mitigated_by`); decide
-  and remove or wire.
-- `asm list --columns short` is accepted but renders nothing (SHORT is
-  implicit); drop the enum value at the next CLI-breaking release.
-- ~~3D model limitations (7 items)~~ — **resolved**: rotated feature frames
-  (full rotation Jacobian), measurement point, circular/conical zone
-  coupling, flatness tilt, datum-refs validation warning, and 3D
-  direction/Bender parity all landed. Remaining by design: partial datum
-  modeling (no datum shift), small-displacement linearization — documented
-  in the 3D guide's Scope section.
-
-## Tooling recommendations
-
-- Add `cargo machete` (unused deps) and `cargo clippy --all-targets -D
-  warnings` to CI (all currently clean).
-- Consider `typos` and a docs-example checker in CI: this review found 50+
-  documented flags/subcommands that had drifted from the real CLI; a script
-  that extracts ```bash blocks and validates flags against `--help` output
-  (as done in this review) would prevent regressions.
+| Area | Resolution |
+|---|---|
+| ~70 verified bugs from the full review | Fixed with regression tests (tolerance math, suspect links, imports, git layer, panics) |
+| Entity-command duplication | One generic cached-list output (10 entities), one slow-path output (15), one directory table, one format resolver, one `list_columns!` macro; ~2.1k lines removed |
+| Dual git implementations | Feature-gated: shell-only on desktop (gix not compiled, −129 crates, binary 74.2→62.7 MB); gix kept for mobile targets; `gix-vc` CI compile-check |
+| Two table renderers | `tabled` dropped; ~50-line `MarkdownTableBuilder` serves the six reports |
+| Dead/reserved code | Blanket `allow(dead_code)` gone, 17 dead items deleted, `Analysis3DConfig` wired, duplicate root `schemas/` deleted |
+| Links as bare IDs | All 21 `*Links` structs use `LinkRef`; typed round-trips preserve metadata natively; save-path merge workaround deleted |
+| Cache link aliasing | `links.field_name` column (schema v14) records the real YAML field |
+| `auto_sync` staleness gap | Per-file mtime comparison; older-mtime restores detected |
+| `validate` startup cost | Lazy schema compilation (120ms→70ms, 143→82 MB) |
+| `import --update` | Implemented: generic ID-matched, schema-validated CSV updates; SysML overwrite gated behind the flag |
+| 3D model limitations (7 items) | Rotated feature frames (full rotation Jacobian), measurement point, circular/conical zones, flatness tilt, datum warnings, 3D direction/Bender parity; hand-verified end-to-end |
+| Documentation drift | Every bash example in README + 26 docs validated against the real CLI; 3D guide rewritten with a hand-checkable worked example |
